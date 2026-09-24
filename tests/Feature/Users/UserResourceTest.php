@@ -33,10 +33,42 @@ it('formdan birden fazla rolle kullanıcı oluşturur', function () {
         ->and(Hash::check('gizli-sifre', $user->password))->toBeTrue();
 });
 
+it('Türkçe karakterli ve büyük harfli kullanıcı adını hata vermeden düzeltir', function () {
+    Livewire::test(CreateUser::class)
+        ->fillForm(['username' => 'Şükrü.ÖZGÜLEÇ'])
+        ->assertSchemaStateSet(['username' => 'sukru.ozgulec'])
+        ->assertHasNoFormErrors(['username'])
+        ->fillForm([
+            'name' => 'Şükrü Özgüleç',
+            'roles' => [Role::Operator->value],
+            'password' => 'gizli-sifre',
+            'password_confirmation' => 'gizli-sifre',
+        ])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    expect(User::where('username', 'sukru.ozgulec')->exists())->toBeTrue();
+});
+
+it('benzersizlik kontrolü düzeltilmiş kullanıcı adıyla yapılır', function () {
+    User::factory()->operator()->create(['username' => 'sukru']);
+
+    Livewire::test(CreateUser::class)
+        ->fillForm([
+            'username' => 'ŞÜKRÜ',
+            'name' => 'Başka Şükrü',
+            'roles' => [Role::Operator->value],
+            'password' => 'gizli-sifre',
+            'password_confirmation' => 'gizli-sifre',
+        ])
+        ->call('create')
+        ->assertHasFormErrors(['username' => 'unique']);
+});
+
 it('rol seçilmeden ve geçersiz kullanıcı adıyla kayıt yapılmaz', function () {
     Livewire::test(CreateUser::class)
         ->fillForm([
-            'username' => 'şü',
+            'username' => 'ş/ü',
             'name' => 'X',
             'roles' => [],
             'password' => 'gizli-sifre',

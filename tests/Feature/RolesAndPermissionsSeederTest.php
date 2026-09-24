@@ -31,7 +31,9 @@ it('tekrar çalıştırılabilir (idempotent) ve bozulan eşleşmeyi düzeltir',
 it('yetki tablosunu (CLAUDE.md bölüm 6) uygular', function () {
     expect(Role::Admin->permissions())->toBe(Permission::cases())
         ->and(Role::Operator->permissions())->not->toContain(Permission::StockMove, Permission::WorkOrdersManage, Permission::PartsManage, Permission::UsersManage)
-        ->and(Role::Operator->permissions())->toContain(Permission::WorkOrdersChangeStatus)
-        ->and(Role::Warehouse->permissions())->toContain(Permission::StockMove, Permission::PartsManage, Permission::ReportsStock)
-        ->and(Role::Warehouse->permissions())->not->toContain(Permission::WorkOrdersManage, Permission::WorkOrdersChangeStatus, Permission::ReportsProduction, Permission::UsersManage);
+        ->and(Role::Operator->permissions())->toContain(Permission::WorkOrdersView, Permission::WorkOrdersChangeStatus)
+        ->and(Role::Operator->permissions())->not->toContain(Permission::WorkOrdersChangeStatusAny)
+        // Depo iş emirlerini salt okunur görür.
+        ->and(Role::Warehouse->permissions())->toContain(Permission::WorkOrdersView, Permission::StockMove, Permission::PartsManage, Permission::ReportsStock)
+        ->and(Role::Warehouse->permissions())->not->toContain(Permission::WorkOrdersManage, Permission::WorkOrdersChangeStatus, Permission::WorkOrdersChangeStatusAny, Permission::ReportsProduction, Permission::UsersManage);
 });

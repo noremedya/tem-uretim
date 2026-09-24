@@ -18,6 +18,8 @@ enum Permission: string
     case OrdersView = 'orders.view';
     case OrdersManage = 'orders.manage';
 
+    // Görüntüleme; operatör için "yalnızca kendine atananlar" kısıtı policy'de uygulanır.
+    case WorkOrdersView = 'work_orders.view';
     case WorkOrdersManage = 'work_orders.manage';
     // Durum değiştirme; "yalnızca kendine atananlar" kısıtı policy'de uygulanır.
     case WorkOrdersChangeStatus = 'work_orders.change_status';
@@ -42,6 +44,7 @@ enum Permission: string
             self::CustomersManage => 'Müşteri yönetimi',
             self::OrdersView => 'Sipariş görüntüleme',
             self::OrdersManage => 'Sipariş yönetimi',
+            self::WorkOrdersView => 'İş emri görüntüleme',
             self::WorkOrdersManage => 'İş emri oluşturma/atama',
             self::WorkOrdersChangeStatus => 'İş emri durum değiştirme (kendine atananlar)',
             self::WorkOrdersChangeStatusAny => 'İş emri durum değiştirme (tümü)',

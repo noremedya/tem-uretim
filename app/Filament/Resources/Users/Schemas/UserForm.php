@@ -31,9 +31,13 @@ class UserForm
                             ->unique(ignoreRecord: true)
                             ->autocomplete('off')
                             ->autocapitalize('none')
+                            // Türkçe karakterler ve büyük harfler hata vermeden düzeltilir: alandan çıkınca
+                            // kullanıcı düzeltilmiş hâli görür; doğrulama ve kayıt da her durumda bu hâli kullanır.
                             ->live(onBlur: true)
                             ->afterStateUpdated(fn (?string $state, Set $set) => $set('username', User::normalizeUsername($state)))
-                            ->helperText('Girişte kullanılır. Küçük harf, rakam, nokta, alt çizgi, tire.'),
+                            ->mutateStateForValidationUsing(fn (?string $state): string => User::normalizeUsername($state))
+                            ->dehydrateStateUsing(fn (?string $state): string => User::normalizeUsername($state))
+                            ->helperText('Girişte kullanılır. Türkçe karakterler ve büyük harfler otomatik düzeltilir (Şükrü → sukru).'),
                         TextInput::make('name')
                             ->label('Ad soyad')
                             ->required()

@@ -98,6 +98,7 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 | Kullanıcı yönetimi | ✓ | | |
 | Motor modeli, reçete | ✓ | görüntüleme | görüntüleme |
 | Müşteri, sipariş | ✓ | görüntüleme | görüntüleme |
+| İş emri görüntüleme | ✓ | kendine atananlar | ✓ (salt okunur) |
 | İş emri oluşturma/atama | ✓ | | |
 | İş emri durum değiştirme | ✓ | yalnızca kendine atananlar | |
 | Stok kartları | ✓ | görüntüleme | ✓ |
@@ -107,7 +108,10 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 
 - Bir kullanıcının **birden fazla rolü** olabilir (yetkiler birleşir); **en az bir rol zorunludur.** Kullanıcı formunda roller çoklu seçimle atanır.
 - Giriş **kullanıcı adı (username) + şifre** ile yapılır; e-posta isteğe bağlıdır. Şifre sıfırlamayı yönetici yapar (e-posta ile sıfırlama yok).
+- Kullanıcı adı yalnızca ASCII'dir (küçük harf, rakam, `.`, `_`, `-`). Formda, girişte ve komutta Türkçe karakterler otomatik çevrilir (ş→s, ç→c, ğ→g, ü→u, ö→o, ı→i, İ→i) ve büyük harfler küçültülür; kullanıcı hata almadan düzeltilmiş hâlini görür.
+- Pasifleştirilen kullanıcı bir sonraki isteğinde (Livewire istekleri dahil) otomatik çıkış yapar ve giriş ekranında "Hesabınız pasifleştirildi, yöneticinize başvurun." mesajını görür.
 - **Yönetici güvenliği:** kullanıcı kendini pasifleştiremez; son aktif yöneticinin yönetici rolü kaldırılamaz ve pasifleştirilemez.
+- "En az bir rol" ve yönetici güvenliği kuralları **servis seviyesinde** (UserService, kilitli) zorlanır; bunlar için veritabanı trigger'ı eklenmez (bölüm 3 kural 5'in bilinçli istisnası).
 - Filament paneli kök adreste (`/`) çalışır.
 
 Yetkiler Laravel Policy'leriyle uygulanır; Filament menüsü de yetkiye göre gizlenir. Saha operatörü arayüzü sade olmalı: ana ekranı "Bana atanan iş emirleri" + "Hızlı işlem".

@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Filament\Pages\Auth\Login;
+use App\Http\Middleware\LogoutInactiveUser;
 use Filament\FontProviders\LocalFontProvider;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
@@ -57,6 +58,10 @@ class AppPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
             ])
+            // Persistent: Livewire istekleri dahil her istekte çalışır; Authenticate'ten önce gelmeli.
+            ->authMiddleware([
+                LogoutInactiveUser::class,
+            ], isPersistent: true)
             ->authMiddleware([
                 Authenticate::class,
             ]);

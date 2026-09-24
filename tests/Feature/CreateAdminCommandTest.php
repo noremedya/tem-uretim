@@ -59,7 +59,18 @@ it('kullanılan kullanıcı adını ve geçersiz biçimi reddeder', function (st
     ])->assertFailed();
 
     expect(User::count())->toBe(1);
-})->with(['mevcut', 'MEVCUT', 'ab', 'boşluk var', 'şükrü']);
+})->with(['mevcut', 'MEVCUT', 'ab', 'boşluk var', 'geçersiz/karakter']);
+
+it('Türkçe karakterli kullanıcı adını ASCII\'ye çevirir', function () {
+    $this->artisan('app:create-admin', [
+        '--username' => 'Şükrü.Güleç',
+        '--name' => 'Şükrü Güleç',
+        '--password' => 'gizli-sifre',
+        '--no-interaction' => true,
+    ])->expectsOutputToContain('sukru.gulec')->assertSuccessful();
+
+    expect(User::where('username', 'sukru.gulec')->exists())->toBeTrue();
+});
 
 it('roller yoksa anlaşılır hata verir', function () {
     RoleModel::query()->delete();

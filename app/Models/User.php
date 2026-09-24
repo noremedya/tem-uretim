@@ -40,12 +40,23 @@ class User extends Authenticatable implements FilamentUser, HasName
         ];
     }
 
+    /** Kullanıcı adında Türkçe karakterlerin ASCII karşılıkları. */
+    private const USERNAME_TRANSLITERATION = [
+        'ş' => 's', 'Ş' => 's',
+        'ç' => 'c', 'Ç' => 'c',
+        'ğ' => 'g', 'Ğ' => 'g',
+        'ü' => 'u', 'Ü' => 'u',
+        'ö' => 'o', 'Ö' => 'o',
+        'ı' => 'i', 'İ' => 'i',
+    ];
+
     /**
-     * Kullanıcı adı her zaman küçük harf ve boşluksuz saklanır; girişte de aynı normalizasyon uygulanır.
+     * Kullanıcı adı normalizasyonu (form, giriş, komut ve model aynı kuralı kullanır):
+     * boşluklar kırpılır, Türkçe karakterler ASCII'ye çevrilir, büyük harfler küçültülür.
      */
     public static function normalizeUsername(?string $username): string
     {
-        return mb_strtolower(trim((string) $username));
+        return mb_strtolower(strtr(trim((string) $username), self::USERNAME_TRANSLITERATION));
     }
 
     protected function username(): Attribute
