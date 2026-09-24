@@ -36,33 +36,37 @@ Kapsam:
 4. **Birbirine bağlı her işlem tek `DB::transaction` içinde.** Stok bakiyesi güncellenirken ilgili satır `lockForUpdate()` ile kilitlenir.
 5. **Kurallar veritabanında da zorlanır:** foreign key'ler (`restrictOnDelete`), unique index'ler, check constraint'ler (ör. miktar > 0, bakiye >= 0). Sadece form validasyonuna güvenme.
 6. **Eşzamanlı düzenleme koruması:** düzenlenebilir ana tablolarda `lock_version` (integer) ile optimistic locking; çakışmada kullanıcıya anlaşılır Türkçe uyarı.
-7. **Silme yok, pasifleştirme var:** ana kayıtlarda soft delete veya `aktif` alanı. Stok hareketi, durum geçmişi ve üretilmiş motor kayıtları hiçbir şekilde silinemez.
+   - Kontrol **tek atomik sorguyla** yapılır: `UPDATE ... SET ..., lock_version = lock_version + 1 WHERE id = ? AND lock_version = ?`; etkilenen satır 0 ise `StaleModelException`. Önce okuyup sonra karşılaştırma yapılmaz.
+   - Filament düzenleme formu, formun **açıldığı andaki** `lock_version`'ı taşır ve kaydederken onu kullanır; Filament'in kaydı yeniden okuması çakışmayı gizleyemez. Bu davranış iki ayrı oturumun aynı kaydı düzenlediği bir testle doğrulanır.
+7. **Silme yok, pasifleştirme var:** ana kayıtlarda soft delete veya `is_active` alanı. Stok hareketi, durum geçmişi ve üretilmiş motor kayıtları hiçbir şekilde silinemez.
 8. **Durum değişiklikleri enum + izinli geçiş tablosuyla** yönetilir; izinsiz geçiş exception fırlatır.
 9. Durumlar, hareket tipleri, roller PHP `enum` olarak tanımlanır; string karşılaştırması dağınık kullanılmaz.
+   - **Kolon adları ve enum değerleri İngilizcedir** (ör. `is_active`, `critical_level`; `planned`, `in_progress`, `stock_in`). Türkçe yalnızca arayüz etiketlerindedir (enum'larda `label()` metodu). Bölüm 5 ve sonrasındaki Türkçe alan/durum adları bölüm 4'teki İngilizce karşılıklarını ifade eder.
 10. Arayüz tamamen **Türkçe**, `APP_LOCALE=tr`, `APP_TIMEZONE=Europe/Istanbul`, sayılar Türkçe biçimde.
 11. Tüm iş mantığı `app/Services/` altında; Filament sayfaları yalnızca bu servisleri çağırır.
-12. Belirsiz bir iş kuralıyla karşılaşırsan **varsayım yapma, bana sor.**
+12. **Denetim izine hassas alan yazılmaz:** `password` ve `remember_token` activity log'a hiçbir şekilde kaydedilmez.
+13. Belirsiz bir iş kuralıyla karşılaşırsan **varsayım yapma, bana sor.**
 
 ## 4. Veri modeli
 
-Tablo adları İngilizce, arayüz etiketleri Türkçe.
+Tablo adları, kolon adları ve enum değerleri İngilizce; arayüz etiketleri Türkçe (parantez içi Türkçe açıklamalar yalnızca anlam içindir).
 
-- **users**: ad, e-posta, şifre (hash), aktif, rol (spatie)
-- **units**: birim (adet, kg, metre…)
-- **parts** (stok kartı): kod (unique), ad, birim, tür (hammadde / parça / sarf), barkod (unique, nullable), kritik_seviye (decimal), aktif
-- **stock_balances**: part_id (unique), miktar (decimal, >= 0), updated_at — hızlı okuma için; tek yazıcısı StockService
-- **stock_movements**: part_id, tip (enum: giris, cikis, uretim_sarf, sayim_duzeltme, iade), miktar (işaretli decimal, 0 olamaz), onceki_bakiye, sonraki_bakiye, referans (morph: work_order vb., nullable), aciklama, user_id, created_at. Update/delete yok.
-- **motor_models**: kod (unique), ad, güç, devir, gerilim gibi teknik alanlar, açıklama, aktif
-- **bom_items** (ürün reçetesi): motor_model_id, part_id, birim_basina_miktar; (motor_model_id, part_id) unique
-- **customers**: ad/ünvan, vergi no, telefon, e-posta, adres, aktif
-- **orders**: sipariş_no (unique), customer_id, sipariş_tarihi, termin_tarihi, durum (enum: acik, kismi, tamamlandi, iptal), not
-- **order_items**: order_id, motor_model_id, adet
-- **production_batches** (parti): parti_no (unique), tarih, not
-- **work_orders**: is_emri_no (unique, otomatik), order_item_id (nullable), motor_model_id, adet, production_batch_id (nullable), durum (enum: planlandi, uretimde, tamamlandi, iptal), atanan_user_id, planlanan_baslangic, planlanan_bitis, baslama_zamani, bitis_zamani, lock_version
-- **work_order_status_histories**: work_order_id, eski_durum, yeni_durum, user_id, aciklama, created_at
-- **motor_units** (üretilen motor): seri_no (unique), motor_model_id, work_order_id, production_batch_id, order_id (nullable), uretim_tarihi, durum (enum: stokta, sevk_edildi), not
+- **users**: username (unique, zorunlu — giriş bununla yapılır), name, email (nullable, unique), password (hash), is_active, lock_version, roller (spatie; birden fazla olabilir, en az bir rol zorunlu)
+- **units** (birim: adet, kg, metre…): name
+- **parts** (stok kartı): code (unique), name, unit_id, type (enum: raw_material / component / consumable — hammadde / parça / sarf), barcode (unique, nullable), critical_level (decimal), is_active
+- **stock_balances**: part_id (unique), quantity (decimal, >= 0), updated_at — hızlı okuma için; tek yazıcısı StockService
+- **stock_movements**: part_id, type (enum: stock_in, stock_out, production_consumption, count_adjustment, return — giriş, çıkış, üretim sarfı, sayım düzeltme, iade), quantity (işaretli decimal, 0 olamaz), balance_before, balance_after, reference (morph: work_order vb., nullable), description, user_id, created_at. Update/delete yok.
+- **motor_models**: code (unique), name, güç, devir, gerilim gibi teknik alanlar (power, speed, voltage…), description, is_active
+- **bom_items** (ürün reçetesi): motor_model_id, part_id, quantity_per_unit; (motor_model_id, part_id) unique
+- **customers**: name (ad/ünvan), tax_number, phone, email, address, is_active
+- **orders**: order_number (unique), customer_id, order_date, due_date, status (enum: open, partial, completed, cancelled — açık, kısmi, tamamlandı, iptal), notes
+- **order_items**: order_id, motor_model_id, quantity
+- **production_batches** (parti): batch_number (unique), date, notes
+- **work_orders**: work_order_number (unique, otomatik), order_item_id (nullable), motor_model_id, quantity, production_batch_id (nullable), status (enum: planned, in_progress, completed, cancelled — planlandı, üretimde, tamamlandı, iptal), assigned_user_id, planned_start, planned_end, started_at, completed_at, lock_version
+- **work_order_status_histories**: work_order_id, from_status, to_status, user_id, description, created_at
+- **motor_units** (üretilen motor): serial_number (unique), motor_model_id, work_order_id, production_batch_id, order_id (nullable), production_date, status (enum: in_stock, shipped — stokta, sevk edildi), notes
 
-Tarih, seri_no, durum, motor_model_id, part_id gibi filtrelenen alanlara index ekle.
+Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara index ekle.
 
 ## 5. İş kuralları
 
@@ -100,6 +104,11 @@ Tarih, seri_no, durum, motor_model_id, part_id gibi filtrelenen alanlara index e
 | Stok giriş/çıkış/sayım | ✓ | | ✓ |
 | Raporlar ve Excel | ✓ | | stok raporları |
 | Denetim izi | ✓ | | |
+
+- Bir kullanıcının **birden fazla rolü** olabilir (yetkiler birleşir); **en az bir rol zorunludur.** Kullanıcı formunda roller çoklu seçimle atanır.
+- Giriş **kullanıcı adı (username) + şifre** ile yapılır; e-posta isteğe bağlıdır. Şifre sıfırlamayı yönetici yapar (e-posta ile sıfırlama yok).
+- **Yönetici güvenliği:** kullanıcı kendini pasifleştiremez; son aktif yöneticinin yönetici rolü kaldırılamaz ve pasifleştirilemez.
+- Filament paneli kök adreste (`/`) çalışır.
 
 Yetkiler Laravel Policy'leriyle uygulanır; Filament menüsü de yetkiye göre gizlenir. Saha operatörü arayüzü sade olmalı: ana ekranı "Bana atanan iş emirleri" + "Hızlı işlem".
 
