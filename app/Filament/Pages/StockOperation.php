@@ -38,7 +38,8 @@ use UnitEnum;
  * Stok giriş / çıkış / sayım / iade formu.
  *
  * Çift gönderim koruması yalnızca gönderim anahtarına dayanır:
- * - İstek sürerken kaydet butonu pasiftir (Filament, wire:loading).
+ * - İstek sürerken kaydet butonu pasiftir (Filament, wire:loading) ve form ikinci kez gönderilemez
+ *   (Alpine submitGuard; Enter ile gönderim dahil). Bu yalnızca kullanıcı deneyimi içindir.
  * - Her form gönderimi $submissionKey taşır; StockService aynı anahtarla ikinci hareket oluşturmaz, mevcut
  *   hareketi döndürür. Bu durumda ilk işlemin sonucu gösterilir, bildirim tekrarlanmaz.
  * - Başarılı işlemden sonra form sıfırlanır (miktar ve açıklama temizlenir; tür ve parça kalır) ve yeni
@@ -157,6 +158,8 @@ class StockOperation extends Page
                 Form::make([EmbeddedSchema::make('form')])
                     ->id('form')
                     ->livewireSubmitHandler('save')
+                    // İstek sürerken ikinci gönderim tarayıcıda kesilir (resources/js/filament/submit-guard.js).
+                    ->extraAttributes(['x-data' => "submitGuard({ action: 'save' })"])
                     ->footer([
                         Actions::make([
                             Action::make('save')

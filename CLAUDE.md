@@ -30,7 +30,7 @@ Kapsam:
 
 ## 3. Değişmez kurallar
 
-1. **Hiçbir CDN veya harici kaynak kullanma.** Font, JS, CSS, ikon dahil her şey Vite ile derlenip uygulamayla birlikte gelmeli. İnternet kesikken arayüz eksiksiz çalışmalı.
+1. **Hiçbir CDN veya harici kaynak kullanma.** Panelde ortak JS (Alpine bileşenleri) `resources/js/filament/app.js` üzerinden Vite ile yüklenir; yeni ortak bileşenler buraya kaydedilir. Font, JS, CSS, ikon dahil her şey Vite ile derlenip uygulamayla birlikte gelmeli. İnternet kesikken arayüz eksiksiz çalışmalı.
 2. **Stok yalnızca `StockService` üzerinden değişir.** Hiçbir controller, Filament action veya model olayı stok bakiyesini doğrudan güncelleyemez.
 3. **Stok hareketleri değiştirilemez ve silinemez.** Hata düzeltme ters kayıtla (düzeltme hareketi) yapılır.
 4. **Birbirine bağlı her işlem tek `DB::transaction` içinde.** Stok bakiyesi güncellenirken ilgili satır `lockForUpdate()` ile kilitlenir.
@@ -95,7 +95,7 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - **Küsurat:** birimi `allows_decimal = false` olan parçada küsuratlı miktar (hareket miktarı, sayılan miktar) servis seviyesinde reddedilir.
 - **Ters kayıt (`correction`):** miktar orijinal hareketin tam tersidir; bir hareket yalnızca bir kez ters kaydedilebilir (`corrected_movement_id` unique); ters kaydın kendisi ters kaydedilemez; stoğu eksiye düşürecekse reddedilir. Bu kurallar servis + veritabanı (unique, insert trigger'ı) seviyesinde zorlanır.
 - **Üretim sarfı (`production_consumption`) elle ters kaydedilemez.** Motor kayıtları oluşmuşken malzemenin geri dönmesi tutarsızlık yaratır; Aşama 4'te iş emri geri alma akışıyla ele alınacak.
-- **Çift gönderim:** stok işlemi formu işlem sırasında butonu pasifleştirir; sunucu tarafında her form gönderimi bir `idempotency_key` taşır, aynı anahtarla ikinci hareket oluşmaz. Koruma yalnızca bu anahtara dayanır: aynı anahtarlı ikinci istek hareket oluşturmaz, ilk işlemin sonucunu gösterir ve bildirimi tekrarlamaz. Başarılı işlemden sonra form sıfırlanır (miktar ve açıklama temizlenir, tür ve parça kalır) ve yeni anahtar üretilir; aynı parça ve miktarla bilinçli ikinci işlem (ör. iki ayrı teslimat) yeni hareket oluşturur. İşlem sonrası kullanıcıya yeni bakiye gösterilir.
+- **Çift gönderim:** stok işlemi formu işlem sırasında butonu pasifleştirir ve formun ikinci kez gönderilmesini tarayıcıda engeller (Alpine `submitGuard`, bkz. bölüm 7); sunucu tarafında her form gönderimi bir `idempotency_key` taşır, aynı anahtarla ikinci hareket oluşmaz. Koruma yalnızca bu anahtara dayanır: aynı anahtarlı ikinci istek hareket oluşturmaz, ilk işlemin sonucunu gösterir ve bildirimi tekrarlamaz. Başarılı işlemden sonra form sıfırlanır (miktar ve açıklama temizlenir, tür ve parça kalır) ve yeni anahtar üretilir; aynı parça ve miktarla bilinçli ikinci işlem (ör. iki ayrı teslimat) yeni hareket oluşturur. İşlem sonrası kullanıcıya yeni bakiye gösterilir.
 - Stok hareketleri listesini yönetici ve depo görür; operatör görmez.
 - Günlük zamanlanmış komut `stock:reconcile`: her parça için hareket toplamı ile `stock_balances` karşılaştırılır; fark varsa loglanır ve yöneticiye bildirim gider (otomatik düzeltme yapmaz).
 
@@ -132,7 +132,7 @@ Yetkiler Laravel Policy'leriyle uygulanır; Filament menüsü de yetkiye göre g
 - Standart Filament kaynakları: kullanıcılar, birimler, parçalar, motor modelleri (reçete ilişki yöneticisiyle), müşteriler, siparişler (kalemleriyle), partiler, iş emirleri, üretilen motorlar, stok hareketleri (salt okunur liste)
 - **Stok işlemi sayfası**: giriş / çıkış / sayım düzeltme formu
 - **Hızlı İşlem sayfası** (dokunmatik ve büyük butonlu):
-  - Otomatik odaklı tek bir okuma alanı; USB okuyucunun gönderdiği Enter ile işlem tetiklenir
+  - Otomatik odaklı tek bir okuma alanı; USB okuyucunun gönderdiği Enter ile işlem tetiklenir. Okuma alanı bir form içindedir ve Enter formu gönderir; form, istek sürerken ikinci gönderimi engelleyen ortak Alpine bileşeni **`submitGuard`** ile korunur (`resources/js/filament/submit-guard.js`, kullanım: `x-data="submitGuard({ action: '...' })"`). Açık soru (Aşama 5'te karar verilecek): guard, istek sürerken gelen okumayı düşürür; hızlı art arda farklı kodların okunması durumunda düşürmek mi, sıraya almak mı istendiği sorulacak.
   - "Kamera ile okut" butonu (telefon/tablet)
   - Okunan değer parça barkoduysa → hızlı stok giriş/çıkış formu
   - Seri no ise → motor detay kartı

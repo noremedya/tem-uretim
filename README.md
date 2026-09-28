@@ -31,6 +31,10 @@ docker compose exec app php artisan test
 
 `tests/Concurrency` altındaki eşzamanlılık testleri ayrı PHP süreçleri başlatır ve veriyi commit eder; her testten önce ve sonra test veritabanını `migrate:fresh` ile yeniden kurar. Yalnızca bunları çalıştırmak için: `php artisan test --testsuite=Concurrency`.
 
+Tarayıcı tarafı JS mantık testleri Node'un yerleşik test çalıştırıcısıyla yazılır (`tests/js`, ek paket yok) ve `php artisan test` içinden de çalışır; tek başına: `docker compose exec app npm run test:js`.
+
+Panel JS'i değiştiğinde varlıkları yeniden derleyin: `docker compose exec app npm run build` (veya `npm run dev`).
+
 Stok tutarlılık kontrolü elle: `docker compose exec app php artisan stock:reconcile` (üretimde scheduler her gün 03:00'te çalıştırır).
 
 Kod biçimi: `docker compose exec app vendor/bin/pint`
