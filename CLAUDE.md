@@ -52,10 +52,10 @@ Kapsam:
 Tablo adları, kolon adları ve enum değerleri İngilizce; arayüz etiketleri Türkçe (parantez içi Türkçe açıklamalar yalnızca anlam içindir).
 
 - **users**: username (unique, zorunlu — giriş bununla yapılır), name, email (nullable, unique), password (hash), is_active, lock_version, roller (spatie; birden fazla olabilir, en az bir rol zorunlu)
-- **units** (birim: adet, kg, metre…): name
-- **parts** (stok kartı): code (unique), name, unit_id, type (enum: raw_material / component / consumable — hammadde / parça / sarf), barcode (unique, nullable), critical_level (decimal), is_active
-- **stock_balances**: part_id (unique), quantity (decimal, >= 0), updated_at — hızlı okuma için; tek yazıcısı StockService
-- **stock_movements**: part_id, type (enum: stock_in, stock_out, production_consumption, count_adjustment, return — giriş, çıkış, üretim sarfı, sayım düzeltme, iade), quantity (işaretli decimal, 0 olamaz), balance_before, balance_after, reference (morph: work_order vb., nullable), description, user_id, created_at. Update/delete yok.
+- **units** (birim: adet, kg, metre…): name (unique), allows_decimal (bool — false ise bu birimdeki miktarlar tam sayı olmalı), lock_version
+- **parts** (stok kartı): code (unique), name, unit_id, type (enum: raw_material / component / consumable — hammadde / parça / sarf), barcode (unique, nullable), critical_level (decimal, >= 0; 0 = takip yok), is_active, lock_version. Hareketi olan parçanın birimi değiştirilemez.
+- **stock_balances**: part_id (unique), quantity (decimal, >= 0), is_below_critical (bool — kritik bildirimi gönderildi mi), updated_at — hızlı okuma için; tek yazıcısı StockService. Parça oluşturulurken 0 bakiyeyle açılır.
+- **stock_movements**: part_id, type (enum: stock_in, stock_out, production_consumption, count_adjustment, return, correction — giriş, çıkış, üretim sarfı, sayım düzeltme, iade, ters kayıt), quantity (işaretli decimal, 0 olamaz), balance_before, balance_after, reference (morph: work_order vb., nullable), corrected_movement_id (nullable, unique — ters kaydedilen hareket), idempotency_key (uuid, nullable, unique — çift gönderim koruması), description, user_id, created_at. Update/delete/truncate yok (veritabanı trigger'ı ile de engellenir).
 - **motor_models**: code (unique), name, güç, devir, gerilim gibi teknik alanlar (power, speed, voltage…), description, is_active
 - **bom_items** (ürün reçetesi): motor_model_id, part_id, quantity_per_unit; (motor_model_id, part_id) unique
 - **customers**: name (ad/ünvan), tax_number, phone, email, address, is_active
@@ -87,6 +87,15 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 **Stok**
 - Bakiye hiçbir zaman negatife düşemez (servis + check constraint).
 - Her hareketten sonra bakiye `kritik_seviye`'nin altına inerse yönetici ve depo rollerine Filament veritabanı bildirimi gönderilir. Aynı parça için bakiye kritik seviyenin üstüne çıkana kadar tekrar bildirim gönderilmez.
+- Hareket tiplerinin yönü: `stock_in` ve `return` (+), `stock_out` ve `production_consumption` (−), `count_adjustment` ve `correction` (±). `return` üretimden/müşteriden depoya dönüştür; **tedarikçiye iade `stock_out` + açıklamayla** yapılır.
+- Açıklama zorunlu: `stock_out`, `count_adjustment`, `correction`. `stock_in` ve `return`'de isteğe bağlı.
+- **Sayım:** kullanıcı sayılan miktarı girer, sistem farkı hesaplar; fark 0 ise hareket oluşmaz, "bakiye zaten doğru" mesajı gösterilir.
+- **Kritik seviye:** `bakiye <= critical_level` ise parça kritiktir. `critical_level = 0` takip yok demektir, bildirim gitmez.
+- **Pasif parçaya** yalnızca sayım (`count_adjustment`) yapılabilir; diğer tüm hareketler reddedilir.
+- **Küsurat:** birimi `allows_decimal = false` olan parçada küsuratlı miktar (hareket miktarı, sayılan miktar) servis seviyesinde reddedilir.
+- **Ters kayıt (`correction`):** miktar orijinal hareketin tam tersidir; bir hareket yalnızca bir kez ters kaydedilebilir (`corrected_movement_id` unique); ters kaydın kendisi ters kaydedilemez; stoğu eksiye düşürecekse reddedilir. Bu kurallar servis + veritabanı (unique, insert trigger'ı) seviyesinde zorlanır.
+- **Çift gönderim:** stok işlemi formu işlem sırasında butonu pasifleştirir; sunucu tarafında her form gönderimi bir `idempotency_key` taşır, aynı anahtarla ikinci hareket oluşmaz. İşlem sonrası kullanıcıya yeni bakiye gösterilir.
+- Stok hareketleri listesini yönetici ve depo görür; operatör görmez.
 - Günlük zamanlanmış komut `stock:reconcile`: her parça için hareket toplamı ile `stock_balances` karşılaştırılır; fark varsa loglanır ve yöneticiye bildirim gider (otomatik düzeltme yapmaz).
 
 **Denetim izi:** users, parts, motor_models, bom_items, customers, orders, work_orders, motor_units değişiklikleri activitylog ile kaydedilir. Yönetici için görüntüleme ekranı olsun.
@@ -203,6 +212,9 @@ Pest ile en az şu durumlar test edilmeli:
 - Kritik stok bildirimi bir kez gönderilir, tekrar etmez
 - Rol yetkileri: operatör başkasının iş emrini değiştiremez, depo iş emri oluşturamaz
 - `stock:reconcile` tutarsızlığı yakalar
+- Ters kayıt kuralları (tam ters miktar, tek sefer, ters kaydın ters kaydı yok, eksiye düşürmez), pasif parça, küsurat, çift gönderim
+
+**Eşzamanlılık testleri** (`tests/Concurrency`, ayrı test suite): gerçek eşzamanlılık için veri commit edilmeli, bu yüzden bu testler transaction'lı `RefreshDatabase` kullanmaz. `stock_movements` TRUNCATE'e kapalı olduğundan `DatabaseTruncation` da kullanılmaz; temizlik `migrate:fresh` ile (DROP TABLE) yapılır. Trigger'ı devre dışı bırakan hiçbir uygulama yolu (ayar, oturum değişkeni, ortam bayrağı) yoktur.
 
 Testler PostgreSQL üzerinde çalışmalı (SQLite değil), çünkü kilitler ve constraint'ler davranışı farklıdır.
 

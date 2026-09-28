@@ -16,3 +16,8 @@ use Tests\TestCase;
 pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
     ->in('Feature');
+
+// Eşzamanlılık testleri veriyi commit eder; RefreshDatabase (transaction) kullanmaz, kendi temizliğini
+// migrate:fresh ile yapar (bkz. tests/Concurrency/StockConcurrencyTest.php).
+pest()->extend(TestCase::class)
+    ->in('Concurrency');

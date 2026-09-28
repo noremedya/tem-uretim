@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\Models\Part;
+use App\Models\StockMovement;
+use App\Models\Unit;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
@@ -30,6 +33,9 @@ class AppServiceProvider extends ServiceProvider
         // Morph tiplerinde sınıf adı yerine sabit takma ad (activity_log, model_has_roles, notifications...).
         Relation::enforceMorphMap([
             'user' => User::class,
+            'unit' => Unit::class,
+            'part' => Part::class,
+            'stock_movement' => StockMovement::class,
         ]);
 
         // N+1 ve yanlışlıkla atılan alanları geliştirmede erken yakala.

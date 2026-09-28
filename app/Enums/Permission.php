@@ -28,6 +28,7 @@ enum Permission: string
     case PartsView = 'parts.view';
     case PartsManage = 'parts.manage';
     case StockMove = 'stock.move';
+    case StockMovementsView = 'stock_movements.view';
 
     case ReportsProduction = 'reports.production';
     case ReportsStock = 'reports.stock';
@@ -51,6 +52,7 @@ enum Permission: string
             self::PartsView => 'Stok kartı görüntüleme',
             self::PartsManage => 'Stok kartı yönetimi',
             self::StockMove => 'Stok giriş/çıkış/sayım',
+            self::StockMovementsView => 'Stok hareketleri görüntüleme',
             self::ReportsProduction => 'Üretim raporları',
             self::ReportsStock => 'Stok raporları',
             self::AuditLogView => 'Denetim izi',

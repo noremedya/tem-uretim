@@ -29,4 +29,8 @@ Testler PostgreSQL'de, ayrı `tem_uretim_test` veritabanında çalışır (verit
 docker compose exec app php artisan test
 ```
 
+`tests/Concurrency` altındaki eşzamanlılık testleri ayrı PHP süreçleri başlatır ve veriyi commit eder; her testten önce ve sonra test veritabanını `migrate:fresh` ile yeniden kurar. Yalnızca bunları çalıştırmak için: `php artisan test --testsuite=Concurrency`.
+
+Stok tutarlılık kontrolü elle: `docker compose exec app php artisan stock:reconcile` (üretimde scheduler her gün 03:00'te çalıştırır).
+
 Kod biçimi: `docker compose exec app vendor/bin/pint`
