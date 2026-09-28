@@ -126,7 +126,7 @@ Yetkiler Laravel Policy'leriyle uygulanır; Filament menüsü de yetkiye göre g
   - "Kamera ile okut" butonu (telefon/tablet)
   - Okunan değer parça barkoduysa → hızlı stok giriş/çıkış formu
   - Seri no ise → motor detay kartı
-  - İş emri numarası ise → durum değiştirme butonları
+  - İş emri numarası ise → durum değiştirme butonları. Saha operatörü yalnızca kendine atanan iş emirlerini görür (listede, detayda ve burada); başkasına atanmış bir iş emri okutulursa iş emri bilgisi gösterilmez, "Bu iş emri size atanmamış." mesajı çıkar
   - Aynı kodun 2 saniye içinde tekrar okunması yok sayılır
   - Okuma sonrası odak otomatik olarak okuma alanına döner
 - **Etiket yazdırma** (opsiyonel aşama): seri no ve iş emri için QR etiketli, tarayıcıdan yazdırılabilir sayfa
@@ -167,7 +167,7 @@ Kurulum kılavuzu bu dosya adlarına dayanır; isimleri değiştirme.
   ```
 - `.env.production.example` — tüm üretim değişkenleri açıklamalı (APP_DOMAIN, CF_API_TOKEN, TUNNEL_TOKEN dahil)
 - Laravel TrustProxies: Caddy ve Cloudflare arkasında doğru şema/IP için proxy'lere güven
-- Sağlık kontrolü: Laravel'in `/up` endpoint'i
+- Sağlık kontrolü: Laravel'in `/up` endpoint'i. `app` servisinin healthcheck'i hem `docker-compose.yml` hem `docker-compose.prod.yml` içinde açıkça tanımlanır: `curl -fsS -o /dev/null http://localhost:<port>/up || exit 1` (geliştirmede 8000, üretimde 80). `dunglas/frankenphp` taban imajından miras kalan healthcheck (`localhost:2019/metrics`, Caddy admin API) kullanılmaz; o port açık olmadığından konteyner uygulama çalışırken bile `unhealthy` görünür.
 
 **Artisan komutları**
 - `app:create-admin` — etkileşimli ilk yönetici oluşturma

@@ -14,6 +14,15 @@ services:
       - "5173:5173"
     environment:
       SERVER_NAME: ":8000"
+    # Taban imajdan (dunglas/frankenphp) gelen healthcheck Caddy admin API'sini
+    # (localhost:2019/metrics) yoklar; php-server bu portu açmadığı için konteyner
+    # hep "unhealthy" görünür. Yerine Laravel'in /up endpoint'i kullanılır.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:8000/up || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     depends_on:
       db:
         condition: service_healthy
