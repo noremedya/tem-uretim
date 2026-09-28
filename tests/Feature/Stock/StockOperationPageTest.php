@@ -63,42 +63,51 @@ it('sayımda fark yoksa hareket oluşmaz ve bilgi verilir', function () {
     expect(movementsOf($this->part))->toBe(1);
 });
 
-it('çift tıklamanın kuyruktan gelen ikinci isteği sessizce yok sayılır', function () {
-    // İkinci çağrı ilk yanıttan sonra gelir: formda değişiklik yoktur (miktar temizlenmiştir).
+it('başarılı işlemden sonra form sıfırlanır ve yeni gönderim anahtarı üretilir', function () {
+    $page = Livewire::test(StockOperation::class)
+        ->fillForm(['type' => StockMovementType::StockIn->value, 'part_id' => $this->part->id, 'quantity' => '5', 'description' => 'İrsaliye 1']);
+    $firstKey = $page->get('submissionKey');
+
+    $page->call('save')
+        ->assertNotified('Giriş kaydedildi')
+        ->assertSchemaStateSet(['type' => 'stock_in', 'part_id' => $this->part->id, 'quantity' => null, 'description' => null]);
+
+    expect($page->get('submissionKey'))->not->toBe($firstKey)
+        ->and(StockMovement::where('idempotency_key', $firstKey)->count())->toBe(1);
+});
+
+it('aynı parça ve miktarla formu yeniden doldurarak yapılan iki bilinçli işlem iki hareket oluşturur', function () {
+    // Ör. iki ayrı teslimat: depocu aynı parçayı ve miktarı iki kez girer.
+    $page = Livewire::test(StockOperation::class);
+
+    foreach ([1, 2] as $delivery) {
+        $page->fillForm(['type' => StockMovementType::StockIn->value, 'part_id' => $this->part->id, 'quantity' => '5'])
+            ->call('save')
+            ->assertHasNoFormErrors()
+            ->assertNotified('Giriş kaydedildi');
+    }
+
+    $page->assertSee('Yeni bakiye: 20 kg');
+
+    $inbound = StockMovement::where('part_id', $this->part->id)->where('type', StockMovementType::StockIn)->where('quantity', 5)->get();
+    expect($inbound)->toHaveCount(2)
+        ->and($inbound->pluck('idempotency_key')->unique())->toHaveCount(2)
+        ->and((string) $this->part->stockBalance()->value('quantity'))->toBe('20.000');
+});
+
+it('ilk yanıttan sonra kuyruktan gelen değişmemiş istek hareket oluşturmaz', function () {
+    // Yeni anahtarı ve temizlenmiş miktarı taşır: doğrulamada durur, stok değişmez.
     Livewire::test(StockOperation::class)
         ->fillForm(['type' => StockMovementType::StockIn->value, 'part_id' => $this->part->id, 'quantity' => '5'])
         ->call('save')
-        ->assertNotified('Giriş kaydedildi')
         ->call('save')
-        ->assertHasNoFormErrors()
-        ->assertNotNotified()
-        // Kullanıcı ilk işlemin sonucunu görmeye devam eder.
-        ->assertSet('lastResult.title', 'Giriş kaydedildi')
-        ->assertSee('Yeni bakiye: 15 kg');
+        ->assertHasFormErrors(['quantity' => 'required']);
 
     expect(movementsOf($this->part))->toBe(2)
         ->and((string) $this->part->stockBalance()->value('quantity'))->toBe('15.000');
 });
 
-it('başarılı işlemden sonra formu değiştiren kullanıcı yeni işlem yapabilir', function () {
-    Livewire::test(StockOperation::class)
-        ->fillForm(['type' => StockMovementType::StockIn->value, 'part_id' => $this->part->id, 'quantity' => '5'])
-        ->call('save')
-        // Tarayıcıdan gelen alan güncellemesi (fillForm sunucu tarafında doldurur, istemci değişikliği sayılmaz).
-        ->set('data.quantity', '5')
-        ->call('save')
-        ->assertNotified('Giriş kaydedildi')
-        ->assertSee('Yeni bakiye: 20 kg')
-        // Değişiklikten sonra boş formla kaydet normal doğrulama hatası verir.
-        ->set('data.quantity', '5')
-        ->set('data.quantity', null)
-        ->call('save')
-        ->assertHasFormErrors(['quantity' => 'required']);
-
-    expect(movementsOf($this->part))->toBe(3);
-});
-
-it('aynı gönderim anahtarıyla gelen eşzamanlı istek ikinci hareketi oluşturmaz ve bildirimi tekrarlamaz', function () {
+it('aynı anahtarla gelen iki istek tek hareket oluşturur; ikincisi bildirimi tekrarlamaz', function () {
     // Çift tıklamada iki istek aynı anlık görüntüden (aynı anahtar) çıkar. İlki işlenip commit edildikten
     // sonra ikincisi sunucuya ulaşır.
     $page = Livewire::test(StockOperation::class)

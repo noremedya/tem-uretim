@@ -37,12 +37,12 @@ use UnitEnum;
 /**
  * Stok giriş / çıkış / sayım / iade formu.
  *
- * Çift gönderim koruması (kullanıcı yalnızca ilk işlemin sonucunu görür):
+ * Çift gönderim koruması yalnızca gönderim anahtarına dayanır:
  * - İstek sürerken kaydet butonu pasiftir (Filament, wire:loading).
- * - Aynı anlık görüntüden çıkan eşzamanlı istekler aynı $submissionKey'i taşır; StockService aynı anahtarla
- *   ikinci hareket oluşturmaz, mevcut hareketi döndürür. Bu durumda bildirim tekrar gönderilmez.
- * - İlk yanıttan sonra kuyruktan gelen istek, başarılı işlemden beri formda değişiklik olmadığı için
- *   ($awaitingChanges) doğrulama çalışmadan sessizce yok sayılır.
+ * - Her form gönderimi $submissionKey taşır; StockService aynı anahtarla ikinci hareket oluşturmaz, mevcut
+ *   hareketi döndürür. Bu durumda ilk işlemin sonucu gösterilir, bildirim tekrarlanmaz.
+ * - Başarılı işlemden sonra form sıfırlanır (miktar ve açıklama temizlenir; tür ve parça kalır) ve yeni
+ *   anahtar üretilir. Aynı parça ve miktarla bilinçli ikinci işlem yeni bir hareket oluşturur.
  */
 class StockOperation extends Page
 {
@@ -64,10 +64,6 @@ class StockOperation extends Page
     #[Locked]
     public string $submissionKey = '';
 
-    /** Başarılı işlemden sonra true; kullanıcı formda bir alanı değiştirene kadar kaydet yok sayılır. */
-    #[Locked]
-    public bool $awaitingChanges = false;
-
     /** Son işlemin özeti (yeni bakiye dahil). */
     #[Locked]
     public ?array $lastResult = null;
@@ -87,14 +83,6 @@ class StockOperation extends Page
             'type' => StockMovementType::StockIn->value,
             'part_id' => $part !== null && Part::query()->whereKey($part)->exists() ? $part : null,
         ]);
-    }
-
-    /** İstemciden gelen her form değişikliği yeni bir işlemin başladığını gösterir. */
-    public function updated(string $property): void
-    {
-        if (str_starts_with($property, 'data.') || $property === 'data') {
-            $this->awaitingChanges = false;
-        }
     }
 
     public function form(Schema $schema): Schema
@@ -184,11 +172,6 @@ class StockOperation extends Page
     {
         abort_unless(static::canAccess(), 403);
 
-        // Çift tıklamanın kuyruktan gelen ikinci isteği: son işlemden beri değişiklik yok, sessizce yok say.
-        if ($this->awaitingChanges) {
-            return;
-        }
-
         $data = $this->form->getState();
 
         $type = StockMovementType::from($data['type']);
@@ -212,9 +195,8 @@ class StockOperation extends Page
 
         $this->showResult($type, $part, $movement);
 
-        // Sonraki işlem için yeni anahtar; tür ve parça korunur, miktar ve açıklama temizlenir.
+        // Form sıfırlanır: yeni anahtar; tür ve parça korunur, miktar ve açıklama temizlenir.
         $this->submissionKey = (string) Str::uuid();
-        $this->awaitingChanges = true;
         $this->form->fill(['type' => $type->value, 'part_id' => $part->getKey()]);
     }
 
