@@ -22,9 +22,12 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Str;
+use Tests\TestCase;
 
 function freshDatabase(): void
 {
+    TestCase::ensureTestDatabase();
+
     Artisan::call('migrate:fresh', ['--seed' => true, '--seeder' => RolesAndPermissionsSeeder::class]);
 }
 

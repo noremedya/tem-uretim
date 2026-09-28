@@ -13,11 +13,15 @@ use App\Models\StockMovement;
 use App\Models\User;
 use App\Services\StockService;
 use Illuminate\Contracts\Console\Kernel;
+use Tests\TestCase;
 
 require __DIR__.'/../../vendor/autoload.php';
 
 $app = require __DIR__.'/../../bootstrap/app.php';
 $app->make(Kernel::class)->bootstrap();
+
+// Yalnızca test veritabanında çalışır (tests/TestCase.php ile aynı kural).
+TestCase::ensureTestDatabase();
 
 [, $operation, $partId, $userId, $argument] = $argv;
 $key = $argv[5] ?? null;

@@ -94,7 +94,8 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - **Pasif parçaya** yalnızca sayım (`count_adjustment`) yapılabilir; diğer tüm hareketler reddedilir.
 - **Küsurat:** birimi `allows_decimal = false` olan parçada küsuratlı miktar (hareket miktarı, sayılan miktar) servis seviyesinde reddedilir.
 - **Ters kayıt (`correction`):** miktar orijinal hareketin tam tersidir; bir hareket yalnızca bir kez ters kaydedilebilir (`corrected_movement_id` unique); ters kaydın kendisi ters kaydedilemez; stoğu eksiye düşürecekse reddedilir. Bu kurallar servis + veritabanı (unique, insert trigger'ı) seviyesinde zorlanır.
-- **Çift gönderim:** stok işlemi formu işlem sırasında butonu pasifleştirir; sunucu tarafında her form gönderimi bir `idempotency_key` taşır, aynı anahtarla ikinci hareket oluşmaz. İşlem sonrası kullanıcıya yeni bakiye gösterilir.
+- **Üretim sarfı (`production_consumption`) elle ters kaydedilemez.** Motor kayıtları oluşmuşken malzemenin geri dönmesi tutarsızlık yaratır; Aşama 4'te iş emri geri alma akışıyla ele alınacak.
+- **Çift gönderim:** stok işlemi formu işlem sırasında butonu pasifleştirir; sunucu tarafında her form gönderimi bir `idempotency_key` taşır, aynı anahtarla ikinci hareket oluşmaz. Çift tıklamanın ikinci isteği hata veya ikinci bildirim göstermeden sessizce yok sayılır; kullanıcı yalnızca ilk işlemin başarı mesajını görür. İşlem sonrası kullanıcıya yeni bakiye gösterilir.
 - Stok hareketleri listesini yönetici ve depo görür; operatör görmez.
 - Günlük zamanlanmış komut `stock:reconcile`: her parça için hareket toplamı ile `stock_balances` karşılaştırılır; fark varsa loglanır ve yöneticiye bildirim gider (otomatik düzeltme yapmaz).
 
@@ -218,20 +219,25 @@ Pest ile en az şu durumlar test edilmeli:
 
 Testler PostgreSQL üzerinde çalışmalı (SQLite değil), çünkü kilitler ve constraint'ler davranışı farklıdır.
 
+**Testler yalnızca `tem_uretim_test` veritabanında çalışır.** Bağlı veritabanının adı farklıysa testler `migrate:fresh` veya herhangi bir sorgu çalıştırmadan hata vererek durur (`Tests\TestCase::ensureTestDatabase()`; eşzamanlılık testleri ve işçi süreçleri de aynı kontrolü yapar). Bu koruma testle doğrulanır.
+
 ## 11. Çalışma şekli
 
 - Aşağıdaki aşamalarla ilerle. **Her aşamaya başlamadan önce kısa bir plan göster ve onayımı bekle.**
 - Her aşama sonunda: testleri çalıştır, geçtiğini göster, anlamlı bir mesajla commit at, yapılanları ve açık kalan soruları özetle.
 - Kod yorumları ve commit mesajları Türkçe olabilir; kod içi isimlendirme İngilizce.
+- **Geliştirme veritabanında veri silen komut çalıştırmadan önce mutlaka onay iste:** `migrate:fresh`, `migrate:refresh`, `migrate:reset`, `migrate:rollback`, `db:wipe`, `db:seed` ile üzerine yazma, doğrudan `DELETE`/`TRUNCATE`/`DROP` vb. Şema değişikliği için yalnızca `migrate` (ileri) onaysız çalıştırılabilir. Test veritabanı (`tem_uretim_test`) bu kuralın dışındadır.
 
 **Aşamalar**
 1. Proje iskeleti: Laravel + Filament kurulumu, geliştirme için `docker-compose.yml`, PostgreSQL, Türkçe dil/saat dilimi, roller ve yetkiler, `app:create-admin`, kullanıcı yönetimi, Pest kurulumu
 2. Stok: birimler, parçalar, `StockService`, stok hareketleri, stok işlemi sayfası, kritik stok bildirimi, `stock:reconcile`, testler
 3. Müşteri ve sipariş
 4. Üretim: motor modelleri, reçete, partiler, iş emirleri, durum makinesi, tamamlama akışı, seri no üretimi, üretilen motorlar, testler
+   - İş emri geri alma akışı: üretim sarfının ters kaydı burada ele alınır (elle ters kayıt kapalıdır, bkz. bölüm 5).
 5. Hızlı İşlem sayfası: USB barkod ve kamera ile okuma
 6. Raporlar ve Excel dışa aktarım
 7. Dashboard ve denetim izi ekranı
 8. Üretim dağıtım dosyaları, betikler, `.env.production.example`, README
+   - **Ayrı uygulama veritabanı rolü:** uygulama, tablo sahibi olmayan bir rolle bağlanır (yalnızca gereken tablo yetkileri; `ALTER TABLE ... DISABLE TRIGGER` yapamaz). Migration'lar tablo sahibi kullanıcıyla çalışır. `deploy.sh`, `.env.production.example` ve kurulum kılavuzu buna göre düzenlenir.
 9. Demo veri, genel gözden geçirme (güvenlik, N+1 sorgular, eksik index'ler, CDN kontrolü)
 10. (Opsiyonel) Etiket yazdırma

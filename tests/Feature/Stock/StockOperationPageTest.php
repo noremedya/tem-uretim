@@ -63,19 +63,42 @@ it('sayımda fark yoksa hareket oluşmaz ve bilgi verilir', function () {
     expect(movementsOf($this->part))->toBe(1);
 });
 
-it('art arda iki kaydet çağrısı ikinci hareketi oluşturmaz', function () {
-    // İkinci çağrı, ilk yanıttan sonra kuyruktan gelen gönderimdir: anahtar yenilenmiş ve miktar temizlenmiştir.
+it('çift tıklamanın kuyruktan gelen ikinci isteği sessizce yok sayılır', function () {
+    // İkinci çağrı ilk yanıttan sonra gelir: formda değişiklik yoktur (miktar temizlenmiştir).
     Livewire::test(StockOperation::class)
         ->fillForm(['type' => StockMovementType::StockIn->value, 'part_id' => $this->part->id, 'quantity' => '5'])
         ->call('save')
+        ->assertNotified('Giriş kaydedildi')
         ->call('save')
-        ->assertHasFormErrors(['quantity' => 'required']);
+        ->assertHasNoFormErrors()
+        ->assertNotNotified()
+        // Kullanıcı ilk işlemin sonucunu görmeye devam eder.
+        ->assertSet('lastResult.title', 'Giriş kaydedildi')
+        ->assertSee('Yeni bakiye: 15 kg');
 
     expect(movementsOf($this->part))->toBe(2)
         ->and((string) $this->part->stockBalance()->value('quantity'))->toBe('15.000');
 });
 
-it('aynı gönderim anahtarıyla gelen eşzamanlı istek ikinci hareketi oluşturmaz', function () {
+it('başarılı işlemden sonra formu değiştiren kullanıcı yeni işlem yapabilir', function () {
+    Livewire::test(StockOperation::class)
+        ->fillForm(['type' => StockMovementType::StockIn->value, 'part_id' => $this->part->id, 'quantity' => '5'])
+        ->call('save')
+        // Tarayıcıdan gelen alan güncellemesi (fillForm sunucu tarafında doldurur, istemci değişikliği sayılmaz).
+        ->set('data.quantity', '5')
+        ->call('save')
+        ->assertNotified('Giriş kaydedildi')
+        ->assertSee('Yeni bakiye: 20 kg')
+        // Değişiklikten sonra boş formla kaydet normal doğrulama hatası verir.
+        ->set('data.quantity', '5')
+        ->set('data.quantity', null)
+        ->call('save')
+        ->assertHasFormErrors(['quantity' => 'required']);
+
+    expect(movementsOf($this->part))->toBe(3);
+});
+
+it('aynı gönderim anahtarıyla gelen eşzamanlı istek ikinci hareketi oluşturmaz ve bildirimi tekrarlamaz', function () {
     // Çift tıklamada iki istek aynı anlık görüntüden (aynı anahtar) çıkar. İlki işlenip commit edildikten
     // sonra ikincisi sunucuya ulaşır.
     $page = Livewire::test(StockOperation::class)
@@ -84,8 +107,11 @@ it('aynı gönderim anahtarıyla gelen eşzamanlı istek ikinci hareketi oluştu
     app(StockService::class)->stockIn($this->part, 5, $this->user, null, $page->get('submissionKey')); // ilk istek
 
     $page->call('save')
-        ->assertNotified('Bu işlem zaten kaydedilmişti, tekrar kaydedilmedi')
-        ->assertSee('Güncel bakiye: 15 kg');
+        ->assertHasNoFormErrors()
+        ->assertNotNotified()
+        // İlk işlemin sonucu gösterilir.
+        ->assertSet('lastResult.title', 'Giriş kaydedildi')
+        ->assertSee('Yeni bakiye: 15 kg');
 
     expect(movementsOf($this->part))->toBe(2)
         ->and((string) $this->part->stockBalance()->value('quantity'))->toBe('15.000');
