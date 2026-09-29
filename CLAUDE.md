@@ -247,6 +247,7 @@ Testler PostgreSQL üzerinde çalışmalı (SQLite değil), çünkü kilitler ve
 
 - Aşağıdaki aşamalarla ilerle. **Her aşamaya başlamadan önce kısa bir plan göster ve onayımı bekle.**
 - Her aşama sonunda: testleri çalıştır, geçtiğini göster, anlamlı bir mesajla commit at, yapılanları ve açık kalan soruları özetle.
+- **Her aşama ve düzeltme özetinin sonuna** şu iki bilgi otomatik eklenir: tüm test paketinin sonucu (toplam / geçen / başarısız / atlanan) ve son commit'in hash'i. Sayılar, özetten hemen önce çalıştırılan tam paketten alınır (kısmi çalıştırmadan değil).
 - Kod yorumları ve commit mesajları Türkçe olabilir; kod içi isimlendirme İngilizce.
 - **Geliştirme veritabanında veri silen komut çalıştırmadan önce mutlaka onay iste:** `migrate:fresh`, `migrate:refresh`, `migrate:reset`, `migrate:rollback`, `db:wipe`, `db:seed` ile üzerine yazma, doğrudan `DELETE`/`TRUNCATE`/`DROP` vb. Şema değişikliği için yalnızca `migrate` (ileri) onaysız çalıştırılabilir. Test veritabanı (`tem_uretim_test`) bu kuralın dışındadır.
 - **Çalıştırılmış (herhangi bir veritabanında, geliştirme dahil) veya commit edilmiş bir migration dosyası asla değiştirilmez.** Her şema değişikliği, düzeltmeler dahil, yeni bir migration ile yapılır; böylece her ortam aynı şemaya ileri `migrate` ile ulaşır.
