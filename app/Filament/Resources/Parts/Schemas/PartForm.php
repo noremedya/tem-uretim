@@ -3,13 +3,18 @@
 namespace App\Filament\Resources\Parts\Schemas;
 
 use App\Enums\PartType;
+use App\Filament\Resources\Units\Schemas\UnitForm;
 use App\Models\Part;
+use App\Models\Unit;
+use App\Services\UnitService;
 use App\Support\Quantity;
 use Closure;
+use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
+use Illuminate\Support\Facades\Auth;
 
 class PartForm
 {
@@ -43,7 +48,14 @@ class PartForm
                             ->disabled(fn (?Part $record): bool => $record?->stockMovements()->exists() ?? false)
                             ->helperText(fn (?Part $record): ?string => ($record?->stockMovements()->exists() ?? false)
                                 ? 'Stok hareketi olan parçanın birimi değiştirilemez.'
-                                : null),
+                                : null)
+                            // "+": formdan çıkmadan yeni birim; yalnızca birim yönetme yetkisi olanlar görür.
+                            ->createOptionForm(UnitForm::fields())
+                            ->createOptionUsing(fn (array $data): int => app(UnitService::class)->create($data)->getKey())
+                            ->createOptionAction(fn (Action $action): Action => $action
+                                ->modalHeading('Yeni birim')
+                                ->modalSubmitActionLabel('Birimi oluştur')
+                                ->visible(fn (): bool => Auth::user()?->can('create', Unit::class) ?? false)),
                         TextInput::make('barcode')
                             ->label('Barkod')
                             ->maxLength(100)

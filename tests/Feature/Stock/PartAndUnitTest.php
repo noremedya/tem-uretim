@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\PartType;
+use App\Enums\Permission;
 use App\Exceptions\BusinessRuleException;
 use App\Exceptions\StaleModelException;
 use App\Filament\Resources\Parts\Pages\CreatePart;
@@ -14,6 +15,7 @@ use App\Services\PartService;
 use App\Services\StockService;
 use App\Services\UnitService;
 use Filament\Actions\Testing\TestAction;
+use Illuminate\Support\Facades\Gate;
 use Livewire\Livewire;
 use Spatie\Activitylog\Models\Activity;
 
@@ -167,4 +169,68 @@ it('birim düzenlemesi optimistic locking ile korunur', function () {
     expect($unit->fresh()->name)->toBe('kilogram');
     expect(fn () => app(UnitService::class)->update($unit->fresh(), ['name' => 'x'], 0))
         ->toThrow(StaleModelException::class);
+});
+
+it('parça formundan "+" ile yeni birim eklenir ve seçilir', function () {
+    $this->actingAs($this->user);
+
+    $component = Livewire::test(CreatePart::class)
+        ->callAction(
+            TestAction::make('createOption')->schemaComponent('unit_id', schema: 'form'),
+            data: ['name' => 'Rulo', 'allows_decimal' => false],
+        )
+        ->assertHasNoFormErrors();
+
+    $unit = Unit::where('name', 'Rulo')->sole();
+    expect($unit->allows_decimal)->toBeFalse();
+
+    $component->assertSchemaStateSet(['unit_id' => $unit->id])
+        ->fillForm(['code' => 'R-1', 'name' => 'Bant', 'type' => PartType::Consumable->value, 'critical_level' => '0'])
+        ->call('create')
+        ->assertHasNoFormErrors();
+
+    expect(Part::where('code', 'R-1')->sole()->unit_id)->toBe($unit->id);
+});
+
+it('"+" ile birim eklemede aynı doğrulamalar geçerlidir', function () {
+    $this->actingAs($this->user);
+    Unit::factory()->create(['name' => 'Kg']);
+
+    Livewire::test(CreatePart::class)
+        ->callAction(TestAction::make('createOption')->schemaComponent('unit_id', schema: 'form'), data: ['name' => 'Kg'])
+        ->assertHasActionErrors(['name' => 'unique']);
+
+    expect(Unit::where('name', 'Kg')->count())->toBe(1);
+});
+
+it('"+" birim ekleme UnitService üzerinden yapılır', function () {
+    $this->actingAs($this->user);
+    $service = Mockery::mock(UnitService::class);
+    $service->shouldReceive('create')->once()->with(['name' => 'Paket', 'allows_decimal' => false])
+        ->andReturnUsing(fn (array $data) => Unit::create($data));
+    app()->instance(UnitService::class, $service);
+
+    Livewire::test(CreatePart::class)
+        ->callAction(TestAction::make('createOption')->schemaComponent('unit_id', schema: 'form'), data: ['name' => 'Paket', 'allows_decimal' => false])
+        ->assertHasNoFormErrors();
+});
+
+it('"+" birim ekleme yalnızca birim yönetme yetkisi olanlara görünür', function () {
+    $part = Part::factory()->create();
+
+    // Depo ve yönetici görür.
+    foreach ([$this->user, User::factory()->admin()->create()] as $user) {
+        $this->actingAs($user);
+        Livewire::test(CreatePart::class)
+            ->assertActionVisible(TestAction::make('createOption')->schemaComponent('unit_id', schema: 'form'));
+    }
+
+    // Birim yönetme yetkisi olmayan (parça yönetebilen ama birim oluşturamayan) kullanıcı görmez.
+    $partsOnly = User::factory()->operator()->create();
+    $partsOnly->givePermissionTo(Permission::PartsManage->value);
+    Gate::before(fn (User $actor, string $ability, array $args) => $actor->is($partsOnly) && $ability === 'create' && ($args[0] ?? null) === Unit::class ? false : null);
+
+    $this->actingAs($partsOnly);
+    Livewire::test(CreatePart::class)
+        ->assertActionHidden(TestAction::make('createOption')->schemaComponent('unit_id', schema: 'form'));
 });
