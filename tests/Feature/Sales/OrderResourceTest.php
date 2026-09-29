@@ -223,7 +223,7 @@ it('sipariş formundan "+" ile yeni müşteri eklenir ve seçilir', function () 
     Livewire::test(CreateOrder::class)
         ->callAction(
             TestAction::make('createOption')->schemaComponent('customer_id', schema: 'form'),
-            data: ['name' => 'Yeni Müşteri Ltd.', 'tax_number' => '9876543210'],
+            data: ['name' => 'Yeni Müşteri Ltd.', 'phone' => '0232 000 00 00', 'tax_number' => '9876543210', 'tax_office' => 'Konak'],
         )
         ->assertHasNoFormErrors()
         ->assertSchemaStateSet(['customer_id' => Customer::where('name', 'Yeni Müşteri Ltd.')->sole()->id]);
@@ -246,3 +246,23 @@ it('operatör ve depo siparişleri görüntüler; oluşturamaz, düzenleyemez, i
     expect($user->can('delete', $order))->toBeFalse()
         ->and($this->admin->can('delete', $order))->toBeFalse();
 })->with(['operator', 'warehouse']);
+
+it('sipariş formundaki "+" penceresinde aynı adlı müşteri onay ister', function () {
+    Customer::factory()->create(['name' => 'Anadolu Pompa']);
+    $data = ['name' => ' ANADOLU POMPA ', 'phone' => '0216 000 00 00'];
+
+    Livewire::test(CreateOrder::class)
+        ->callAction(TestAction::make('createOption')->schemaComponent('customer_id', schema: 'form'), data: $data)
+        ->assertHasActionErrors(['confirm_duplicate_name' => 'accepted']);
+
+    expect(Customer::count())->toBe(1);
+
+    Livewire::test(CreateOrder::class)
+        ->callAction(
+            TestAction::make('createOption')->schemaComponent('customer_id', schema: 'form'),
+            data: [...$data, 'confirm_duplicate_name' => true],
+        )
+        ->assertHasNoActionErrors();
+
+    expect(Customer::count())->toBe(2);
+});

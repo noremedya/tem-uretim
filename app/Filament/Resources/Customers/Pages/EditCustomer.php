@@ -32,7 +32,7 @@ class EditCustomer extends EditRecord
     {
         return $this->withBusinessRules(
             function () use ($record, $data): Model {
-                $record = app(CustomerService::class)->update($record, $data, $this->lockVersion);
+                $record = app(CustomerService::class)->update($record, $data, $this->lockVersion, (bool) ($data['confirm_duplicate_name'] ?? false));
                 $this->lockVersion = $record->lock_version;
 
                 return $record;

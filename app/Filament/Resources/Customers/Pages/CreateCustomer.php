@@ -16,7 +16,7 @@ class CreateCustomer extends CreateRecord
 
     protected function handleRecordCreation(array $data): Model
     {
-        return $this->withBusinessRules(fn () => app(CustomerService::class)->create($data));
+        return $this->withBusinessRules(fn () => app(CustomerService::class)->create($data, (bool) ($data['confirm_duplicate_name'] ?? false)));
     }
 
     protected function getRedirectUrl(): string

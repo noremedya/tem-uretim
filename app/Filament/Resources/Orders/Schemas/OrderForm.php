@@ -47,7 +47,9 @@ class OrderForm
                             ->default(fn (): ?int => request()->integer('customer') ?: null)
                             ->disabled(fn (?Order $record): bool => static::itemsLocked($record))
                             ->createOptionForm(CustomerForm::fields())
-                            ->createOptionUsing(fn (array $data): int => app(CustomerService::class)->create($data)->getKey())
+                            ->createOptionUsing(fn (array $data): int => app(CustomerService::class)
+                                ->create($data, (bool) ($data['confirm_duplicate_name'] ?? false))
+                                ->getKey())
                             ->createOptionAction(fn (Action $action): Action => $action
                                 ->modalHeading('Yeni müşteri')
                                 ->modalSubmitActionLabel('Müşteriyi oluştur')

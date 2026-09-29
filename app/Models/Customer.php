@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\HasOptimisticLocking;
 use Database\Factories\CustomerFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -51,6 +52,29 @@ class Customer extends Model
     protected function email(): Attribute
     {
         return Attribute::make(set: fn (?string $value) => filled($value) ? mb_strtolower(trim($value)) : null);
+    }
+
+    /** SQL'deki ad karşılaştırma ifadesi (customers_normalized_name_index ile aynı olmalı). */
+    private const NORMALIZED_NAME_SQL = "translate(lower(btrim(%s)), 'ı', 'i')";
+
+    /**
+     * PHP tarafında ad karşılaştırması için NORMALIZED_NAME_SQL'in karşılığı: boşluklar kırpılır, küçük harfe
+     * çevrilir; Türkçe I/İ/ı hepsi "i" sayılır (mb_strtolower('İ') "i̇" ürettiği için önce çevrilir).
+     */
+    public static function normalizeName(?string $name): string
+    {
+        return mb_strtolower(strtr(trim((string) $name), ['İ' => 'i', 'I' => 'i', 'ı' => 'i']));
+    }
+
+    /**
+     * Aynı adlı aktif müşteriler: büyük/küçük harf (Türkçe I/ı dahil) ve baştaki/sondaki boşluklar önemsiz.
+     * Karşılaştırma iki tarafta da aynı SQL ifadesiyle yapılır; index'i kullanır.
+     */
+    public function scopeActiveWithSameName(Builder $query, ?string $name, ?int $exceptId = null): void
+    {
+        $query->where('is_active', true)
+            ->whereRaw(sprintf(self::NORMALIZED_NAME_SQL, 'name').' = '.sprintf(self::NORMALIZED_NAME_SQL, '?'), [(string) $name])
+            ->when($exceptId !== null, fn (Builder $q) => $q->whereKeyNot($exceptId));
     }
 
     /** @return HasMany<Order, $this> */

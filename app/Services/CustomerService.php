@@ -5,14 +5,24 @@ namespace App\Services;
 use App\Exceptions\BusinessRuleException;
 use App\Models\Customer;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Müşteri yönetimi. Kurallar (CLAUDE.md bölüm 5):
+ * - Telefon zorunlu; vergi no ve vergi dairesi birlikte girilir.
+ * - Aynı adla aktif bir müşteri varsa kayıt yalnızca açık onayla yapılır ($confirmDuplicateName).
+ */
 class CustomerService
 {
-    public function create(array $data): Customer
+    public const DUPLICATE_NAME_MESSAGE = 'Bu adla bir müşteri zaten var';
+
+    public function create(array $data, bool $confirmDuplicateName = false): Customer
     {
         $customer = new Customer(Arr::only($this->normalize($data), Customer::FIELDS));
         $customer->is_active = true;
+
+        $this->ensureValid($customer, $confirmDuplicateName);
         $customer->save();
 
         return $customer;
@@ -21,12 +31,14 @@ class CustomerService
     /**
      * @param  int  $expectedLockVersion  Düzenlemenin başladığı andaki lock_version.
      */
-    public function update(Customer $customer, array $data, int $expectedLockVersion): Customer
+    public function update(Customer $customer, array $data, int $expectedLockVersion, bool $confirmDuplicateName = false): Customer
     {
         $data = $this->normalize($data);
 
-        return DB::transaction(function () use ($customer, $data, $expectedLockVersion): Customer {
+        return DB::transaction(function () use ($customer, $data, $expectedLockVersion, $confirmDuplicateName): Customer {
             $customer->fill(Arr::only($data, Customer::FIELDS));
+
+            $this->ensureValid($customer, $confirmDuplicateName);
             $customer->saveExpectingVersion($expectedLockVersion);
 
             return $customer;
@@ -48,6 +60,41 @@ class CustomerService
         $customer->save();
 
         return $customer;
+    }
+
+    /**
+     * Aynı adlı aktif müşteriler (uyarı için). Düzenlemede yalnızca ad değiştiyse bakılır; kaydın kendisi sayılmaz.
+     *
+     * @return Collection<int, Customer>
+     */
+    public function duplicatesByName(?string $name, ?Customer $customer = null): Collection
+    {
+        if (blank($name) || ($customer?->exists && ! $this->nameChanged($customer, $name))) {
+            return collect();
+        }
+
+        return Customer::query()->activeWithSameName($name, $customer?->getKey())->orderBy('id')->get();
+    }
+
+    /** Değişiklik yalnızca büyük/küçük harf veya boşluksa ad değişmemiş sayılır. */
+    private function nameChanged(Customer $customer, string $name): bool
+    {
+        return Customer::normalizeName($name) !== Customer::normalizeName($customer->getOriginal('name'));
+    }
+
+    private function ensureValid(Customer $customer, bool $confirmDuplicateName): void
+    {
+        if (blank($customer->phone)) {
+            throw new BusinessRuleException('Telefon zorunludur.');
+        }
+
+        if (($customer->tax_number === null) !== ($customer->tax_office === null)) {
+            throw new BusinessRuleException('Vergi no ve vergi dairesi birlikte girilmelidir.');
+        }
+
+        if (! $confirmDuplicateName && $this->duplicatesByName($customer->name, $customer)->isNotEmpty()) {
+            throw new BusinessRuleException(self::DUPLICATE_NAME_MESSAGE.'. Aynı adla kaydetmek için onaylayın.');
+        }
     }
 
     private function normalize(array $data): array

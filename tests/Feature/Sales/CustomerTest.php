@@ -44,10 +44,10 @@ it('formdan müşteri oluşturulur, vergi no boşlukları atılır ve denetim iz
         ->and(Activity::where('subject_type', 'customer')->where('subject_id', $customer->id)->exists())->toBeTrue();
 });
 
-it('yalnızca ad zorunludur', function () {
-    $customer = app(CustomerService::class)->create(['name' => 'Şahıs', 'tax_number' => '', 'phone' => ' ']);
+it('vergi no, vergi dairesi, e-posta ve adres isteğe bağlıdır; boş değerler null olur', function () {
+    $customer = app(CustomerService::class)->create(['name' => 'Şahıs', 'phone' => '0532 000 00 00', 'tax_number' => ' ', 'tax_office' => '', 'address' => ' ']);
 
-    expect($customer->fresh())->tax_number->toBeNull()->phone->toBeNull();
+    expect($customer->fresh())->tax_number->toBeNull()->tax_office->toBeNull()->address->toBeNull()->email->toBeNull();
 });
 
 it('vergi no 10 veya 11 rakam olmalıdır', function (string $value) {
@@ -63,7 +63,7 @@ it('vergi no 10 veya 11 rakam olmalıdır', function (string $value) {
 })->with(['123456789', '123456789012', '12345678ab']);
 
 it('11 haneli TCKN kabul edilir', function () {
-    expect(app(CustomerService::class)->create(['name' => 'Şahıs', 'tax_number' => '12345678901'])->tax_number)
+    expect(app(CustomerService::class)->create(['name' => 'Şahıs', 'phone' => '0532 000 00 00', 'tax_number' => '12345678901', 'tax_office' => 'Konak'])->tax_number)
         ->toBe('12345678901');
 });
 
@@ -72,21 +72,31 @@ it('aynı vergi no ile ikinci müşteri oluşturulamaz (form ve veritabanı)', f
     Customer::factory()->create(['tax_number' => '1111111111']);
 
     Livewire::test(CreateCustomer::class)
-        ->fillForm(['name' => 'Kopya', 'tax_number' => '111 111 1111'])
+        ->fillForm(['name' => 'Kopya', 'phone' => '1', 'tax_number' => '111 111 1111', 'tax_office' => 'X'])
         ->call('create')
         ->assertHasFormErrors(['tax_number' => 'unique']);
 
-    expect(fn () => DB::table('customers')->insert(['name' => 'Kopya', 'tax_number' => '1111111111']))
+    expect(fn () => DB::table('customers')->insert(['name' => 'Kopya', 'phone' => '1', 'tax_number' => '1111111111', 'tax_office' => 'X']))
         ->toThrow(QueryException::class);
 });
 
-it('veritabanı vergi no biçimini ve boş adı reddeder', function (array $attributes) {
-    expect(fn () => DB::table('customers')->insert(array_merge(['name' => 'X'], $attributes)))
+it('veritabanı müşteri kurallarını zorlar', function (array $attributes) {
+    // Geçerli temel kayıt: tek başına eklenebilir; her veri kümesi yalnızca bir kuralı bozar.
+    $valid = ['name' => 'X', 'phone' => '0532 000 00 00', 'tax_number' => '1234567890', 'tax_office' => 'Kadıköy'];
+    DB::table('customers')->insert($valid);
+    DB::table('customers')->where('name', 'X')->delete();
+
+    expect(fn () => DB::table('customers')->insert(array_merge($valid, $attributes)))
         ->toThrow(QueryException::class);
 })->with([
     'kısa vergi no' => [['tax_number' => '123']],
     'harfli vergi no' => [['tax_number' => '12345abcde']],
     'boş ad' => [['name' => ' ']],
+    'telefonsuz' => [['phone' => null]],
+    'boş telefon' => [['phone' => '  ']],
+    'vergi dairesiz vergi no' => [['tax_office' => null]],
+    'vergi nosuz vergi dairesi' => [['tax_number' => null]],
+    'boş vergi dairesi' => [['tax_office' => ' ']],
 ]);
 
 it('müşteri düzenlemesi iki ayrı oturumda çakışırsa ikincisi reddedilir', function () {
@@ -173,3 +183,160 @@ it('telefon yaygın Türkçe biçimlerde girilebilir', function (string $phone) 
         ->call('create')
         ->assertHasNoFormErrors();
 })->with(['0 (532) 123 45 67', '+90 532 123 45 67', '0212-555-00-00', '444 1 234']);
+
+describe('telefon zorunlu', function () {
+    it('formda telefon olmadan kayıt yapılmaz', function () {
+        $this->actingAs($this->admin);
+
+        Livewire::test(CreateCustomer::class)
+            ->fillForm(['name' => 'X', 'phone' => ''])
+            ->call('create')
+            ->assertHasFormErrors(['phone' => 'required']);
+
+        expect(Customer::count())->toBe(0);
+    });
+
+    it('servis telefonsuz oluşturmayı ve düzenlemede telefonu silmeyi reddeder', function () {
+        expect(fn () => app(CustomerService::class)->create(['name' => 'X', 'phone' => '  ']))
+            ->toThrow(BusinessRuleException::class, 'Telefon zorunludur');
+
+        $customer = Customer::factory()->create();
+        expect(fn () => app(CustomerService::class)->update($customer, ['phone' => ''], 0))
+            ->toThrow(BusinessRuleException::class, 'Telefon zorunludur');
+    });
+});
+
+describe('vergi no ve vergi dairesi birlikte', function () {
+    it('formda biri doluysa diğeri zorunludur', function (array $data, string $missing) {
+        $this->actingAs($this->admin);
+
+        Livewire::test(CreateCustomer::class)
+            ->fillForm(['name' => 'X', 'phone' => '1', ...$data])
+            ->call('create')
+            ->assertHasFormErrors([$missing => 'required_with']);
+
+        expect(Customer::count())->toBe(0);
+    })->with([
+        'yalnızca vergi no' => [['tax_number' => '1234567890'], 'tax_office'],
+        'yalnızca vergi dairesi' => [['tax_office' => 'Kadıköy'], 'tax_number'],
+    ]);
+
+    it('ikisi birlikte veya ikisi de boş kaydedilir', function () {
+        $service = app(CustomerService::class);
+
+        expect($service->create(['name' => 'A', 'phone' => '1', 'tax_number' => '1234567890', 'tax_office' => 'Kadıköy'])->exists)->toBeTrue()
+            ->and($service->create(['name' => 'B', 'phone' => '1'])->exists)->toBeTrue();
+    });
+
+    it('servis yalnızca birinin girilmesini ve düzenlemede birinin silinmesini reddeder', function () {
+        $service = app(CustomerService::class);
+
+        expect(fn () => $service->create(['name' => 'X', 'phone' => '1', 'tax_number' => '1234567890']))
+            ->toThrow(BusinessRuleException::class, 'birlikte girilmelidir')
+            ->and(fn () => $service->create(['name' => 'X', 'phone' => '1', 'tax_office' => 'Kadıköy']))
+            ->toThrow(BusinessRuleException::class, 'birlikte girilmelidir');
+
+        $customer = Customer::factory()->create();
+        expect(fn () => $service->update($customer, ['tax_office' => ''], 0))
+            ->toThrow(BusinessRuleException::class, 'birlikte girilmelidir');
+
+        // İkisi birlikte silinebilir.
+        $service->update($customer->fresh(), ['tax_number' => '', 'tax_office' => ''], 0);
+        expect($customer->fresh())->tax_number->toBeNull()->tax_office->toBeNull();
+    });
+});
+
+describe('aynı adlı müşteri uyarısı', function () {
+    beforeEach(function () {
+        $this->existing = Customer::factory()->create(['name' => 'Işık Motor Sanayi A.Ş.', 'tax_number' => '5555555555']);
+        $this->service = app(CustomerService::class);
+    });
+
+    it('büyük/küçük harf (Türkçe I/ı dahil) ve baştaki/sondaki boşluklar önemsizdir', function (string $name) {
+        expect($this->service->duplicatesByName($name)->pluck('id')->all())->toBe([$this->existing->id]);
+    })->with(['Işık Motor Sanayi A.Ş.', '  ışık motor sanayi a.ş.  ', 'IŞIK MOTOR SANAYI A.Ş.', 'IŞIK MOTOR SANAYİ A.Ş.']);
+
+    it('ad içindeki farklılık ve pasif müşteri aynı ad sayılmaz', function () {
+        $passive = Customer::factory()->inactive()->create(['name' => 'Pasif Firma']);
+
+        expect($this->service->duplicatesByName('Işık Motor Sanayi'))->toBeEmpty()
+            ->and($this->service->duplicatesByName('Işık  Motor Sanayi A.Ş.'))->toBeEmpty()
+            ->and($this->service->duplicatesByName($passive->name))->toBeEmpty();
+    });
+
+    it('servis onaysız kaydı reddeder, onayla kaydeder', function () {
+        $data = ['name' => ' IŞIK MOTOR SANAYİ A.Ş. ', 'phone' => '1'];
+
+        expect(fn () => $this->service->create($data))->toThrow(BusinessRuleException::class, 'Bu adla bir müşteri zaten var');
+        expect(Customer::count())->toBe(1);
+
+        $this->service->create($data, confirmDuplicateName: true);
+        expect(Customer::count())->toBe(2);
+    });
+
+    it('formda uyarı ve onay kutusu görünür; onaysız kaydedilmez, onayla kaydedilir', function () {
+        $this->actingAs($this->admin);
+
+        $page = Livewire::test(CreateCustomer::class)
+            ->assertFormFieldHidden('confirm_duplicate_name')
+            ->fillForm(['name' => 'ışık motor sanayi a.ş.', 'phone' => '0232 000 00 00'])
+            ->assertFormFieldVisible('confirm_duplicate_name')
+            ->assertSee('Bu adla bir müşteri zaten var')
+            ->assertSee('5555555555')
+            ->call('create')
+            ->assertHasFormErrors(['confirm_duplicate_name' => 'accepted']);
+
+        expect(Customer::count())->toBe(1);
+
+        $page->fillForm(['confirm_duplicate_name' => true])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        expect(Customer::count())->toBe(2);
+    });
+
+    it('farklı adda onay kutusu çıkmaz', function () {
+        $this->actingAs($this->admin);
+
+        Livewire::test(CreateCustomer::class)
+            ->fillForm(['name' => 'Başka Firma', 'phone' => '1'])
+            ->assertFormFieldHidden('confirm_duplicate_name')
+            ->assertDontSee('Bu adla bir müşteri zaten var')
+            ->call('create')
+            ->assertHasNoFormErrors();
+    });
+
+    it('düzenlemede yalnızca ad başka bir aktif müşterininkiyle aynı olacak şekilde değişirse onay istenir', function () {
+        $this->actingAs($this->admin);
+        $twin = $this->service->create(['name' => 'ışık motor sanayi a.ş.', 'phone' => '1'], confirmDuplicateName: true);
+        $other = Customer::factory()->create(['name' => 'Başka Firma']);
+
+        // Zaten aynı adı taşıyan kaydın başka alanı (veya adının yalnızca harf büyüklüğü) değişirse onay istenmez.
+        Livewire::test(EditCustomer::class, ['record' => $twin->getRouteKey()])
+            ->assertFormFieldHidden('confirm_duplicate_name')
+            ->fillForm(['name' => 'Işık Motor Sanayi A.Ş.', 'phone' => '2'])
+            ->assertFormFieldHidden('confirm_duplicate_name')
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        // Başka bir kaydın adı aynı olacak şekilde değişirse onay istenir.
+        Livewire::test(EditCustomer::class, ['record' => $other->getRouteKey()])
+            ->fillForm(['name' => 'IŞIK MOTOR SANAYİ A.Ş.'])
+            ->assertFormFieldVisible('confirm_duplicate_name')
+            ->call('save')
+            ->assertHasFormErrors(['confirm_duplicate_name' => 'accepted'])
+            ->fillForm(['confirm_duplicate_name' => true])
+            ->call('save')
+            ->assertHasNoFormErrors();
+
+        expect($other->fresh()->name)->toBe('IŞIK MOTOR SANAYİ A.Ş.');
+    });
+
+    it('servis düzenlemede onaysız ad çakışmasını reddeder', function () {
+        $other = Customer::factory()->create(['name' => 'Başka Firma']);
+
+        expect(fn () => $this->service->update($other, ['name' => 'ışık motor sanayi a.ş.'], 0))
+            ->toThrow(BusinessRuleException::class, 'Bu adla bir müşteri zaten var')
+            ->and($other->fresh()->name)->toBe('Başka Firma');
+    });
+});
