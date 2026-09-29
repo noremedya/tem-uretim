@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Exceptions\BusinessRuleException;
 use App\Models\Customer;
+use App\Support\TaxNumber;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -104,6 +105,10 @@ class CustomerService
 
             if ($data['tax_number'] !== null && ! preg_match(Customer::TAX_NUMBER_PATTERN, $data['tax_number'])) {
                 throw new BusinessRuleException('Vergi no 10 (VKN) veya 11 (TCKN) haneli olmalı ve yalnızca rakam içermelidir.');
+            }
+
+            if ($data['tax_number'] !== null && ! TaxNumber::isValid($data['tax_number'])) {
+                throw new BusinessRuleException(TaxNumber::INVALID_MESSAGE);
             }
         }
 

@@ -223,7 +223,7 @@ it('sipariş formundan "+" ile yeni müşteri eklenir ve seçilir', function () 
     Livewire::test(CreateOrder::class)
         ->callAction(
             TestAction::make('createOption')->schemaComponent('customer_id', schema: 'form'),
-            data: ['name' => 'Yeni Müşteri Ltd.', 'phone' => '0232 000 00 00', 'tax_number' => '9876543210', 'tax_office' => 'Konak'],
+            data: ['name' => 'Yeni Müşteri Ltd.', 'phone' => '0232 000 00 00', 'tax_number' => '9876543217', 'tax_office' => 'Konak'],
         )
         ->assertHasNoFormErrors()
         ->assertSchemaStateSet(['customer_id' => Customer::where('name', 'Yeni Müşteri Ltd.')->sole()->id]);

@@ -12,6 +12,7 @@ use App\Models\Customer;
 use App\Models\Order;
 use App\Models\User;
 use App\Services\CustomerService;
+use App\Support\TaxNumber;
 use Filament\Actions\Testing\TestAction;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -63,20 +64,20 @@ it('vergi no 10 veya 11 rakam olmalıdır', function (string $value) {
 })->with(['123456789', '123456789012', '12345678ab']);
 
 it('11 haneli TCKN kabul edilir', function () {
-    expect(app(CustomerService::class)->create(['name' => 'Şahıs', 'phone' => '0532 000 00 00', 'tax_number' => '12345678901', 'tax_office' => 'Konak'])->tax_number)
-        ->toBe('12345678901');
+    expect(app(CustomerService::class)->create(['name' => 'Şahıs', 'phone' => '0532 000 00 00', 'tax_number' => '12345678950', 'tax_office' => 'Konak'])->tax_number)
+        ->toBe('12345678950');
 });
 
 it('aynı vergi no ile ikinci müşteri oluşturulamaz (form ve veritabanı)', function () {
     $this->actingAs($this->admin);
-    Customer::factory()->create(['tax_number' => '1111111111']);
+    Customer::factory()->create(['tax_number' => '1111111114']);
 
     Livewire::test(CreateCustomer::class)
-        ->fillForm(['name' => 'Kopya', 'phone' => '1', 'tax_number' => '111 111 1111', 'tax_office' => 'X'])
+        ->fillForm(['name' => 'Kopya', 'phone' => '1', 'tax_number' => '111 111 1114', 'tax_office' => 'X'])
         ->call('create')
         ->assertHasFormErrors(['tax_number' => 'unique']);
 
-    expect(fn () => DB::table('customers')->insert(['name' => 'Kopya', 'phone' => '1', 'tax_number' => '1111111111', 'tax_office' => 'X']))
+    expect(fn () => DB::table('customers')->insert(['name' => 'Kopya', 'phone' => '1', 'tax_number' => '1111111114', 'tax_office' => 'X']))
         ->toThrow(QueryException::class);
 });
 
@@ -248,7 +249,7 @@ describe('vergi no ve vergi dairesi birlikte', function () {
 
 describe('aynı adlı müşteri uyarısı', function () {
     beforeEach(function () {
-        $this->existing = Customer::factory()->create(['name' => 'Işık Motor Sanayi A.Ş.', 'tax_number' => '5555555555']);
+        $this->existing = Customer::factory()->create(['name' => 'Işık Motor Sanayi A.Ş.', 'tax_number' => '5555555553']);
         $this->service = app(CustomerService::class);
     });
 
@@ -282,7 +283,7 @@ describe('aynı adlı müşteri uyarısı', function () {
             ->fillForm(['name' => 'ışık motor sanayi a.ş.', 'phone' => '0232 000 00 00'])
             ->assertFormFieldVisible('confirm_duplicate_name')
             ->assertSee('Bu adla bir müşteri zaten var')
-            ->assertSee('5555555555')
+            ->assertSee('5555555553')
             ->call('create')
             ->assertHasFormErrors(['confirm_duplicate_name' => 'accepted']);
 
@@ -338,5 +339,63 @@ describe('aynı adlı müşteri uyarısı', function () {
         expect(fn () => $this->service->update($other, ['name' => 'ışık motor sanayi a.ş.'], 0))
             ->toThrow(BusinessRuleException::class, 'Bu adla bir müşteri zaten var')
             ->and($other->fresh()->name)->toBe('Başka Firma');
+    });
+});
+
+describe('vergi no kontrol hanesi', function () {
+    it('geçerli VKN ve TCKN formdan kaydedilir', function (string $number) {
+        $this->actingAs($this->admin);
+
+        Livewire::test(CreateCustomer::class)
+            ->fillForm(['name' => "Firma {$number}", 'phone' => '1', 'tax_number' => $number, 'tax_office' => 'Kadıköy'])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        expect(Customer::where('tax_number', preg_replace('/\s+/', '', $number))->exists())->toBeTrue();
+    })->with(['1234567890', '0012345672', '10000000146', '287 104 561 60']);
+
+    it('kontrol hanesi hatalı numara formda Türkçe mesajla reddedilir', function (string $number) {
+        $this->actingAs($this->admin);
+
+        Livewire::test(CreateCustomer::class)
+            ->fillForm(['name' => 'X', 'phone' => '1', 'tax_number' => $number, 'tax_office' => 'Kadıköy'])
+            ->call('create')
+            ->assertHasFormErrors(['tax_number'])
+            ->assertSee('Geçersiz vergi/TC kimlik numarası, lütfen kontrol edin.');
+
+        expect(Customer::count())->toBe(0);
+    })->with(['1234567891', '9876543210', '01234567890', '10000000147', '12345678901']);
+
+    it('biçimi hatalı numarada yalnızca biçim mesajı gösterilir', function () {
+        $this->actingAs($this->admin);
+
+        Livewire::test(CreateCustomer::class)
+            ->fillForm(['name' => 'X', 'phone' => '1', 'tax_number' => '12345', 'tax_office' => 'Kadıköy'])
+            ->call('create')
+            ->assertHasFormErrors(['tax_number' => 'regex'])
+            ->assertDontSee('Geçersiz vergi/TC kimlik numarası');
+    });
+
+    it('servis kontrol hanesi hatalı numarayı oluşturmada ve düzenlemede reddeder', function () {
+        $service = app(CustomerService::class);
+
+        expect(fn () => $service->create(['name' => 'X', 'phone' => '1', 'tax_number' => '1234567891', 'tax_office' => 'Kadıköy']))
+            ->toThrow(BusinessRuleException::class, 'Geçersiz vergi/TC kimlik numarası, lütfen kontrol edin.');
+
+        $customer = Customer::factory()->create();
+        expect(fn () => $service->update($customer, ['tax_number' => '10000000147'], 0))
+            ->toThrow(BusinessRuleException::class, 'Geçersiz vergi/TC kimlik numarası')
+            ->and($customer->fresh()->tax_number)->not->toBe('10000000147');
+    });
+
+    it('veritabanı yalnızca biçimi denetler; kontrol hanesi form ve servis seviyesindedir', function () {
+        DB::table('customers')->insert(['name' => 'X', 'phone' => '1', 'tax_number' => '1234567891', 'tax_office' => 'Kadıköy']);
+
+        expect(Customer::where('tax_number', '1234567891')->exists())->toBeTrue();
+    });
+
+    it('factory geçerli vergi numaraları üretir', function () {
+        Customer::factory()->count(20)->create()
+            ->each(fn (Customer $c) => expect(TaxNumber::isValid($c->tax_number))->toBeTrue($c->tax_number));
     });
 });

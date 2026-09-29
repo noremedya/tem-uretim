@@ -4,6 +4,8 @@ namespace App\Filament\Resources\Customers\Schemas;
 
 use App\Models\Customer;
 use App\Services\CustomerService;
+use App\Support\TaxNumber;
+use Closure;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -64,6 +66,12 @@ class CustomerForm
                 ->mutateStateForValidationUsing(fn (?string $state): ?string => Customer::normalizeTaxNumber($state))
                 ->dehydrateStateUsing(fn (?string $state): ?string => Customer::normalizeTaxNumber($state))
                 ->regex(Customer::TAX_NUMBER_PATTERN)
+                // Kontrol hanesi (VKN / TCKN algoritması); biçim hatalıysa yalnızca regex mesajı gösterilir.
+                ->rule(fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {
+                    if (is_string($value) && preg_match(Customer::TAX_NUMBER_PATTERN, $value) && ! TaxNumber::isValid($value)) {
+                        $fail(TaxNumber::INVALID_MESSAGE);
+                    }
+                })
                 ->validationMessages([
                     'regex' => 'Vergi no 10 (VKN) veya 11 (TCKN) haneli olmalı ve yalnızca rakam içermelidir.',
                     'unique' => 'Bu vergi numarasıyla kayıtlı bir müşteri zaten var.',
