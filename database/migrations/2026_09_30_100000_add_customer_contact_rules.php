@@ -16,9 +16,8 @@ return new class extends Migration
                 ADD CONSTRAINT customers_tax_pair_check CHECK ((tax_number IS NULL) = (tax_office IS NULL))
         SQL);
 
-        // Aynı ad uyarısı (Customer::scopeActiveWithSameName) bu ifadeyle arar; unique değildir.
-        // translate: Türkçe noktasız ı, I'nın küçüğüdür (lower('IŞIK') = 'işik', 'ışık' → 'işik').
-        DB::statement("CREATE INDEX customers_normalized_name_index ON customers (translate(lower(btrim(name)), 'ı', 'i'))");
+        // Aynı ad uyarısı (CustomerService) bu ifadeyle arar; unique değildir.
+        DB::statement('CREATE INDEX customers_normalized_name_index ON customers (lower(btrim(name)))');
     }
 
     public function down(): void
