@@ -1,16 +1,19 @@
 <?php
 
 /*
- * Eşzamanlılık testleri için ayrı süreçte çalışan işçi. Kendi veritabanı bağlantısıyla StockService'i çağırır
+ * Eşzamanlılık testleri için ayrı süreçte çalışan işçi. Kendi veritabanı bağlantısıyla servisi çağırır
  * ve sonucu JSON olarak yazar.
  *
- * Kullanım: php worker.php <in|out|correct> <part_id> <user_id> <miktar|hareket_id> [idempotency_key]
+ * Kullanım:
+ *   php worker.php <in|out|correct> <part_id> <user_id> <miktar|hareket_id> [idempotency_key]
+ *   php worker.php order <customer_id> <motor_model_id>
  */
 
 use App\Exceptions\BusinessRuleException;
 use App\Models\Part;
 use App\Models\StockMovement;
 use App\Models\User;
+use App\Services\OrderService;
 use App\Services\StockService;
 use Illuminate\Contracts\Console\Kernel;
 use Tests\TestCase;
@@ -23,14 +26,30 @@ $app->make(Kernel::class)->bootstrap();
 // Yalnızca test veritabanında çalışır (tests/TestCase.php ile aynı kural).
 TestCase::ensureTestDatabase();
 
-[, $operation, $partId, $userId, $argument] = $argv;
-$key = $argv[5] ?? null;
-
-$service = app(StockService::class);
-$part = Part::query()->findOrFail($partId);
-$user = User::query()->findOrFail($userId);
+$operation = $argv[1];
 
 try {
+    if ($operation === 'order') {
+        [, , $customerId, $motorModelId] = $argv;
+
+        $order = app(OrderService::class)->create([
+            'customer_id' => (int) $customerId,
+            'due_date' => today()->addMonth()->toDateString(),
+            'items' => [['motor_model_id' => (int) $motorModelId, 'quantity' => 1]],
+        ]);
+
+        echo json_encode(['ok' => true, 'id' => $order->id, 'number' => $order->order_number]);
+
+        exit;
+    }
+
+    [, , $partId, $userId, $argument] = $argv;
+    $key = $argv[5] ?? null;
+
+    $service = app(StockService::class);
+    $part = Part::query()->findOrFail($partId);
+    $user = User::query()->findOrFail($userId);
+
     $movement = match ($operation) {
         'in' => $service->stockIn($part, $argument, $user, null, $key),
         'out' => $service->stockOut($part, $argument, $user, 'Eşzamanlı çıkış', $key),

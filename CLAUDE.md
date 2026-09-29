@@ -56,11 +56,12 @@ Tablo adları, kolon adları ve enum değerleri İngilizce; arayüz etiketleri T
 - **parts** (stok kartı): code (unique), name, unit_id, type (enum: raw_material / component / consumable — hammadde / parça / sarf), barcode (unique, nullable), critical_level (decimal, >= 0; 0 = takip yok), is_active, lock_version. Hareketi olan parçanın birimi değiştirilemez.
 - **stock_balances**: part_id (unique), quantity (decimal, >= 0), is_below_critical (bool — kritik bildirimi gönderildi mi), updated_at — hızlı okuma için; tek yazıcısı StockService. Parça oluşturulurken 0 bakiyeyle açılır.
 - **stock_movements**: part_id, type (enum: stock_in, stock_out, production_consumption, count_adjustment, return, correction — giriş, çıkış, üretim sarfı, sayım düzeltme, iade, ters kayıt), quantity (işaretli decimal, 0 olamaz), balance_before, balance_after, reference (morph: work_order vb., nullable), corrected_movement_id (nullable, unique — ters kaydedilen hareket), idempotency_key (uuid, nullable, unique — çift gönderim koruması), description, user_id, created_at. Update/delete/truncate yok (veritabanı trigger'ı ile de engellenir).
-- **motor_models**: code (unique), name, güç, devir, gerilim gibi teknik alanlar (power, speed, voltage…), description, is_active
+- **motor_models**: code (unique), name, teknik alanlar (hepsi isteğe bağlı): power_kw (güç, kW, decimal), speed_rpm (devir, d/dk, integer), voltage (gerilim, metin), frequency_hz (frekans, Hz), pole_count (kutup sayısı), frame_size (gövde ölçüsü, metin), phase (enum: single_phase / three_phase), mounting_type (montaj şekli, metin, ör. B3/B5/B14), protection_class (koruma sınıfı, metin, ör. IP55), efficiency_class (verim sınıfı, metin, ör. IE3); description, is_active, lock_version
 - **bom_items** (ürün reçetesi): motor_model_id, part_id, quantity_per_unit; (motor_model_id, part_id) unique
-- **customers**: name (ad/ünvan), tax_number, phone, email, address, is_active
-- **orders**: order_number (unique), customer_id, order_date, due_date, status (enum: open, partial, completed, cancelled — açık, kısmi, tamamlandı, iptal), notes
-- **order_items**: order_id, motor_model_id, quantity
+- **customers**: name (ad/ünvan, zorunlu), tax_number (isteğe bağlı; doluysa unique ve 10–11 rakam — VKN/TCKN), tax_office (vergi dairesi, isteğe bağlı), phone, email, address, is_active, lock_version
+- **orders**: order_number (unique, otomatik), customer_reference (müşteri sipariş no, isteğe bağlı, aranabilir), customer_id, order_date, due_date (zorunlu, >= order_date), status (enum: open, partial, completed, cancelled — açık, kısmi, tamamlandı, iptal), cancellation_reason (iptalde zorunlu), notes, lock_version
+- **order_items**: order_id, motor_model_id, quantity (tam sayı, > 0); (order_id, motor_model_id) unique
+- **number_sequences** (numara sayaçları): name, scope, last_value; (name, scope) unique — bkz. bölüm 5 "Numara üretimi"
 - **production_batches** (parti): batch_number (unique), date, notes
 - **work_orders**: work_order_number (unique, otomatik), order_item_id (nullable), motor_model_id, quantity, production_batch_id (nullable), status (enum: planned, in_progress, completed, cancelled — planlandı, üretimde, tamamlandı, iptal), assigned_user_id, planned_start, planned_end, started_at, completed_at, lock_version
 - **work_order_status_histories**: work_order_id, from_status, to_status, user_id, description, created_at
@@ -81,7 +82,7 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 **İş emri tamamlanınca (tek transaction):**
 1. Reçeteye göre `adet × birim_basina_miktar` kadar malzeme `uretim_sarf` hareketiyle düşülür.
 2. Herhangi bir malzeme yetersizse işlem tamamen iptal edilir; hangi malzemeden ne kadar eksik olduğu kullanıcıya listelenir.
-3. `adet` kadar `motor_units` kaydı oluşturulur. Seri no formatı yapılandırılabilir olsun (varsayılan: `{MODEL_KODU}-{YY}{AA}-{5 haneli sıra}`), sıra numarası çakışmasız üretilmeli (veritabanı sequence'i veya kilitli sayaç tablosu).
+3. `adet` kadar `motor_units` kaydı oluşturulur. Seri no formatı yapılandırılabilir olsun (varsayılan: `{MODEL_KODU}-{YY}{AA}-{5 haneli sıra}`), sıra numarası çakışmasız üretilmeli (`NumberSequenceService`, bkz. "Numara üretimi").
 4. İş emri siparişe bağlıysa motorlar siparişe bağlanır, sipariş durumu yeniden hesaplanır.
 
 **Stok**
@@ -99,7 +100,25 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - Stok hareketleri listesini yönetici ve depo görür; operatör görmez.
 - Günlük zamanlanmış komut `stock:reconcile`: her parça için hareket toplamı ile `stock_balances` karşılaştırılır; fark varsa loglanır ve yöneticiye bildirim gider (otomatik düzeltme yapmaz).
 
-**Denetim izi:** users, parts, motor_models, bom_items, customers, orders, work_orders, motor_units değişiklikleri activitylog ile kaydedilir. Yönetici için görüntüleme ekranı olsun.
+**Numara üretimi** (`NumberSequenceService`): sipariş no, iş emri no ve seri no aynı servisle üretilir.
+- Numara, yapılandırılabilir bir şablondan üretilir (`config/numbering.php`). Belirteçler: `{YIL}` (4 hane), `{YY}`, `{AA}` (ay), `{SIRA:n}` (n haneli sıra) ve çağıranın verdiği bağlam değerleri (ör. `{MODEL_KODU}`).
+- Sayaç kapsamı, şablonun sıra dışındaki kısmıdır: `SIP-{YIL}-{SIRA:5}` için kapsam `SIP-2026-` olduğundan sıra her yıl başında kendiliğinden sıfırlanır.
+- Sayaç `number_sequences` tablosunda tek atomik sorguyla artırılır (`INSERT ... ON CONFLICT DO UPDATE ... RETURNING`); satır kilidi çağıranın transaction'ı bitene kadar tutulur. Böylece eşzamanlı işlemlerde çakışma olmaz, geri alınan işlem numara tüketmez.
+- Sipariş no: `SIP-{YIL}-{SIRA:5}` (ör. SIP-2026-00001).
+
+**Müşteri**
+- Pasif müşteriye yeni sipariş açılamaz (siparişin müşterisi pasif bir müşteriyle değiştirilemez); mevcut siparişleri görünür kalır.
+
+**Sipariş**
+- En az bir kalem ve termin tarihi (`due_date`) zorunlu; `due_date >= order_date`.
+- Sipariş no otomatik üretilir, formda girilmez.
+- Durumlar: `open` → `partial` / `completed` / `cancelled`, `partial` → `completed` / `cancelled`. `open`, `partial`, `completed` üretime göre hesaplanır (Aşama 4); `cancelled` elle yapılır. Üretim geri alındığında gerekebilecek geri geçişler Aşama 4'te ele alınır.
+- **İptal:** yalnızca `open` ve `partial` siparişler iptal edilebilir; açıklama zorunludur, `cancellation_reason`'a ve denetim izine yazılır, sipariş sayfasında görünür. İptal geri alınamaz.
+- **Kalemler** yalnızca sipariş `open` iken eklenip çıkarılabilir ve miktarı değişebilir. Aşama 4'te: bağlı iş emri veya üretilmiş motor varsa kalem silinemez, miktar üretilenin altına inemez.
+- `completed` ve `cancelled` siparişler düzenlenemez. `partial` siparişte yalnızca termin, müşteri sipariş no ve notlar değişebilir (müşteri ve kalemler değişmez).
+- Pasif motor modeli yeni kaleme eklenemez; mevcut kalemler korunur.
+
+**Denetim izi:** users, parts, motor_models, bom_items, customers, orders, order_items, work_orders, motor_units değişiklikleri activitylog ile kaydedilir. Yönetici için görüntüleme ekranı olsun.
 
 ## 6. Roller ve yetkiler
 
@@ -231,8 +250,8 @@ Testler PostgreSQL üzerinde çalışmalı (SQLite değil), çünkü kilitler ve
 **Aşamalar**
 1. Proje iskeleti: Laravel + Filament kurulumu, geliştirme için `docker-compose.yml`, PostgreSQL, Türkçe dil/saat dilimi, roller ve yetkiler, `app:create-admin`, kullanıcı yönetimi, Pest kurulumu
 2. Stok: birimler, parçalar, `StockService`, stok hareketleri, stok işlemi sayfası, kritik stok bildirimi, `stock:reconcile`, testler
-3. Müşteri ve sipariş
-4. Üretim: motor modelleri, reçete, partiler, iş emirleri, durum makinesi, tamamlama akışı, seri no üretimi, üretilen motorlar, testler
+3. Müşteri ve sipariş, motor modelleri (tablo + yönetim ekranı; sipariş kalemleri motor modeline bağlı olduğu için Aşama 4'ten öne alındı), `NumberSequenceService`
+4. Üretim: reçete, partiler, iş emirleri, durum makinesi, tamamlama akışı, seri no üretimi, üretilen motorlar, testler
    - İş emri geri alma akışı: üretim sarfının ters kaydı burada ele alınır (elle ters kayıt kapalıdır, bkz. bölüm 5).
 5. Hızlı İşlem sayfası: USB barkod ve kamera ile okuma
 6. Raporlar ve Excel dışa aktarım

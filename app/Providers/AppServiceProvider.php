@@ -2,6 +2,10 @@
 
 namespace App\Providers;
 
+use App\Models\Customer;
+use App\Models\MotorModel;
+use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Part;
 use App\Models\StockMovement;
 use App\Models\Unit;
@@ -36,6 +40,10 @@ class AppServiceProvider extends ServiceProvider
             'unit' => Unit::class,
             'part' => Part::class,
             'stock_movement' => StockMovement::class,
+            'motor_model' => MotorModel::class,
+            'customer' => Customer::class,
+            'order' => Order::class,
+            'order_item' => OrderItem::class,
         ]);
 
         // N+1 ve yanlışlıkla atılan alanları geliştirmede erken yakala.
