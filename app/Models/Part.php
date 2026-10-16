@@ -63,6 +63,47 @@ class Part extends Model
         return $this->hasMany(StockMovement::class);
     }
 
+    /**
+     * Bu kartın reçetesi (kart yarı mamul veya mamulse).
+     *
+     * @return HasMany<BomItem, $this>
+     */
+    public function bomItems(): HasMany
+    {
+        return $this->hasMany(BomItem::class, 'parent_part_id');
+    }
+
+    /**
+     * Bu kartın bileşen olarak geçtiği reçete satırları.
+     *
+     * @return HasMany<BomItem, $this>
+     */
+    public function usedInBomItems(): HasMany
+    {
+        return $this->hasMany(BomItem::class, 'component_part_id');
+    }
+
+    /**
+     * Mamul kartıysa bağlı olduğu motor modeli.
+     *
+     * @return HasOne<MotorModel, $this>
+     */
+    public function motorModel(): HasOne
+    {
+        return $this->hasOne(MotorModel::class, 'finished_part_id');
+    }
+
+    public function isFinishedGood(): bool
+    {
+        return $this->type === PartType::FinishedGood;
+    }
+
+    /** Reçetesi olabilir mi? Yalnızca yarı mamul ve mamul. */
+    public function canHaveBom(): bool
+    {
+        return in_array($this->type, [PartType::SemiFinished, PartType::FinishedGood], true);
+    }
+
     /** Kritik seviye takibi var mı? critical_level = 0 takip yok demektir. */
     public function tracksCriticalLevel(): bool
     {

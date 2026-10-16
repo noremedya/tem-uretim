@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Models\BomItem;
 use App\Models\Customer;
 use App\Models\MotorModel;
 use App\Models\Order;
@@ -41,6 +42,7 @@ class AppServiceProvider extends ServiceProvider
             'part' => Part::class,
             'stock_movement' => StockMovement::class,
             'motor_model' => MotorModel::class,
+            'bom_item' => BomItem::class,
             'customer' => Customer::class,
             'order' => Order::class,
             'order_item' => OrderItem::class,

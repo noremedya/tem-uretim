@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\PartType;
 use App\Enums\StockMovementType;
 use App\Exceptions\BusinessRuleException;
 use App\Exceptions\InsufficientStockException;
@@ -101,7 +102,7 @@ class StockService
         }
 
         if (! $movement->isCorrectableType()) {
-            throw new BusinessRuleException('Üretim sarfı hareketleri elle ters kaydedilemez.');
+            throw new BusinessRuleException("{$movement->type->label()} hareketleri elle ters kaydedilemez; iş emri geri alma akışını kullanın.");
         }
 
         $quantity = Quantity::negate((string) $movement->quantity);
@@ -318,6 +319,11 @@ class StockService
 
     private function ensureTypeAllowed(Part $part, StockMovementType $type): void
     {
+        // Veritabanında stock_movements_validate_insert trigger'ı da zorlar.
+        if ($part->type === PartType::FinishedGood && ! $type->allowedOnFinishedGood()) {
+            throw new BusinessRuleException("{$part->code} {$part->name} bir mamul kartı. Mamul stoğu elle değiştirilemez; yalnızca üretim ve sevkle değişir.");
+        }
+
         if (! $part->is_active && ! $type->allowedOnInactivePart()) {
             throw new BusinessRuleException("{$part->code} {$part->name} pasif. Pasif parçaya yalnızca sayım yapılabilir.");
         }

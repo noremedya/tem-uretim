@@ -25,15 +25,21 @@ class PartForm
                 Section::make('Stok kartı')
                     ->columns(2)
                     ->schema([
+                        // Mamul kartının kodu, adı ve birimi motor modelinden yönetilir.
                         TextInput::make('code')
                             ->label('Kod')
                             ->required()
                             ->maxLength(50)
-                            ->unique(ignoreRecord: true),
+                            ->unique(ignoreRecord: true)
+                            ->disabled(fn (?Part $record): bool => $record?->isFinishedGood() ?? false)
+                            ->helperText(fn (?Part $record): ?string => ($record?->isFinishedGood() ?? false)
+                                ? 'Mamul kartının kodu, adı ve birimi motor modelinden değiştirilir.'
+                                : null),
                         TextInput::make('name')
                             ->label('Ad')
                             ->required()
-                            ->maxLength(255),
+                            ->maxLength(255)
+                            ->disabled(fn (?Part $record): bool => $record?->isFinishedGood() ?? false),
                         // Muhasebe koduyla gösterilir. Mamul kartı elle açılamaz ve mamul türüne alınamaz
                         // (PartService'te de kontrol edilir); mamul kartının türü değiştirilemez.
                         Select::make('type')
@@ -51,7 +57,7 @@ class PartForm
                             ->preload()
                             ->required()
                             // Hareketi olan parçanın birimi değiştirilemez (PartService'te de kontrol edilir).
-                            ->disabled(fn (?Part $record): bool => $record?->stockMovements()->exists() ?? false)
+                            ->disabled(fn (?Part $record): bool => ($record?->isFinishedGood() ?? false) || ($record?->stockMovements()->exists() ?? false))
                             ->helperText(fn (?Part $record): ?string => ($record?->stockMovements()->exists() ?? false)
                                 ? 'Stok hareketi olan parçanın birimi değiştirilemez.'
                                 : null)

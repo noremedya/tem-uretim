@@ -4,12 +4,19 @@ namespace App\Services;
 
 use App\Exceptions\BusinessRuleException;
 use App\Models\MotorModel;
+use App\Models\Part;
 use App\Support\Quantity;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Motor modelleri. Her modelin bir mamul kartı vardır: model oluşturulunca açılır, kodu/adı/aktifliği
+ * modelle birlikte değişir (CLAUDE.md bölüm 5 "Mamul ve yarı mamul").
+ */
 class MotorModelService
 {
+    public function __construct(private readonly PartService $parts) {}
+
     private const INTEGER_FIELDS = [
         'speed_rpm' => 'Devir',
         'frequency_hz' => 'Frekans',
@@ -18,11 +25,18 @@ class MotorModelService
 
     public function create(array $data): MotorModel
     {
-        $model = new MotorModel(Arr::only($this->normalize($data), MotorModel::FIELDS));
-        $model->is_active = true;
-        $model->save();
+        $data = $this->normalize($data);
 
-        return $model;
+        return DB::transaction(function () use ($data): MotorModel {
+            $model = new MotorModel(Arr::only($data, MotorModel::FIELDS));
+            $this->ensurePartCodeFree($model->code);
+
+            $model->finished_part_id = $this->parts->createFinishedGood($model->code, $model->name, true)->getKey();
+            $model->is_active = true;
+            $model->save();
+
+            return $model;
+        });
     }
 
     /**
@@ -34,7 +48,13 @@ class MotorModelService
 
         return DB::transaction(function () use ($model, $data, $expectedLockVersion): MotorModel {
             $model->fill(Arr::only($data, MotorModel::FIELDS));
+
+            if ($model->isDirty('code')) {
+                $this->ensurePartCodeFree($model->code, except: $model->finished_part_id);
+            }
+
             $model->saveExpectingVersion($expectedLockVersion);
+            $this->syncFinishedPart($model);
 
             return $model;
         });
@@ -42,18 +62,37 @@ class MotorModelService
 
     public function deactivate(MotorModel $model): MotorModel
     {
-        $model->is_active = false;
-        $model->save();
+        return DB::transaction(function () use ($model): MotorModel {
+            $model->is_active = false;
+            $model->save();
+            $this->syncFinishedPart($model);
 
-        return $model;
+            return $model;
+        });
     }
 
     public function activate(MotorModel $model): MotorModel
     {
-        $model->is_active = true;
-        $model->save();
+        return DB::transaction(function () use ($model): MotorModel {
+            $model->is_active = true;
+            $model->save();
+            $this->syncFinishedPart($model);
 
-        return $model;
+            return $model;
+        });
+    }
+
+    private function syncFinishedPart(MotorModel $model): void
+    {
+        $this->parts->syncFinishedGood($model->finishedPart()->firstOrFail(), $model->code, $model->name, $model->is_active);
+    }
+
+    /** Mamul kartı modelin kodunu kullanır; bu kodla başka bir stok kartı olmamalı. */
+    private function ensurePartCodeFree(string $code, ?int $except = null): void
+    {
+        if (Part::query()->where('code', $code)->when($except, fn ($query) => $query->whereKeyNot($except))->exists()) {
+            throw new BusinessRuleException("{$code} koduyla bir stok kartı zaten var. Motor modelinin mamul kartı aynı kodu kullanır; farklı bir kod seçin.");
+        }
     }
 
     /** Boş alanlar null olur; güç Türkçe biçimde girilebilir ("5,5"); sayısal alanlar pozitif olmalı. */

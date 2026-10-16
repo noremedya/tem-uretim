@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Parts;
 
+use App\Filament\RelationManagers\BomItemsRelationManager;
 use App\Filament\Resources\Parts\Pages\CreatePart;
 use App\Filament\Resources\Parts\Pages\EditPart;
 use App\Filament\Resources\Parts\Pages\ListParts;
@@ -60,6 +61,7 @@ class PartResource extends Resource
     public static function getRelations(): array
     {
         return [
+            BomItemsRelationManager::class,
             StockMovementsRelationManager::class,
         ];
     }

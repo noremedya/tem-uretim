@@ -30,12 +30,13 @@ class PartPolicy
 
     public function deactivate(User $actor, Part $part): bool
     {
-        return $actor->can(Permission::PartsManage) && $part->is_active;
+        // Mamul kartı motor modeliyle birlikte pasifleşir.
+        return $actor->can(Permission::PartsManage) && $part->is_active && ! $part->isFinishedGood();
     }
 
     public function activate(User $actor, Part $part): bool
     {
-        return $actor->can(Permission::PartsManage) && ! $part->is_active;
+        return $actor->can(Permission::PartsManage) && ! $part->is_active && ! $part->isFinishedGood();
     }
 
     // Silme yok, pasifleştirme var.

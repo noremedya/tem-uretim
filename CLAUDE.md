@@ -59,17 +59,18 @@ Tablo adları, kolon adları ve enum değerleri İngilizce; arayüz etiketleri T
 - **units** (birim: adet, kg, metre…): name (unique), allows_decimal (bool — false ise bu birimdeki miktarlar tam sayı olmalı), lock_version
 - **parts** (stok kartı): code (unique), name, unit_id, type (enum, muhasebe koduyla: raw_material 150.01 hammadde / component 150.02 komponent / direct_consumable 150.03 direkt sarf / indirect_consumable 157 endirekt sarf / semi_finished 151 yarı mamul / finished_good 152 mamul; kodlar `config/accounting.php`'de), barcode (unique, nullable), critical_level (decimal, >= 0; 0 = takip yok), is_active, lock_version. Hareketi olan parçanın birimi değiştirilemez. Mamul (finished_good) kartı elle açılamaz ve hiçbir karta mamul türü verilemez/mamul türünden çıkarılamaz (Aşama 4'te motor modelinden oluşur).
 - **stock_balances**: part_id (unique), quantity (decimal, >= 0), is_below_critical (bool — kritik bildirimi gönderildi mi), updated_at — hızlı okuma için; tek yazıcısı StockService. Parça oluşturulurken 0 bakiyeyle açılır.
-- **stock_movements**: part_id, type (enum: stock_in, stock_out, production_consumption, count_adjustment, return, correction — giriş, çıkış, üretim sarfı, sayım düzeltme, iade, ters kayıt), quantity (işaretli decimal, 0 olamaz), balance_before, balance_after, reference (morph: work_order vb., nullable), corrected_movement_id (nullable, unique — ters kaydedilen hareket), idempotency_key (uuid, nullable, unique — çift gönderim koruması), description, user_id, created_at. Update/delete/truncate yok (veritabanı trigger'ı ile de engellenir).
-- **motor_models**: code (unique), name, teknik alanlar (hepsi isteğe bağlı): power_kw (güç, kW, decimal), speed_rpm (devir, d/dk, integer), voltage (gerilim, metin), frequency_hz (frekans, Hz), pole_count (kutup sayısı), frame_size (gövde ölçüsü, metin), phase (enum: single_phase / three_phase), mounting_type (montaj şekli, metin, ör. B3/B5/B14), protection_class (koruma sınıfı, metin, ör. IP55), efficiency_class (verim sınıfı, metin, ör. IE3); description, is_active, lock_version
-- **bom_items** (ürün reçetesi): motor_model_id, part_id, quantity_per_unit; (motor_model_id, part_id) unique
+- **stock_movements**: part_id, type (enum: stock_in, stock_out, production_consumption, production_scrap, production_output, shipment, count_adjustment, return, correction — giriş, çıkış, üretim sarfı, üretim firesi, üretimden giriş, sevk, sayım düzeltme, iade, ters kayıt), quantity (işaretli decimal, 0 olamaz), balance_before, balance_after, reference (morph: work_order vb., nullable), corrected_movement_id (nullable, unique — ters kaydedilen hareket), idempotency_key (uuid, nullable, unique — çift gönderim koruması), description, user_id, created_at. Update/delete/truncate yok (veritabanı trigger'ı ile de engellenir).
+- **motor_models**: code (unique), name, teknik alanlar (hepsi isteğe bağlı): power_kw (güç, kW, decimal), speed_rpm (devir, d/dk, integer), voltage (gerilim, metin), frequency_hz (frekans, Hz), pole_count (kutup sayısı), frame_size (gövde ölçüsü, metin), phase (enum: single_phase / three_phase), mounting_type (montaj şekli, metin, ör. B3/B5/B14), protection_class (koruma sınıfı, metin, ör. IP55), efficiency_class (verim sınıfı, metin, ör. IE3); description, is_active, lock_version, finished_part_id (unique — modelin mamul kartı, model oluşturulunca otomatik açılır)
+- **bom_items** (ürün reçetesi, stok kartına bağlı): parent_part_id (yarı mamul veya mamul kartı), component_part_id (endirekt sarf ve mamul olamaz), quantity_per_unit (> 0), scrap_rate (standart fire yüzdesi, 0 ≤ oran < 100); (parent_part_id, component_part_id) unique, parent ≠ component. Motorun reçetesi mamul kartının reçetesidir.
 - **customers**: name (ad/ünvan, zorunlu), tax_number (isteğe bağlı; doluysa unique, 10–11 rakam ve kontrol hanesi geçerli — VKN/TCKN), tax_office (vergi dairesi; vergi no ile birlikte: biri doluysa diğeri de zorunlu), phone (zorunlu), email, address, is_active, lock_version
 - **orders**: order_number (unique, otomatik), customer_reference (müşteri sipariş no, isteğe bağlı, aranabilir), customer_id, order_date, due_date (zorunlu, >= order_date), status (enum: open, partial, completed, cancelled — açık, kısmi, tamamlandı, iptal), cancellation_reason (iptalde zorunlu), notes, lock_version
 - **order_items**: order_id, motor_model_id, quantity (tam sayı, > 0); (order_id, motor_model_id) unique
 - **number_sequences** (numara sayaçları): name, scope, last_value; (name, scope) unique — bkz. bölüm 5 "Numara üretimi"
-- **production_batches** (parti): batch_number (unique), date, notes
-- **work_orders**: work_order_number (unique, otomatik), order_item_id (nullable), motor_model_id, quantity, production_batch_id (nullable), status (enum: planned, in_progress, completed, cancelled — planlandı, üretimde, tamamlandı, iptal), assigned_user_id, planned_start, planned_end, started_at, completed_at, lock_version
+- **production_batches** (parti): batch_number (unique, elle girilir), date, notes, lock_version
+- **work_orders**: work_order_number (unique, otomatik), product_part_id (üretilen kart: yarı mamul veya mamul), motor_model_id (nullable; mamulde dolu), order_item_id (nullable; yalnızca mamulde, kalemin modeli aynı olmalı), quantity (> 0; birimin küsurat kuralına uyar), production_batch_id (nullable), status (enum: planned, in_progress, completed, cancelled — planlandı, üretimde, tamamlandı, iptal), assigned_user_id, planned_start, planned_end, started_at, completed_at, lock_version
+- **work_order_materials** (iş emrinin malzeme listesi; oluşturulurken reçeteden kopyalanır): work_order_id, part_id, quantity_per_unit, scrap_rate, required_quantity (adet × birim başına), planned_scrap (standart fire), actual_scrap (tamamlamada girilen fire, nullable); (work_order_id, part_id) unique
 - **work_order_status_histories**: work_order_id, from_status, to_status, user_id, description, created_at
-- **motor_units** (üretilen motor): serial_number (unique), motor_model_id, work_order_id, production_batch_id, order_id (nullable), production_date, status (enum: in_stock, shipped — stokta, sevk edildi), notes
+- **motor_units** (üretilen motor): serial_number (unique), motor_model_id, work_order_id, production_batch_id, order_id (nullable), production_date, status (enum: in_stock, shipped, voided — stokta, sevk edildi, iptal edildi), shipped_at, shipped_by_user_id, notes. Silinmez; seri no tekrar kullanılmaz.
 
 Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara index ekle.
 
@@ -80,14 +81,34 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - uretimde → tamamlandi (atanan operatör veya yönetici)
 - planlandi → iptal (yönetici)
 - uretimde → planlandi (yalnızca yönetici, açıklama zorunlu)
-- tamamlandi ve iptal son durumlardır
+- tamamlandi → uretimde yalnızca **geri alma** akışıyla (aşağıda); iptal son durumdur
 - Her geçiş `work_order_status_histories`'e yazılır.
 
+**İş emri**
+- Bir stok kartı üretir: yarı mamul veya mamul. Mamul iş emri siparişin aynı modeldeki kalemine bağlanabilir. Numara: `IE-{YIL}-{SIRA:5}`.
+- **Malzeme listesi** oluşturulurken reçeteden `work_order_materials`'a kopyalanır; reçete sonradan değişse de açık iş emri etkilenmez. `planned` iş emrinde "reçeteyi yenile" ile güncel reçete yeniden kopyalanır. Reçetesi olmayan karta iş emri açılamaz.
+- Adet yönetici tarafından `planned` ve `in_progress` iken değiştirilebilir (malzeme ihtiyacı yeniden hesaplanır). **Kısmi tamamlama yoktur**: az üretildiyse önce adet düşürülür.
+- **Yetersiz malzeme uyarısı:** iş emri ekranında her malzeme için ihtiyaç (fire dahil), mevcut ve eksik gösterilir. Uyarıdır; oluşturma ve başlatmayı engellemez, başka iş emirlerinin ihtiyacını hesaba katmaz.
+
 **İş emri tamamlanınca (tek transaction):**
-1. Reçeteye göre `adet × birim_basina_miktar` kadar malzeme `uretim_sarf` hareketiyle düşülür.
-2. Herhangi bir malzeme yetersizse işlem tamamen iptal edilir; hangi malzemeden ne kadar eksik olduğu kullanıcıya listelenir.
-3. `adet` kadar `motor_units` kaydı oluşturulur. Seri no formatı yapılandırılabilir olsun (varsayılan: `{MODEL_KODU}-{YY}{AA}-{5 haneli sıra}`), sıra numarası çakışmasız üretilmeli (`NumberSequenceService`, bkz. "Numara üretimi").
-4. İş emri siparişe bağlıysa motorlar siparişe bağlanır, sipariş durumu yeniden hesaplanır.
+1. Operatör her malzeme için gerçekleşen fireyi girer (varsayılan: standart fire). Net ihtiyaç (`adet × birim başına`) `production_consumption`, fire `production_scrap` hareketiyle düşülür.
+2. Herhangi bir malzeme yetersizse (yarı mamul dahil) işlem tamamen iptal edilir; hangi malzemeden ne kadar eksik olduğu kullanıcıya listelenir. Eksik yarı mamul otomatik üretilmez.
+3. Üretilen kart `production_output` hareketiyle stoğa girer.
+4. Mamulde `adet` kadar `motor_units` kaydı oluşturulur. Seri no formatı yapılandırılabilir (varsayılan: `{MODEL_KODU}-{YY}{AA}-{SIRA:5}`; sıra model ve ay bazında sıfırlanır), sıra numarası çakışmasız üretilir (`NumberSequenceService`, bkz. "Numara üretimi").
+5. İş emri siparişe bağlıysa motorlar siparişe bağlanır, sipariş durumu yeniden hesaplanır.
+
+**İş emri geri alma** (yalnızca yönetici, açıklama zorunlu, tek transaction): yalnızca tamamlanmış iş emri; motorların hepsi stokta olmalı (sevk edilmiş motor varsa reddedilir). Sarf, fire ve üretimden giriş hareketleri ters kaydedilir (`correction`); üretilen yarı mamul bu arada tüketildiyse ters kayıt stoğu eksiye düşüreceği için reddedilir. Motorlar `voided` olur, iş emri `in_progress`'e döner, sipariş durumu yeniden hesaplanır.
+
+**Reçete**
+- Üst kart yarı mamul veya mamul; bileşen endirekt sarf veya mamul olamaz. Direkt sarf reçeteye girer.
+- Döngü yasaktır (A, B'yi içerir; B, A'yı içeremez — dolaylı dahil); kontrol kilit altında yapılır.
+
+**Mamul ve yarı mamul**
+- Motor modeli oluşturulunca mamul kartı otomatik açılır: kod ve ad modelinkiyle aynı, birim "Adet", tür `finished_good`. Model kodu/adı değişince kart da değişir; model pasifleşince kart pasifleşir.
+- Mamul kartında elle hareket yoktur: yalnızca `production_output`, `shipment` ve geri almadaki `correction` (servis + veritabanı trigger'ı). Kural: **mamul bakiyesi = o modelin `in_stock` motor sayısı**; `stock:reconcile` bunu da kontrol eder.
+- Yarı mamulde lot/seri takibi yoktur; yarı mamul satılmaz (sipariş kalemi yalnızca motor modeline bağlıdır).
+
+**Sevk** (yönetici ve depo): stoktaki motorlar seçilip sevk edilir; motor `shipped` olur, mamul kartından `shipment` hareketiyle düşülür. E-irsaliye bağlantısı Aşama 6'da eklenir.
 
 **Stok**
 - Bakiye hiçbir zaman negatife düşemez (servis + check constraint).
@@ -99,7 +120,7 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - **Pasif parçaya** yalnızca sayım (`count_adjustment`) yapılabilir; diğer tüm hareketler reddedilir.
 - **Küsurat:** birimi `allows_decimal = false` olan parçada küsuratlı miktar (hareket miktarı, sayılan miktar) servis seviyesinde reddedilir.
 - **Ters kayıt (`correction`):** miktar orijinal hareketin tam tersidir; bir hareket yalnızca bir kez ters kaydedilebilir (`corrected_movement_id` unique); ters kaydın kendisi ters kaydedilemez; stoğu eksiye düşürecekse reddedilir. Bu kurallar servis + veritabanı (unique, insert trigger'ı) seviyesinde zorlanır.
-- **Üretim sarfı (`production_consumption`) elle ters kaydedilemez.** Motor kayıtları oluşmuşken malzemenin geri dönmesi tutarsızlık yaratır; Aşama 4'te iş emri geri alma akışıyla ele alınacak.
+- **Üretim hareketleri (`production_consumption`, `production_scrap`, `production_output`) ve `shipment` elle ters kaydedilemez.** Motor kayıtlarıyla tutarlılık için yalnızca iş emri geri alma akışı bunları ters kaydeder.
 - **Çift gönderim:** stok işlemi formu işlem sırasında butonu pasifleştirir ve formun ikinci kez gönderilmesini tarayıcıda engeller (Alpine `submitGuard`, bkz. bölüm 7); sunucu tarafında her form gönderimi bir `idempotency_key` taşır, aynı anahtarla ikinci hareket oluşmaz. Koruma yalnızca bu anahtara dayanır: aynı anahtarlı ikinci istek hareket oluşturmaz, ilk işlemin sonucunu gösterir ve bildirimi tekrarlamaz. Başarılı işlemden sonra form sıfırlanır (miktar ve açıklama temizlenir, tür ve parça kalır) ve yeni anahtar üretilir; aynı parça ve miktarla bilinçli ikinci işlem (ör. iki ayrı teslimat) yeni hareket oluşturur. İşlem sonrası kullanıcıya yeni bakiye gösterilir.
 - Stok hareketleri listesini yönetici ve depo görür; operatör görmez.
 - **Kart türü** değiştirilebilir (yanlış sınıflanan kartı düzeltmek için) ve denetim izine yazılır; mamul türü bu kuralın dışındadır (bkz. bölüm 4).
@@ -107,12 +128,13 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - **Yetersiz malzeme uyarısı** (Aşama 4): iş emrinin reçete ihtiyacı (fire dahil) mevcut stoğu aşıyorsa iş emri ekranında hangi malzemeden ne kadar eksik olduğu gösterilir; tamamlama zaten bölüm 5'teki kuralla engellenir.
 - Günlük zamanlanmış komut `stock:reconcile`: her parça için hareket toplamı ile `stock_balances` karşılaştırılır; fark varsa loglanır ve yöneticiye bildirim gider (otomatik düzeltme yapmaz).
 
-**Üretim yapısı** (ayrıntılar Aşama 4 planında netleşir)
+**Üretim yapısı**
 - Yarı mamuller (ör. gövde, kapak/flanş, rotor, bobinajlı stator, işlenmiş mil) fabrikada üretilir ve modele özeldir (ör. 0,37 kW 1500 d/dk 71 tip 60 mm stator) → çok seviyeli reçete gerekir.
 - Mamul ayrı bir stok kartıdır (motor_units'e ek olarak).
 - Direkt sarf reçeteye girer ve üretimde otomatik düşer; endirekt sarf reçeteye girmez.
 - Fire: reçetede her malzeme için standart fire oranı; operatör tamamlamada gerçekleşen fireyi girebilir. Fire, üretim sarfından ayrı bir hareket tipiyle kaydedilir ve muhasebe aktarımına yansır.
-- Açık sorular (Aşama 4 planında): reçetenin ve iş emrinin motor modeline mi stok kartına mı bağlanacağı, mamul kartının motor modelinden otomatik açılması, mamulde elle hareket, yarı mamulde lot takibi, eksik yarı mamulde davranış, yarı mamulün satılıp satılamayacağı.
+- Ayrıntılı kurallar: yukarıdaki "İş emri", "Reçete", "Mamul ve yarı mamul", "Sevk".
+- Açık soru: fabrikada sistem öncesinden stokta bitmiş motor varsa açılış kaydı nasıl yapılacak (mamulde elle giriş kapalı).
 
 **Ön muhasebe ve e-dönüşüm** (ayrıntılar Aşama 5 ve 6 planlarında netleşir)
 - Mikro bırakılır; cari takibi bu sistemde yapılır (müşteri ve tedarikçi).
@@ -155,9 +177,14 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 | Müşteri, sipariş | ✓ | görüntüleme | görüntüleme |
 | İş emri görüntüleme | ✓ | kendine atananlar | ✓ (salt okunur) |
 | İş emri oluşturma/atama | ✓ | | |
+| İş emri geri alma | ✓ | | |
 | İş emri durum değiştirme | ✓ | yalnızca kendine atananlar | |
 | Stok kartları | ✓ | görüntüleme | ✓ |
 | Stok giriş/çıkış/sayım | ✓ | | ✓ |
+| Reçete | ✓ (motor modeli yetkisiyle) | görüntüleme | görüntüleme |
+| Üretim partileri | ✓ | görüntüleme | görüntüleme |
+| Üretilen motorlar | ✓ | görüntüleme | görüntüleme |
+| Sevk | ✓ | | ✓ |
 | Raporlar ve Excel | ✓ | | stok raporları |
 | Denetim izi | ✓ | | |
 
@@ -255,6 +282,7 @@ Pest ile en az şu durumlar test edilmeli:
 - Malzeme yetersizse hiçbir şey değişmez (transaction geri alınır)
 - İzinsiz durum geçişleri reddedilir
 - Seri no'lar benzersizdir; aynı anda iki tamamlamada çakışma olmaz
+- Çok seviyeli reçete, döngü engeli, fire (standart ve girilen), yarı mamul üretimi ve tüketimi, mamul bakiyesi = stoktaki motor sayısı, mamulde elle hareket reddi (servis ve veritabanı), sevk, geri alma kuralları
 - Kritik stok bildirimi bir kez gönderilir, tekrar etmez
 - Rol yetkileri: operatör başkasının iş emrini değiştiremez, depo iş emri oluşturamaz
 - `stock:reconcile` tutarsızlığı yakalar
@@ -281,7 +309,7 @@ Testler PostgreSQL üzerinde çalışmalı (SQLite değil), çünkü kilitler ve
    - Ek (Aşama 4'ten önce): stok kartı türleri ve muhasebe kodları (6 tür, mevcut sarf kartları direkt sarfa), hareketsiz stok uyarısı
 3. Müşteri ve sipariş, motor modelleri (tablo + yönetim ekranı; sipariş kalemleri motor modeline bağlı olduğu için Aşama 4'ten öne alındı), `NumberSequenceService`
 4. Üretim: reçete (çok seviyeli, direkt sarf ve fire dahil), yarı mamul ve mamul üretimi, partiler, iş emirleri, durum makinesi, tamamlama akışı, seri no üretimi, üretilen motorlar, yetersiz malzeme uyarısı, testler
-   - İş emri geri alma akışı: üretim sarfının ters kaydı burada ele alınır (elle ters kayıt kapalıdır, bkz. bölüm 5).
+   - Alt adımlar (her biri testler ve commit ile biter): 4a hareket tipleri, mamul kartı, reçete · 4b iş emirleri, malzeme listesi, durum makinesi · 4c tamamlama, motorlar, seri no, sevk · 4d iş emri geri alma
 5. Ön muhasebe: cari hesaplar (müşteri ve tedarikçi), fiyat/iskonto/KDV, döviz, alış ve satış faturası, tahsilat ve ödeme, Luca aktarımı
 6. e-Dönüşüm: Uyumsoft e-fatura, e-arşiv, e-irsaliye, gelen faturaların alışa bağlanması, gönderim kuyruğu ve durum takibi
 7. Hızlı İşlem sayfası: USB barkod ve kamera ile okuma

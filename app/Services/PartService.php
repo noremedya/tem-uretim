@@ -6,6 +6,7 @@ use App\Enums\PartType;
 use App\Exceptions\BusinessRuleException;
 use App\Models\Part;
 use App\Models\StockBalance;
+use App\Models\Unit;
 use App\Support\Quantity;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -17,7 +18,13 @@ class PartService
 {
     private const FIELDS = ['code', 'name', 'unit_id', 'type', 'barcode', 'critical_level'];
 
-    public function __construct(private readonly StockService $stock) {}
+    /** Mamul kartında motor modelinden yönetilen alanlar. */
+    private const FINISHED_GOOD_MANAGED_FIELDS = ['code', 'name', 'unit_id', 'type'];
+
+    public function __construct(
+        private readonly StockService $stock,
+        private readonly BomService $boms,
+    ) {}
 
     /**
      * @param  array{code: string, name: string, unit_id: int, type: mixed, barcode?: ?string, critical_level?: string|int|float|null}  $data
@@ -43,6 +50,37 @@ class PartService
     }
 
     /**
+     * Motor modelinin mamul kartını açar (yalnızca MotorModelService çağırır). Birim "Adet"tir.
+     */
+    public function createFinishedGood(string $code, string $name, bool $isActive): Part
+    {
+        return DB::transaction(function () use ($code, $name, $isActive): Part {
+            $part = new Part([
+                'code' => $code,
+                'name' => $name,
+                'unit_id' => $this->pieceUnit()->getKey(),
+                'type' => PartType::FinishedGood,
+                'critical_level' => '0',
+            ]);
+            $part->is_active = $isActive;
+            $part->save();
+
+            $this->stock->openBalance($part);
+
+            return $part;
+        });
+    }
+
+    /** Mamul kartını motor modeliyle eşitler (kod, ad, aktiflik). Yalnızca MotorModelService çağırır. */
+    public function syncFinishedGood(Part $part, string $code, string $name, bool $isActive): Part
+    {
+        $part->forceFill(['code' => $code, 'name' => $name, 'is_active' => $isActive]);
+        $part->save();
+
+        return $part;
+    }
+
+    /**
      * @param  int  $expectedLockVersion  Düzenlemenin başladığı andaki lock_version.
      */
     public function update(Part $part, array $data, int $expectedLockVersion): Part
@@ -51,11 +89,24 @@ class PartService
 
         return DB::transaction(function () use ($part, $data, $expectedLockVersion): Part {
             $originalType = PartType::from($part->getRawOriginal('type'));
-            $part->fill(Arr::only($data, self::FIELDS));
 
-            // Tür değiştirilebilir (yanlış sınıflamayı düzeltmek için, denetim izine yazılır); mamul hariç.
-            if ($part->type !== $originalType && (! $originalType->isManuallyAssignable() || ! $part->type->isManuallyAssignable())) {
-                throw new BusinessRuleException('Bir kart mamul türüne alınamaz ve mamul kartının türü değiştirilemez.');
+            if ($originalType === PartType::FinishedGood) {
+                $part->fill(Arr::only($data, array_diff(self::FIELDS, self::FINISHED_GOOD_MANAGED_FIELDS)));
+
+                foreach (self::FINISHED_GOOD_MANAGED_FIELDS as $field) {
+                    $value = $data[$field] ?? null;
+                    $value = trim((string) ($value instanceof PartType ? $value->value : $value));
+
+                    if (array_key_exists($field, $data) && $value !== (string) $part->getRawOriginal($field)) {
+                        throw new BusinessRuleException('Mamul kartının kodu, adı, birimi ve türü motor modelinden yönetilir; mamul kartının türü değiştirilemez.');
+                    }
+                }
+            } else {
+                $part->fill(Arr::only($data, self::FIELDS));
+            }
+
+            if ($part->type !== $originalType) {
+                $this->ensureTypeChangeAllowed($part, $originalType);
             }
 
             if ($part->isDirty('unit_id')) {
@@ -76,6 +127,8 @@ class PartService
 
     public function deactivate(Part $part): Part
     {
+        $this->ensureNotFinishedGood($part);
+
         $part->is_active = false;
         $part->save();
 
@@ -84,10 +137,47 @@ class PartService
 
     public function activate(Part $part): Part
     {
+        $this->ensureNotFinishedGood($part);
+
         $part->is_active = true;
         $part->save();
 
         return $part;
+    }
+
+    /**
+     * Tür değiştirilebilir (yanlış sınıflamayı düzeltmek için, denetim izine yazılır); ancak mamul türüne
+     * alınamaz ve reçete kurallarını bozamaz. Reçete kilidi altında kontrol edilir.
+     */
+    private function ensureTypeChangeAllowed(Part $part, PartType $originalType): void
+    {
+        if (! $originalType->isManuallyAssignable() || ! $part->type->isManuallyAssignable()) {
+            throw new BusinessRuleException('Bir kart mamul türüne alınamaz ve mamul kartının türü değiştirilemez.');
+        }
+
+        $this->boms->lock();
+
+        if (! $part->canHaveBom() && $part->bomItems()->exists()) {
+            throw new BusinessRuleException('Bu kartın reçetesi var; türü yalnızca yarı mamul olabilir. Önce reçeteyi kaldırın.');
+        }
+
+        if ($part->type === PartType::IndirectConsumable && $part->usedInBomItems()->exists()) {
+            throw new BusinessRuleException('Bu kart reçetelerde bileşen olarak kullanılıyor; endirekt sarf reçeteye giremez. Önce reçetelerden kaldırın.');
+        }
+    }
+
+    private function ensureNotFinishedGood(Part $part): void
+    {
+        if ($part->isFinishedGood()) {
+            throw new BusinessRuleException('Mamul kartı motor modeliyle birlikte aktifleşir/pasifleşir; motor modelini düzenleyin.');
+        }
+    }
+
+    /** Mamul kartlarının birimi: "Adet" (yoksa tam sayılı olarak açılır). */
+    private function pieceUnit(): Unit
+    {
+        return Unit::query()->whereRaw('lower(name) = ?', ['adet'])->first()
+            ?? app(UnitService::class)->create(['name' => 'Adet', 'allows_decimal' => false]);
     }
 
     private function normalize(array $data): array

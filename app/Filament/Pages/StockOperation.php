@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Enums\PartType;
 use App\Enums\Permission;
 use App\Enums\StockMovementType;
 use App\Exceptions\BusinessRuleException;
@@ -82,7 +83,7 @@ class StockOperation extends Page
 
         $this->form->fill([
             'type' => StockMovementType::StockIn->value,
-            'part_id' => $part !== null && Part::query()->whereKey($part)->exists() ? $part : null,
+            'part_id' => $part !== null && Part::query()->whereKey($part)->where('type', '!=', PartType::FinishedGood->value)->exists() ? $part : null,
         ]);
     }
 
@@ -240,6 +241,8 @@ class StockOperation extends Page
         $search = trim($search);
 
         return Part::query()
+            // Mamul stoğu elle değiştirilemez (yalnızca üretim ve sevk).
+            ->where('type', '!=', PartType::FinishedGood->value)
             // Pasif parçaya yalnızca sayım yapılabilir.
             ->when($type !== StockMovementType::CountAdjustment->value, fn (Builder $query) => $query->where('is_active', true))
             ->where(fn (Builder $query) => $query

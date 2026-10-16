@@ -2,6 +2,8 @@
 
 namespace App\Filament\Resources\MotorModels\Schemas;
 
+use App\Filament\Resources\Parts\PartResource;
+use App\Models\MotorModel;
 use App\Support\Quantity;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -22,6 +24,13 @@ class MotorModelInfolist
                         TextEntry::make('code')->label('Kod'),
                         TextEntry::make('name')->label('Ad'),
                         IconEntry::make('is_active')->label('Aktif')->boolean(),
+                        // Mamul stoğu = stoktaki motor sayısı (yalnızca üretim ve sevkle değişir).
+                        TextEntry::make('finishedPart.stockBalance.quantity')
+                            ->label('Mamul stoğu')
+                            ->formatStateUsing(fn ($state): string => Quantity::format($state, 'Adet'))
+                            ->url(fn (MotorModel $record): ?string => auth()->user()?->can('view', $record->finishedPart)
+                                ? PartResource::getUrl('view', ['record' => $record->finished_part_id])
+                                : null),
                         TextEntry::make('description')->label('Açıklama')->placeholder('—')->columnSpanFull(),
                     ]),
                 Section::make('Teknik özellikler')

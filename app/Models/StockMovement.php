@@ -73,11 +73,12 @@ class StockMovement extends Model
     }
 
     /**
-     * Türü gereği ters kaydedilebilir mi? Ters kaydın kendisi ters kaydedilemez. Üretim sarfı üretim
-     * akışına bağlı olduğu için elle ters kaydedilmez. (Daha önce ters kaydedilmiş olması ayrıca kontrol edilir.)
+     * Türü gereği elle ters kaydedilebilir mi? Ters kaydın kendisi ters kaydedilemez. Üretim ve sevk hareketleri
+     * motor kayıtlarıyla tutarlılık için yalnızca iş emri geri alma akışıyla ters kaydedilir.
+     * (Daha önce ters kaydedilmiş olması ayrıca kontrol edilir.)
      */
     public function isCorrectableType(): bool
     {
-        return ! in_array($this->type, [StockMovementType::Correction, StockMovementType::ProductionConsumption], true);
+        return $this->type !== StockMovementType::Correction && ! $this->type->isProductionFlow();
     }
 }

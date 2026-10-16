@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\MotorModels;
 
+use App\Filament\RelationManagers\BomItemsRelationManager;
 use App\Filament\Resources\MotorModels\Pages\CreateMotorModel;
 use App\Filament\Resources\MotorModels\Pages\EditMotorModel;
 use App\Filament\Resources\MotorModels\Pages\ListMotorModels;
@@ -48,6 +49,13 @@ class MotorModelResource extends Resource
     public static function table(Table $table): Table
     {
         return MotorModelsTable::configure($table);
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            BomItemsRelationManager::class,
+        ];
     }
 
     public static function getPages(): array
