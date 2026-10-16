@@ -82,6 +82,17 @@ class Part extends Model
             ->whereHas('stockBalance', fn (Builder $balance) => $balance->whereColumn('stock_balances.quantity', '<=', 'parts.critical_level'));
     }
 
+    /**
+     * Hareketsiz parçalar: bakiyesi > 0 olan ve son $days gündür hiç hareket görmeyen parçalar.
+     */
+    public function scopeIdle(Builder $query, ?int $days = null): void
+    {
+        $since = now()->subDays($days ?? (int) config('stock.idle_days'));
+
+        $query->whereHas('stockBalance', fn (Builder $balance) => $balance->where('quantity', '>', 0))
+            ->whereDoesntHave('stockMovements', fn (Builder $movement) => $movement->where('created_at', '>=', $since));
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()

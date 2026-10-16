@@ -62,7 +62,7 @@ it('geçersiz veya negatif kritik seviye reddedilir', function (string $value) {
 
     Livewire::test(CreatePart::class)
         ->fillForm([
-            'code' => 'X-1', 'name' => 'X', 'type' => PartType::Consumable->value,
+            'code' => 'X-1', 'name' => 'X', 'type' => PartType::DirectConsumable->value,
             'unit_id' => Unit::factory()->create()->id, 'critical_level' => $value,
         ])
         ->call('create')
@@ -185,7 +185,7 @@ it('parça formundan "+" ile yeni birim eklenir ve seçilir', function () {
     expect($unit->allows_decimal)->toBeFalse();
 
     $component->assertSchemaStateSet(['unit_id' => $unit->id])
-        ->fillForm(['code' => 'R-1', 'name' => 'Bant', 'type' => PartType::Consumable->value, 'critical_level' => '0'])
+        ->fillForm(['code' => 'R-1', 'name' => 'Bant', 'type' => PartType::DirectConsumable->value, 'critical_level' => '0'])
         ->call('create')
         ->assertHasNoFormErrors();
 

@@ -4,17 +4,19 @@ Bu dosya projenin kalıcı talimatlarıdır. Her oturumda baştan oku ve buradak
 
 ## 1. Proje özeti
 
-Bir elektrik motoru üreticisi (Tem Motor) için üretim takip web uygulaması. Fabrika içindeki bir mini PC sunucuda Docker ile çalışır; kullanıcılar yerel ağ üzerinden tarayıcıyla (PC, tablet, telefon) bağlanır. **Uygulama internet olmadan tam çalışmak zorundadır.** Bulut yalnızca yedekleme ve Cloudflare Tunnel ile uzaktan erişim için kullanılır.
+Bir elektrik motoru üreticisi (Tem Motor) için üretim takip web uygulaması. Fabrika içindeki bir mini PC sunucuda Docker ile çalışır; kullanıcılar yerel ağ üzerinden tarayıcıyla (PC, tablet, telefon) bağlanır. **Uygulama internet olmadan tam çalışmak zorundadır** (tek istisna e-dönüşüm gönderimleridir, bkz. bölüm 3 kural 1). Bulut yalnızca yedekleme ve Cloudflare Tunnel ile uzaktan erişim için kullanılır.
 
 Kapsam:
 - İş emri oluşturma, atama, üretim aşaması takibi (planlandı / üretimde / tamamlandı / iptal)
 - Motor modeli, seri no ve üretim partisi bazlı kayıt
-- Hammadde/parça stok takibi, kritik stok uyarısı
+- Stok takibi muhasebe kodlarıyla: hammadde, komponent, direkt/endirekt sarf, yarı mamul, mamul; kritik stok, hareketsiz stok ve yetersiz malzeme uyarıları
 - Müşteri ve sipariş kaydı, sipariş–iş emri–motor ilişkilendirme
 - Rol bazlı yetkilendirme: yönetici, saha operatörü, depo
 - Günlük/haftalık/aylık üretim ve verimlilik raporları, Excel'e aktarım
 - Barkod/QR ile hızlı işlem (USB okuyucu + telefon kamerası)
 - Denetim izi (kim neyi ne zaman değiştirdi)
+- Ön muhasebe (Mikro'nun yerine): cari hesaplar (müşteri ve tedarikçi), fiyat/iskonto/KDV, döviz, alış ve satış faturası, tahsilat ve ödeme, mali müşavire (Luca) aktarım
+- e-Dönüşüm: Uyumsoft üzerinden e-fatura, e-arşiv, e-irsaliye; gelen e-faturaların alış kaydına ve stok girişine otomatik bağlanması
 
 ## 2. Teknoloji
 
@@ -25,12 +27,14 @@ Kapsam:
 - spatie/laravel-permission (roller/yetkiler), spatie/laravel-activitylog (denetim izi)
 - Pest (testler)
 - QR/barkod kamera okuma: npm paketi (ör. html5-qrcode), Vite ile derlenip pakete dahil edilir
+- e-Dönüşüm: Uyumsoft e-Dönüşüm SOAP servisi (`https://edonusumapi.uyum.com.tr/`, SOAP 1.1, WS-Security UsernameToken), PHP `soap` eklentisi; WSDL/XSD dosyaları repoda tutulur (çalışma anında internetten çekilmez), kimlik bilgileri yalnızca `.env`'de
 - Üretim sunucusu: Docker Compose, FrankenPHP tabanlı uygulama imajı, önde Caddy (Cloudflare DNS modülüyle), cloudflared
 - Paket eklemeden önce güncel Laravel/Filament sürümüyle uyumluluğunu kontrol et; uyumsuzsa bana sor.
 
 ## 3. Değişmez kurallar
 
 1. **Hiçbir CDN veya harici kaynak kullanma.** Panelde ortak JS (Alpine bileşenleri) `resources/js/filament/app.js` üzerinden Vite ile yüklenir; yeni ortak bileşenler buraya kaydedilir. Font, JS, CSS, ikon dahil her şey Vite ile derlenip uygulamayla birlikte gelmeli. İnternet kesikken arayüz eksiksiz çalışmalı.
+   - **Bilinçli istisna — e-dönüşüm:** Uyumsoft'a gönderim, durum sorgulama ve gelen fatura çekme internet ister. Belgeler internetsiz kesilip kaydedilir ve kuyruğa alınır; internet gelince kuyruktan gönderilir. Fabrikanın geri kalanı bundan etkilenmez.
 2. **Stok yalnızca `StockService` üzerinden değişir.** Hiçbir controller, Filament action veya model olayı stok bakiyesini doğrudan güncelleyemez.
 3. **Stok hareketleri değiştirilemez ve silinemez.** Hata düzeltme ters kayıtla (düzeltme hareketi) yapılır.
 4. **Birbirine bağlı her işlem tek `DB::transaction` içinde.** Stok bakiyesi güncellenirken ilgili satır `lockForUpdate()` ile kilitlenir.
@@ -53,7 +57,7 @@ Tablo adları, kolon adları ve enum değerleri İngilizce; arayüz etiketleri T
 
 - **users**: username (unique, zorunlu — giriş bununla yapılır), name, email (nullable, unique), password (hash), is_active, lock_version, roller (spatie; birden fazla olabilir, en az bir rol zorunlu)
 - **units** (birim: adet, kg, metre…): name (unique), allows_decimal (bool — false ise bu birimdeki miktarlar tam sayı olmalı), lock_version
-- **parts** (stok kartı): code (unique), name, unit_id, type (enum: raw_material / component / consumable — hammadde / parça / sarf), barcode (unique, nullable), critical_level (decimal, >= 0; 0 = takip yok), is_active, lock_version. Hareketi olan parçanın birimi değiştirilemez.
+- **parts** (stok kartı): code (unique), name, unit_id, type (enum, muhasebe koduyla: raw_material 150.01 hammadde / component 150.02 komponent / direct_consumable 150.03 direkt sarf / indirect_consumable 157 endirekt sarf / semi_finished 151 yarı mamul / finished_good 152 mamul; kodlar `config/accounting.php`'de), barcode (unique, nullable), critical_level (decimal, >= 0; 0 = takip yok), is_active, lock_version. Hareketi olan parçanın birimi değiştirilemez. Mamul (finished_good) kartı elle açılamaz ve hiçbir karta mamul türü verilemez/mamul türünden çıkarılamaz (Aşama 4'te motor modelinden oluşur).
 - **stock_balances**: part_id (unique), quantity (decimal, >= 0), is_below_critical (bool — kritik bildirimi gönderildi mi), updated_at — hızlı okuma için; tek yazıcısı StockService. Parça oluşturulurken 0 bakiyeyle açılır.
 - **stock_movements**: part_id, type (enum: stock_in, stock_out, production_consumption, count_adjustment, return, correction — giriş, çıkış, üretim sarfı, sayım düzeltme, iade, ters kayıt), quantity (işaretli decimal, 0 olamaz), balance_before, balance_after, reference (morph: work_order vb., nullable), corrected_movement_id (nullable, unique — ters kaydedilen hareket), idempotency_key (uuid, nullable, unique — çift gönderim koruması), description, user_id, created_at. Update/delete/truncate yok (veritabanı trigger'ı ile de engellenir).
 - **motor_models**: code (unique), name, teknik alanlar (hepsi isteğe bağlı): power_kw (güç, kW, decimal), speed_rpm (devir, d/dk, integer), voltage (gerilim, metin), frequency_hz (frekans, Hz), pole_count (kutup sayısı), frame_size (gövde ölçüsü, metin), phase (enum: single_phase / three_phase), mounting_type (montaj şekli, metin, ör. B3/B5/B14), protection_class (koruma sınıfı, metin, ör. IP55), efficiency_class (verim sınıfı, metin, ör. IE3); description, is_active, lock_version
@@ -98,7 +102,26 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - **Üretim sarfı (`production_consumption`) elle ters kaydedilemez.** Motor kayıtları oluşmuşken malzemenin geri dönmesi tutarsızlık yaratır; Aşama 4'te iş emri geri alma akışıyla ele alınacak.
 - **Çift gönderim:** stok işlemi formu işlem sırasında butonu pasifleştirir ve formun ikinci kez gönderilmesini tarayıcıda engeller (Alpine `submitGuard`, bkz. bölüm 7); sunucu tarafında her form gönderimi bir `idempotency_key` taşır, aynı anahtarla ikinci hareket oluşmaz. Koruma yalnızca bu anahtara dayanır: aynı anahtarlı ikinci istek hareket oluşturmaz, ilk işlemin sonucunu gösterir ve bildirimi tekrarlamaz. Başarılı işlemden sonra form sıfırlanır (miktar ve açıklama temizlenir, tür ve parça kalır) ve yeni anahtar üretilir; aynı parça ve miktarla bilinçli ikinci işlem (ör. iki ayrı teslimat) yeni hareket oluşturur. İşlem sonrası kullanıcıya yeni bakiye gösterilir.
 - Stok hareketleri listesini yönetici ve depo görür; operatör görmez.
+- **Kart türü** değiştirilebilir (yanlış sınıflanan kartı düzeltmek için) ve denetim izine yazılır; mamul türü bu kuralın dışındadır (bkz. bölüm 4).
+- **Hareketsiz stok uyarısı:** aktif, bakiyesi > 0 olan ve son 90 gündür (`config/stock.php`, yapılandırılabilir) hiç hareket görmeyen parçalar haftalık **özet** bildirimiyle yönetici ve depoya bildirilir (zamanlanmış komut `stock:idle-report`, scheduler'da haftada bir). Hareketsiz parça yoksa bildirim gönderilmez. Parça listesinde "Hareketsiz" filtresi bulunur.
+- **Yetersiz malzeme uyarısı** (Aşama 4): iş emrinin reçete ihtiyacı (fire dahil) mevcut stoğu aşıyorsa iş emri ekranında hangi malzemeden ne kadar eksik olduğu gösterilir; tamamlama zaten bölüm 5'teki kuralla engellenir.
 - Günlük zamanlanmış komut `stock:reconcile`: her parça için hareket toplamı ile `stock_balances` karşılaştırılır; fark varsa loglanır ve yöneticiye bildirim gider (otomatik düzeltme yapmaz).
+
+**Üretim yapısı** (ayrıntılar Aşama 4 planında netleşir)
+- Yarı mamuller (ör. gövde, kapak/flanş, rotor, bobinajlı stator, işlenmiş mil) fabrikada üretilir ve modele özeldir (ör. 0,37 kW 1500 d/dk 71 tip 60 mm stator) → çok seviyeli reçete gerekir.
+- Mamul ayrı bir stok kartıdır (motor_units'e ek olarak).
+- Direkt sarf reçeteye girer ve üretimde otomatik düşer; endirekt sarf reçeteye girmez.
+- Fire: reçetede her malzeme için standart fire oranı; operatör tamamlamada gerçekleşen fireyi girebilir. Fire, üretim sarfından ayrı bir hareket tipiyle kaydedilir ve muhasebe aktarımına yansır.
+- Açık sorular (Aşama 4 planında): reçetenin ve iş emrinin motor modeline mi stok kartına mı bağlanacağı, mamul kartının motor modelinden otomatik açılması, mamulde elle hareket, yarı mamulde lot takibi, eksik yarı mamulde davranış, yarı mamulün satılıp satılamayacağı.
+
+**Ön muhasebe ve e-dönüşüm** (ayrıntılar Aşama 5 ve 6 planlarında netleşir)
+- Mikro bırakılır; cari takibi bu sistemde yapılır (müşteri ve tedarikçi).
+- Fiyat: motor modeli bazında ve müşteriye özel. KDV %20. İskonto oranları: %15, %20, %30.
+- Döviz ile işlem yapılır. Tahsilat ve ödeme: nakit, banka, çek/senet.
+- Mali müşavir Luca kullanır; dönemsel aktarım yapılır (biçim Aşama 5'te).
+- Uyumsoft: e-fatura, e-arşiv, e-irsaliye. Gelen e-faturalar otomatik çekilip alış kaydına ve stok girişine bağlanır. Geliştirme Uyumsoft test ortamıyla yapılır; canlı ortama deneme belgesi gönderilmez.
+- Kesilen fatura değiştirilemez; düzeltme iptal veya iade faturasıyla yapılır.
+- Açık soru: firma notundaki "Mikro'ya satış / genel satış" ayrımının anlamı.
 
 **Numara üretimi** (`NumberSequenceService`): sipariş no, iş emri no ve seri no aynı servisle üretilir.
 - Numara, yapılandırılabilir bir şablondan üretilir (`config/numbering.php`). Belirteçler: `{YIL}` (4 hane), `{YY}`, `{AA}` (ay), `{SIRA:n}` (n haneli sıra) ve çağıranın verdiği bağlam değerleri (ör. `{MODEL_KODU}`).
@@ -154,7 +177,7 @@ Yetkiler Laravel Policy'leriyle uygulanır; Filament menüsü de yetkiye göre g
 - Standart Filament kaynakları: kullanıcılar, birimler, parçalar, motor modelleri (reçete ilişki yöneticisiyle), müşteriler, siparişler (kalemleriyle), partiler, iş emirleri, üretilen motorlar, stok hareketleri (salt okunur liste)
 - **Stok işlemi sayfası**: giriş / çıkış / sayım düzeltme formu
 - **Hızlı İşlem sayfası** (dokunmatik ve büyük butonlu):
-  - Otomatik odaklı tek bir okuma alanı; USB okuyucunun gönderdiği Enter ile işlem tetiklenir. Okuma alanı bir form içindedir ve Enter formu gönderir; form, istek sürerken ikinci gönderimi engelleyen ortak Alpine bileşeni **`submitGuard`** ile korunur (`resources/js/filament/submit-guard.js`, kullanım: `x-data="submitGuard({ action: '...' })"`). Açık soru (Aşama 5'te karar verilecek): guard, istek sürerken gelen okumayı düşürür; hızlı art arda farklı kodların okunması durumunda düşürmek mi, sıraya almak mı istendiği sorulacak.
+  - Otomatik odaklı tek bir okuma alanı; USB okuyucunun gönderdiği Enter ile işlem tetiklenir. Okuma alanı bir form içindedir ve Enter formu gönderir; form, istek sürerken ikinci gönderimi engelleyen ortak Alpine bileşeni **`submitGuard`** ile korunur (`resources/js/filament/submit-guard.js`, kullanım: `x-data="submitGuard({ action: '...' })"`). Açık soru (Aşama 7'de karar verilecek): guard, istek sürerken gelen okumayı düşürür; hızlı art arda farklı kodların okunması durumunda düşürmek mi, sıraya almak mı istendiği sorulacak.
   - "Kamera ile okut" butonu (telefon/tablet)
   - Okunan değer parça barkoduysa → hızlı stok giriş/çıkış formu
   - Seri no ise → motor detay kartı
@@ -255,13 +278,16 @@ Testler PostgreSQL üzerinde çalışmalı (SQLite değil), çünkü kilitler ve
 **Aşamalar**
 1. Proje iskeleti: Laravel + Filament kurulumu, geliştirme için `docker-compose.yml`, PostgreSQL, Türkçe dil/saat dilimi, roller ve yetkiler, `app:create-admin`, kullanıcı yönetimi, Pest kurulumu
 2. Stok: birimler, parçalar, `StockService`, stok hareketleri, stok işlemi sayfası, kritik stok bildirimi, `stock:reconcile`, testler
+   - Ek (Aşama 4'ten önce): stok kartı türleri ve muhasebe kodları (6 tür, mevcut sarf kartları direkt sarfa), hareketsiz stok uyarısı
 3. Müşteri ve sipariş, motor modelleri (tablo + yönetim ekranı; sipariş kalemleri motor modeline bağlı olduğu için Aşama 4'ten öne alındı), `NumberSequenceService`
-4. Üretim: reçete, partiler, iş emirleri, durum makinesi, tamamlama akışı, seri no üretimi, üretilen motorlar, testler
+4. Üretim: reçete (çok seviyeli, direkt sarf ve fire dahil), yarı mamul ve mamul üretimi, partiler, iş emirleri, durum makinesi, tamamlama akışı, seri no üretimi, üretilen motorlar, yetersiz malzeme uyarısı, testler
    - İş emri geri alma akışı: üretim sarfının ters kaydı burada ele alınır (elle ters kayıt kapalıdır, bkz. bölüm 5).
-5. Hızlı İşlem sayfası: USB barkod ve kamera ile okuma
-6. Raporlar ve Excel dışa aktarım
-7. Dashboard ve denetim izi ekranı
-8. Üretim dağıtım dosyaları, betikler, `.env.production.example`, README
+5. Ön muhasebe: cari hesaplar (müşteri ve tedarikçi), fiyat/iskonto/KDV, döviz, alış ve satış faturası, tahsilat ve ödeme, Luca aktarımı
+6. e-Dönüşüm: Uyumsoft e-fatura, e-arşiv, e-irsaliye, gelen faturaların alışa bağlanması, gönderim kuyruğu ve durum takibi
+7. Hızlı İşlem sayfası: USB barkod ve kamera ile okuma
+8. Raporlar ve Excel dışa aktarım
+9. Dashboard (kritik ve hareketsiz stok listesi dahil) ve denetim izi ekranı
+10. Üretim dağıtım dosyaları, betikler, `.env.production.example`, README
    - **Ayrı uygulama veritabanı rolü:** uygulama, tablo sahibi olmayan bir rolle bağlanır (yalnızca gereken tablo yetkileri; `ALTER TABLE ... DISABLE TRIGGER` yapamaz). Migration'lar tablo sahibi kullanıcıyla çalışır. `deploy.sh`, `.env.production.example` ve kurulum kılavuzu buna göre düzenlenir.
-9. Demo veri, genel gözden geçirme (güvenlik, N+1 sorgular, eksik index'ler, CDN kontrolü)
-10. (Opsiyonel) Etiket yazdırma
+11. Demo veri, genel gözden geçirme (güvenlik, N+1 sorgular, eksik index'ler, CDN kontrolü)
+12. (Opsiyonel) Etiket yazdırma

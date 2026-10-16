@@ -34,10 +34,16 @@ class PartForm
                             ->label('Ad')
                             ->required()
                             ->maxLength(255),
+                        // Muhasebe koduyla gösterilir. Mamul kartı elle açılamaz ve mamul türüne alınamaz
+                        // (PartService'te de kontrol edilir); mamul kartının türü değiştirilemez.
                         Select::make('type')
                             ->label('Tür')
-                            ->options(PartType::class)
-                            ->required(),
+                            ->options(fn (?Part $record): array => $record?->type === PartType::FinishedGood
+                                ? [PartType::FinishedGood->value => PartType::FinishedGood->getLabel()]
+                                : PartType::manualOptions())
+                            ->disabled(fn (?Part $record): bool => $record?->type === PartType::FinishedGood)
+                            ->required()
+                            ->helperText('Mamul kartları motor modeliyle birlikte oluşturulur.'),
                         Select::make('unit_id')
                             ->label('Birim')
                             ->relationship('unit', 'name')

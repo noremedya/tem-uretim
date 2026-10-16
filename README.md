@@ -37,4 +37,6 @@ Panel JS'i değiştiğinde varlıkları yeniden derleyin: `docker compose exec a
 
 Stok tutarlılık kontrolü elle: `docker compose exec app php artisan stock:reconcile` (üretimde scheduler her gün 03:00'te çalıştırır).
 
+Hareketsiz stok özeti elle: `docker compose exec app php artisan stock:idle-report` (üretimde her pazartesi 08:00; eşik `config/stock.php`, varsayılan 90 gün).
+
 Kod biçimi: `docker compose exec app vendor/bin/pint`

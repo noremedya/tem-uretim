@@ -73,6 +73,10 @@ class PartsTable
                     ->label('Yalnızca kritik stoktakiler')
                     ->toggle()
                     ->query(fn (Builder $query) => $query->critical()),
+                Filter::make('idle')
+                    ->label(fn (): string => sprintf('Yalnızca hareketsizler (%d+ gün)', config('stock.idle_days')))
+                    ->toggle()
+                    ->query(fn (Builder $query) => $query->idle()),
             ])
             ->recordActions([
                 ViewAction::make(),

@@ -22,7 +22,8 @@ class PartFactory extends Factory
             'code' => fake()->unique()->bothify('P-#####'),
             'name' => fake()->words(2, true),
             'unit_id' => Unit::factory(),
-            'type' => fake()->randomElement(PartType::cases()),
+            // Mamul kartı elle açılmaz (motor modelinden oluşur); varsayılan olarak üretilmez.
+            'type' => fake()->randomElement(array_filter(PartType::cases(), fn (PartType $type) => $type->isManuallyAssignable())),
             'barcode' => null,
             'critical_level' => '0',
         ];

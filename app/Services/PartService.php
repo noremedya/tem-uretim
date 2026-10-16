@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\PartType;
 use App\Exceptions\BusinessRuleException;
 use App\Models\Part;
 use App\Models\StockBalance;
@@ -27,6 +28,11 @@ class PartService
 
         return DB::transaction(function () use ($data): Part {
             $part = new Part(Arr::only($data, self::FIELDS));
+
+            if (! $part->type->isManuallyAssignable()) {
+                throw new BusinessRuleException('Mamul kartı elle açılamaz; motor modeliyle birlikte oluşturulur.');
+            }
+
             $part->is_active = true;
             $part->save();
 
@@ -44,7 +50,13 @@ class PartService
         $data = $this->normalize($data);
 
         return DB::transaction(function () use ($part, $data, $expectedLockVersion): Part {
+            $originalType = PartType::from($part->getRawOriginal('type'));
             $part->fill(Arr::only($data, self::FIELDS));
+
+            // Tür değiştirilebilir (yanlış sınıflamayı düzeltmek için, denetim izine yazılır); mamul hariç.
+            if ($part->type !== $originalType && (! $originalType->isManuallyAssignable() || ! $part->type->isManuallyAssignable())) {
+                throw new BusinessRuleException('Bir kart mamul türüne alınamaz ve mamul kartının türü değiştirilemez.');
+            }
 
             if ($part->isDirty('unit_id')) {
                 // Bakiye satırı kilitlenir: StockService hareket yazarken aynı satırı kilitlediği için

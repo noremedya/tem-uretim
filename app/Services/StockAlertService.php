@@ -7,6 +7,7 @@ use App\Filament\Resources\Parts\PartResource;
 use App\Models\Part;
 use App\Models\User;
 use App\Support\Quantity;
+use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Collection;
@@ -64,6 +65,37 @@ class StockAlertService
             ->title(sprintf('Stok tutarlılık kontrolü: %d parçada fark bulundu', count($mismatches)))
             ->body(implode("\n", $lines))
             ->sendToDatabase($this->recipients(Role::Admin));
+    }
+
+    /**
+     * Haftalık hareketsiz stok özeti: aktif yönetici ve depo kullanıcılarına.
+     *
+     * @param  Collection<int, Part>  $parts  unit, stockBalance ve last_movement_at yüklü olmalı.
+     */
+    public function idleStock(Collection $parts, int $days): void
+    {
+        $lines = $parts->take(10)->map(fn (Part $part): string => sprintf(
+            '%s %s: bakiye %s, son hareket %s',
+            $part->code,
+            $part->name,
+            Quantity::format((string) $part->stockBalance->quantity, $part->unit->name),
+            Carbon::parse($part->last_movement_at)->format('d.m.Y'),
+        ))->all();
+
+        if ($parts->count() > 10) {
+            $lines[] = sprintf('… ve %d parça daha.', $parts->count() - 10);
+        }
+
+        Notification::make()
+            ->warning()
+            ->title(sprintf('Hareketsiz stok: %d parça %d gündür hareket görmedi', $parts->count(), $days))
+            ->body(implode("\n", $lines))
+            ->actions([
+                Action::make('list')
+                    ->label('Listeyi aç')
+                    ->url(PartResource::getUrl('index', ['filters' => ['idle' => ['isActive' => true]]])),
+            ])
+            ->sendToDatabase($this->recipients(Role::Admin, Role::Warehouse));
     }
 
     /** @return Collection<int, User> */
