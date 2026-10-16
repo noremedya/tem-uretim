@@ -42,7 +42,8 @@ enum OrderStatus: string implements HasColor, HasLabel
     }
 
     /**
-     * İzinli geçişler (CLAUDE.md bölüm 5). Üretim geri alındığında gerekebilecek geri geçişler Aşama 4'te.
+     * İzinli geçişler (CLAUDE.md bölüm 5). Geri geçişler (tamamlandı → kısmi/açık, kısmi → açık) yalnızca
+     * üretim geri alındığında durum yeniden hesaplanırken kullanılır; elle yapılmaz.
      *
      * @return list<self>
      */
@@ -50,8 +51,9 @@ enum OrderStatus: string implements HasColor, HasLabel
     {
         return match ($this) {
             self::Open => [self::Partial, self::Completed, self::Cancelled],
-            self::Partial => [self::Completed, self::Cancelled],
-            self::Completed, self::Cancelled => [],
+            self::Partial => [self::Completed, self::Cancelled, self::Open],
+            self::Completed => [self::Partial, self::Open],
+            self::Cancelled => [],
         };
     }
 

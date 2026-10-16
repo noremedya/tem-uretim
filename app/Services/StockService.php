@@ -237,6 +237,66 @@ class StockService
     }
 
     /**
+     * İş emri geri alma: tamamlamanın sarf, fire ve üretimden giriş hareketlerini ters kaydeder (correction).
+     * Elle ters kayıt bu tipler için kapalıdır; yalnızca ProductionService::reverse çağırır. Bakiyeler part_id
+     * sırasıyla kilitlenir; ters kayıt stoğu eksiye düşürecekse (ör. üretilen yarı mamul kullanılmışsa)
+     * hiçbir şey değişmez ve InsufficientStockException fırlar.
+     *
+     * @param  Collection<int, StockMovement>  $movements
+     * @return Collection<int, StockMovement>
+     */
+    public function reverseProduction(Collection $movements, Model $reference, User $user, string $description): Collection
+    {
+        return DB::transaction(function () use ($movements, $reference, $user, $description): Collection {
+            $balances = $this->lockBalances($movements->pluck('part_id')->unique()->values()->all());
+            $parts = Part::query()->with('unit')->findMany($movements->pluck('part_id')->unique())->keyBy('id');
+
+            // Önce eksiye düşecek parçalar toplu kontrol edilir (tüm eksikler tek seferde listelensin).
+            $deltas = [];
+            foreach ($movements as $movement) {
+                if (! $movement->type->isProductionFlow() || $movement->type === StockMovementType::Shipment) {
+                    throw new BusinessRuleException('Yalnızca üretim hareketleri geri alınabilir.');
+                }
+
+                if (StockMovement::query()->where('corrected_movement_id', $movement->getKey())->exists()) {
+                    throw new BusinessRuleException('Bu üretimin hareketleri zaten ters kaydedilmiş.');
+                }
+
+                $deltas[$movement->part_id] = Quantity::add($deltas[$movement->part_id] ?? '0', Quantity::negate((string) $movement->quantity));
+            }
+
+            $shortages = [];
+            foreach ($deltas as $partId => $delta) {
+                $available = (string) $balances[$partId]->quantity;
+
+                if (Quantity::compare(Quantity::add($available, $delta), '0') < 0) {
+                    $shortages[] = $this->shortage($parts[$partId], Quantity::negate($delta), $available);
+                }
+            }
+
+            if ($shortages !== []) {
+                throw new InsufficientStockException($shortages);
+            }
+
+            return $movements->map(function (StockMovement $movement) use ($parts, $balances, $user, $description, $reference): StockMovement {
+                $part = $parts[$movement->part_id];
+                $this->ensureTypeAllowed($part, StockMovementType::Correction);
+
+                return $this->apply(
+                    $part,
+                    $balances[$part->getKey()],
+                    StockMovementType::Correction,
+                    Quantity::negate((string) $movement->quantity),
+                    $user,
+                    $description,
+                    correctedMovement: $movement,
+                    reference: $reference,
+                );
+            })->values();
+        });
+    }
+
+    /**
      * Sevk: mamul kartından düşüm (shipment). Referans sevk edilen motor kaydıdır.
      */
     public function recordShipment(Part $part, string|int $quantity, Model $reference, User $user, ?string $description = null): StockMovement

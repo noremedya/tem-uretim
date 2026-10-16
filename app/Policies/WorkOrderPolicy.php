@@ -52,6 +52,13 @@ class WorkOrderPolicy
             && $this->transitions()->canTransition($actor, $workOrder, WorkOrderStatus::Completed);
     }
 
+    /** Tamamlanmış iş emrini geri alma (yalnızca yönetici). */
+    public function reverse(User $actor, WorkOrder $workOrder): bool
+    {
+        return $workOrder->status === WorkOrderStatus::Completed
+            && $this->transitions()->canTransition($actor, $workOrder, WorkOrderStatus::InProgress);
+    }
+
     public function revertToPlanned(User $actor, WorkOrder $workOrder): bool
     {
         return $workOrder->status === WorkOrderStatus::InProgress

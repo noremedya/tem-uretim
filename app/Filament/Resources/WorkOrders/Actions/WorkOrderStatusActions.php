@@ -83,6 +83,21 @@ class WorkOrderStatusActions
             ));
     }
 
+    /** Tamamlanmış iş emrini geri al (yalnızca yönetici, açıklama zorunlu). */
+    public static function reverse(): Action
+    {
+        return Action::make('reverse')
+            ->label('Üretimi geri al')
+            ->icon(Heroicon::OutlinedArrowUturnLeft)
+            ->color('danger')
+            ->authorize('reverse')
+            ->modalHeading('Üretimi geri al')
+            ->modalDescription('Sarf, fire ve üretimden giriş ters kaydedilir; motorlar "iptal edildi" olur (seri numaraları tekrar kullanılmaz); iş emri "Üretimde" durumuna döner. Sevk edilmiş motor varsa veya üretilen ürün kullanılmışsa yapılamaz.')
+            ->modalSubmitActionLabel('Geri al')
+            ->schema([self::reason()])
+            ->action(self::run(fn (WorkOrder $record, array $data) => app(ProductionService::class)->reverse($record, Auth::user(), $data['reason']), 'Üretim geri alındı'));
+    }
+
     public static function revertToPlanned(): Action
     {
         return Action::make('revertToPlanned')

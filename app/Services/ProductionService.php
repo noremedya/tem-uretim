@@ -5,10 +5,13 @@ namespace App\Services;
 use App\Enums\MotorUnitStatus;
 use App\Enums\OrderStatus;
 use App\Enums\Permission;
+use App\Enums\StockMovementType;
 use App\Enums\WorkOrderStatus;
 use App\Exceptions\BusinessRuleException;
+use App\Exceptions\InsufficientStockException;
 use App\Models\MotorUnit;
 use App\Models\Part;
+use App\Models\StockMovement;
 use App\Models\User;
 use App\Models\WorkOrder;
 use App\Support\Quantity;
@@ -69,6 +72,73 @@ class ProductionService
             $locked->completed_at = now();
             $locked->save();
             $this->workOrders->recordHistory($locked, WorkOrderStatus::InProgress, WorkOrderStatus::Completed, $actor);
+
+            if ($locked->orderItem !== null) {
+                $this->orders->recalculateStatus($locked->orderItem->order);
+            }
+
+            $workOrder->setRawAttributes($locked->getAttributes(), sync: true);
+
+            return $workOrder;
+        });
+    }
+
+    /**
+     * Tamamlanmış iş emrini geri alır (yalnızca yönetici, açıklama zorunlu, tek transaction): motorların hepsi
+     * stokta olmalı; sarf, fire ve üretimden giriş ters kaydedilir; motorlar iptal edilir (silinmez, seri no
+     * tekrar kullanılmaz); iş emri üretimde durumuna döner; sipariş durumu yeniden hesaplanır.
+     */
+    public function reverse(WorkOrder $workOrder, User $actor, ?string $reason): WorkOrder
+    {
+        $reason = trim((string) $reason);
+
+        if ($reason === '') {
+            throw new BusinessRuleException('Geri alma açıklaması zorunludur.');
+        }
+
+        return DB::transaction(function () use ($workOrder, $actor, $reason): WorkOrder {
+            $locked = WorkOrder::query()->with('orderItem.order')->lockForUpdate()->findOrFail($workOrder->getKey());
+
+            $locked->status->ensureCanTransitionTo(WorkOrderStatus::InProgress);
+
+            if ($locked->status !== WorkOrderStatus::Completed || ! $this->workOrders->canTransition($actor, $locked, WorkOrderStatus::InProgress)) {
+                throw new BusinessRuleException('Tamamlanmış iş emrini yalnızca yönetici geri alabilir.');
+            }
+
+            // Motorlar kilitlenir: aynı anda sevk edilemezler.
+            $units = $locked->motorUnits()->where('status', '!=', MotorUnitStatus::Voided->value)->orderBy('id')->lockForUpdate()->get();
+            $notInStock = $units->filter(fn (MotorUnit $unit) => $unit->status !== MotorUnitStatus::InStock);
+
+            if ($notInStock->isNotEmpty()) {
+                throw new BusinessRuleException('Sevk edilmiş motor var, üretim geri alınamaz: '.$notInStock->pluck('serial_number')->implode(', '));
+            }
+
+            // Son tamamlamanın henüz ters kaydedilmemiş üretim hareketleri.
+            $movements = StockMovement::query()
+                ->where('reference_type', $locked->getMorphClass())
+                ->where('reference_id', $locked->getKey())
+                ->whereIn('type', [StockMovementType::ProductionConsumption->value, StockMovementType::ProductionScrap->value, StockMovementType::ProductionOutput->value])
+                ->whereDoesntHave('correction')
+                ->orderBy('id')
+                ->get();
+
+            try {
+                $this->stock->reverseProduction($movements, $locked, $actor, "Geri alma ({$locked->work_order_number}): {$reason}");
+            } catch (InsufficientStockException $exception) {
+                throw new BusinessRuleException("Üretilen ürün bu arada kullanılmış; geri alma stoğu eksiye düşürür.\n".implode("\n", array_slice(explode("\n", $exception->getMessage()), 1)));
+            }
+
+            foreach ($units as $unit) {
+                $unit->status = MotorUnitStatus::Voided;
+                $unit->save();
+            }
+
+            $locked->materials()->update(['actual_scrap' => null]);
+
+            $locked->status = WorkOrderStatus::InProgress;
+            $locked->completed_at = null;
+            $locked->save();
+            $this->workOrders->recordHistory($locked, WorkOrderStatus::Completed, WorkOrderStatus::InProgress, $actor, $reason);
 
             if ($locked->orderItem !== null) {
                 $this->orders->recalculateStatus($locked->orderItem->order);

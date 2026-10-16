@@ -228,8 +228,10 @@ it('izinli durum geçişleri enum tablosuyla sınırlıdır', function () {
     expect(OrderStatus::Open->canTransitionTo(OrderStatus::Partial))->toBeTrue()
         ->and(OrderStatus::Open->canTransitionTo(OrderStatus::Completed))->toBeTrue()
         ->and(OrderStatus::Partial->canTransitionTo(OrderStatus::Completed))->toBeTrue()
-        ->and(OrderStatus::Partial->canTransitionTo(OrderStatus::Open))->toBeFalse()
-        ->and(OrderStatus::Completed->allowedTransitions())->toBe([])
+        // Geri geçişler yalnızca üretim geri alınınca yeniden hesaplamada kullanılır (Aşama 4d).
+        ->and(OrderStatus::Partial->canTransitionTo(OrderStatus::Open))->toBeTrue()
+        ->and(OrderStatus::Completed->allowedTransitions())->toBe([OrderStatus::Partial, OrderStatus::Open])
+        ->and(OrderStatus::Completed->isCancellable())->toBeFalse()
         ->and(OrderStatus::Cancelled->allowedTransitions())->toBe([])
         ->and(fn () => OrderStatus::Cancelled->ensureCanTransitionTo(OrderStatus::Open))
         ->toThrow(BusinessRuleException::class, '"İptal" iken "Açık"');
