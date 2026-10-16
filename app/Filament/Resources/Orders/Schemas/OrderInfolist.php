@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Orders\Schemas;
 use App\Enums\OrderStatus;
 use App\Filament\Resources\Customers\CustomerResource;
 use App\Models\Order;
+use App\Models\OrderItem;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
@@ -59,11 +60,21 @@ class OrderInfolist
                                 TableColumn::make('Model kodu'),
                                 TableColumn::make('Model adı'),
                                 TableColumn::make('Adet')->alignEnd(),
+                                TableColumn::make('Üretilen')->alignEnd(),
+                                TableColumn::make('Kalan')->alignEnd(),
                             ])
                             ->schema([
                                 TextEntry::make('motorModel.code'),
                                 TextEntry::make('motorModel.name'),
                                 TextEntry::make('quantity')->numeric()->alignEnd(),
+                                TextEntry::make('produced')
+                                    ->state(fn (OrderItem $record): int => $record->producedQuantity())
+                                    ->numeric()
+                                    ->alignEnd(),
+                                TextEntry::make('remaining')
+                                    ->state(fn (OrderItem $record): int => max(0, $record->quantity - $record->producedQuantity()))
+                                    ->numeric()
+                                    ->alignEnd(),
                             ]),
                     ]),
             ]);

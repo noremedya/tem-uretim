@@ -62,6 +62,12 @@ class MotorModel extends Model
         return $this->hasMany(BomItem::class, 'parent_part_id', 'finished_part_id');
     }
 
+    /** @return HasMany<MotorUnit, $this> */
+    public function motorUnits(): HasMany
+    {
+        return $this->hasMany(MotorUnit::class);
+    }
+
     /** @return HasMany<OrderItem, $this> */
     public function orderItems(): HasMany
     {

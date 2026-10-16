@@ -9,6 +9,7 @@ use App\Models\Unit;
 use App\Models\User;
 use App\Models\WorkOrder;
 use App\Services\BomService;
+use App\Services\StockService;
 use App\Services\WorkOrderService;
 
 /**
@@ -56,6 +57,28 @@ final class ProductionFixtures
         $boms->add($f->stator, $f->copper, '0,8');
 
         return $f;
+    }
+
+    /** Malzemelere bol stok girer (StockService üzerinden). */
+    public function stockUp(User $user, string $stators = '100'): self
+    {
+        $stock = app(StockService::class);
+
+        foreach ([[$this->bearing, '1000'], [$this->varnish, '100'], [$this->sheet, '1000'], [$this->copper, '1000']] as [$part, $quantity]) {
+            $stock->stockIn($part, $quantity, $user, 'Test stoğu');
+        }
+
+        if ($stators !== '0') {
+            $stock->stockIn($this->stator, $stators, $user, 'Test stoğu');
+        }
+
+        return $this;
+    }
+
+    /** Başlatılmış (üretimde) mamul iş emri. */
+    public function startedMotorWorkOrder(User $actor, string|int $quantity = 10, array $data = []): WorkOrder
+    {
+        return app(WorkOrderService::class)->start($this->motorWorkOrder($actor, $quantity, $data), $actor);
     }
 
     /** Mamul (motor) iş emri. */

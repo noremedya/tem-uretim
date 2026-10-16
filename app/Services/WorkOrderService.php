@@ -380,7 +380,8 @@ class WorkOrderService
         return $reason;
     }
 
-    private function recordHistory(WorkOrder $workOrder, ?WorkOrderStatus $from, WorkOrderStatus $to, User $actor, ?string $description = null): void
+    /** Durum geçmişine satır yazar (ProductionService de kullanır). */
+    public function recordHistory(WorkOrder $workOrder, ?WorkOrderStatus $from, WorkOrderStatus $to, User $actor, ?string $description = null): void
     {
         $history = new WorkOrderStatusHistory;
         $history->forceFill([

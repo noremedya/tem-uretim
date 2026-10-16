@@ -8,13 +8,16 @@
  *   php worker.php <in|out|correct> <part_id> <user_id> <miktar|hareket_id> [idempotency_key]
  *   php worker.php order <customer_id> <motor_model_id>
  *   php worker.php work_order <product_part_id> <order_item_id> <user_id> <adet>
+ *   php worker.php complete <work_order_id> <user_id>
  */
 
 use App\Exceptions\BusinessRuleException;
 use App\Models\Part;
 use App\Models\StockMovement;
 use App\Models\User;
+use App\Models\WorkOrder;
 use App\Services\OrderService;
+use App\Services\ProductionService;
 use App\Services\StockService;
 use App\Services\WorkOrderService;
 use Illuminate\Contracts\Console\Kernel;
@@ -41,6 +44,16 @@ try {
         ]);
 
         echo json_encode(['ok' => true, 'id' => $order->id, 'number' => $order->order_number]);
+
+        exit;
+    }
+
+    if ($operation === 'complete') {
+        [, , $workOrderId, $userId] = $argv;
+
+        $workOrder = app(ProductionService::class)->complete(WorkOrder::query()->findOrFail($workOrderId), User::query()->findOrFail($userId));
+
+        echo json_encode(['ok' => true, 'serials' => $workOrder->motorUnits()->orderBy('id')->pluck('serial_number')->all()]);
 
         exit;
     }

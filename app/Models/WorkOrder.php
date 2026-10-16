@@ -75,6 +75,12 @@ class WorkOrder extends Model
         return $this->hasMany(WorkOrderStatusHistory::class);
     }
 
+    /** @return HasMany<MotorUnit, $this> */
+    public function motorUnits(): HasMany
+    {
+        return $this->hasMany(MotorUnit::class);
+    }
+
     public function isAssignedTo(User $user): bool
     {
         return $this->assigned_user_id !== null && $this->assigned_user_id === $user->getKey();

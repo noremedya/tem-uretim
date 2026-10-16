@@ -70,10 +70,13 @@ enum StockMovementType: string implements HasColor, HasLabel
         return in_array($this, [self::StockOut, self::CountAdjustment, self::Correction], true);
     }
 
-    /** Pasif parçada yapılabilir mi? Pasif parçaya yalnızca sayım yapılır. */
+    /**
+     * Pasif parçada yapılabilir mi? Pasif parçaya yalnızca sayım yapılır. İstisna: pasifleştirilen modelin
+     * stoktaki motorları sevk edilebilir (mamulde sayım yoktur; aksi hâlde stok hiç çıkamaz).
+     */
     public function allowedOnInactivePart(): bool
     {
-        return $this === self::CountAdjustment;
+        return in_array($this, [self::CountAdjustment, self::Shipment], true);
     }
 
     /**

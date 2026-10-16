@@ -68,6 +68,29 @@ class StockAlertService
     }
 
     /**
+     * stock:reconcile mamul bakiyesi ile stoktaki motor sayısı arasında fark buldu: aktif yöneticilere.
+     *
+     * @param  list<array{code: string, name: string, balance: string, in_stock: int}>  $mismatches
+     */
+    public function finishedGoodMismatches(array $mismatches): void
+    {
+        $lines = array_map(
+            fn (array $m): string => sprintf('%s %s: bakiye %s, stoktaki motor %d', $m['code'], $m['name'], Quantity::format($m['balance']), $m['in_stock']),
+            array_slice($mismatches, 0, 10),
+        );
+
+        if (count($mismatches) > 10) {
+            $lines[] = sprintf('… ve %d mamul daha (ayrıntılar uygulama logunda).', count($mismatches) - 10);
+        }
+
+        Notification::make()
+            ->danger()
+            ->title(sprintf('Stok tutarlılık kontrolü: %d mamulde motor sayısı uyuşmuyor', count($mismatches)))
+            ->body(implode("\n", $lines))
+            ->sendToDatabase($this->recipients(Role::Admin));
+    }
+
+    /**
      * Haftalık hareketsiz stok özeti: aktif yönetici ve depo kullanıcılarına.
      *
      * @param  Collection<int, Part>  $parts  unit, stockBalance ve last_movement_at yüklü olmalı.

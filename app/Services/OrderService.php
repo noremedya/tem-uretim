@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\MotorUnitStatus;
 use App\Enums\OrderStatus;
 use App\Enums\WorkOrderStatus;
 use App\Exceptions\BusinessRuleException;
@@ -112,6 +113,42 @@ class OrderService
 
             return $locked;
         });
+    }
+
+    /**
+     * Sipariş durumunu üretime göre yeniden hesaplar (CLAUDE.md bölüm 5 "Sipariş"): hiç motor yoksa açık,
+     * bazı kalemler eksikse kısmi, tüm kalemlerin adedi kadar motor üretildiyse tamamlandı. İptal edilmiş
+     * motorlar (geri alınan iş emri) sayılmaz; iptal edilmiş sipariş değişmez. Çağıranın transaction'ı içinde.
+     */
+    public function recalculateStatus(Order $order): Order
+    {
+        $locked = Order::query()->with('items')->lockForUpdate()->findOrFail($order->getKey());
+
+        if ($locked->status === OrderStatus::Cancelled) {
+            return $locked;
+        }
+
+        $produced = $locked->motorUnits()
+            ->where('status', '!=', MotorUnitStatus::Voided->value)
+            ->selectRaw('motor_model_id, count(*) AS produced')
+            ->groupBy('motor_model_id')
+            ->pluck('produced', 'motor_model_id');
+
+        $complete = $locked->items->every(fn ($item) => (int) ($produced[$item->motor_model_id] ?? 0) >= $item->quantity);
+
+        $status = match (true) {
+            $complete => OrderStatus::Completed,
+            $produced->sum() > 0 => OrderStatus::Partial,
+            default => OrderStatus::Open,
+        };
+
+        if ($status !== $locked->status) {
+            $locked->status->ensureCanTransitionTo($status);
+            $locked->status = $status;
+            $locked->save();
+        }
+
+        return $locked;
     }
 
     /**

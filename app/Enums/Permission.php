@@ -27,6 +27,9 @@ enum Permission: string
     case WorkOrdersChangeStatus = 'work_orders.change_status';
     case WorkOrdersChangeStatusAny = 'work_orders.change_status_any';
 
+    // Üretilen motorların sevki (yönetici, depo).
+    case MotorUnitsShip = 'motor_units.ship';
+
     case PartsView = 'parts.view';
     case PartsManage = 'parts.manage';
     case StockMove = 'stock.move';
@@ -52,6 +55,7 @@ enum Permission: string
             self::WorkOrdersManage => 'İş emri oluşturma/atama',
             self::WorkOrdersChangeStatus => 'İş emri durum değiştirme (kendine atananlar)',
             self::WorkOrdersChangeStatusAny => 'İş emri durum değiştirme (tümü)',
+            self::MotorUnitsShip => 'Motor sevki',
             self::PartsView => 'Stok kartı görüntüleme',
             self::PartsManage => 'Stok kartı yönetimi',
             self::StockMove => 'Stok giriş/çıkış/sayım',

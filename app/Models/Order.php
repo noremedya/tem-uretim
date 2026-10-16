@@ -47,6 +47,12 @@ class Order extends Model
         return $this->hasMany(OrderItem::class);
     }
 
+    /** @return HasMany<MotorUnit, $this> */
+    public function motorUnits(): HasMany
+    {
+        return $this->hasMany(MotorUnit::class);
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()

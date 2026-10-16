@@ -12,4 +12,6 @@
 return [
     'order' => env('NUMBER_FORMAT_ORDER', 'SIP-{YIL}-{SIRA:5}'),
     'work_order' => env('NUMBER_FORMAT_WORK_ORDER', 'IE-{YIL}-{SIRA:5}'),
+    // Sıra, kapsam (model kodu + yıl/ay) bazında sıfırlanır.
+    'serial_number' => env('NUMBER_FORMAT_SERIAL', '{MODEL_KODU}-{YY}{AA}-{SIRA:5}'),
 ];

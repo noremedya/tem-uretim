@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Models\BomItem;
 use App\Models\Customer;
 use App\Models\MotorModel;
+use App\Models\MotorUnit;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Part;
@@ -50,6 +51,7 @@ class AppServiceProvider extends ServiceProvider
             'order_item' => OrderItem::class,
             'production_batch' => ProductionBatch::class,
             'work_order' => WorkOrder::class,
+            'motor_unit' => MotorUnit::class,
         ]);
 
         // N+1 ve yanlışlıkla atılan alanları geliştirmede erken yakala.

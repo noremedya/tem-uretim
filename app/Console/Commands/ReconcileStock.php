@@ -9,8 +9,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Tutarlılık kontrolü: her parça için hareket toplamı ile stock_balances karşılaştırılır.
- * Fark varsa loglanır ve yöneticilere bildirim gider. Otomatik düzeltme yapılmaz.
+ * Tutarlılık kontrolü: her parça için hareket toplamı ile stock_balances karşılaştırılır; ayrıca her mamul
+ * kartının bakiyesi o modelin stoktaki motor sayısıyla karşılaştırılır. Fark varsa loglanır ve yöneticilere
+ * bildirim gider. Otomatik düzeltme yapılmaz.
  */
 class ReconcileStock extends Command
 {
@@ -19,6 +20,58 @@ class ReconcileStock extends Command
     protected $description = 'Stok bakiyelerini hareket toplamlarıyla karşılaştırır (düzeltme yapmaz)';
 
     public function handle(StockAlertService $alerts): int
+    {
+        $balancesOk = $this->checkBalances($alerts);
+        $finishedOk = $this->checkFinishedGoods($alerts);
+
+        if ($balancesOk && $finishedOk) {
+            $this->info('Stok bakiyeleri tutarlı.');
+
+            return self::SUCCESS;
+        }
+
+        return self::FAILURE;
+    }
+
+    /** Mamul bakiyesi = modelin stoktaki (in_stock) motor sayısı. */
+    private function checkFinishedGoods(StockAlertService $alerts): bool
+    {
+        $rows = DB::select(<<<'SQL'
+            SELECT p.code, p.name, b.quantity AS balance, count(u.id) FILTER (WHERE u.status = 'in_stock') AS in_stock
+            FROM motor_models m
+            JOIN parts p ON p.id = m.finished_part_id
+            JOIN stock_balances b ON b.part_id = p.id
+            LEFT JOIN motor_units u ON u.motor_model_id = m.id
+            GROUP BY p.id, p.code, p.name, b.quantity
+            HAVING b.quantity <> count(u.id) FILTER (WHERE u.status = 'in_stock')
+            ORDER BY p.code
+        SQL);
+
+        if ($rows === []) {
+            return true;
+        }
+
+        $mismatches = array_map(fn (object $row): array => [
+            'code' => $row->code,
+            'name' => $row->name,
+            'balance' => Quantity::parse($row->balance),
+            'in_stock' => (int) $row->in_stock,
+        ], $rows);
+
+        Log::warning('stock:reconcile: mamul bakiyesi stoktaki motor sayısıyla uyuşmuyor.', ['mismatches' => $mismatches]);
+
+        $this->error(sprintf('%d mamul kartında bakiye stoktaki motor sayısıyla uyuşmuyor:', count($mismatches)));
+        $this->table(
+            ['Kod', 'Ad', 'Bakiye', 'Stoktaki motor'],
+            array_map(fn (array $m): array => [$m['code'], $m['name'], Quantity::format($m['balance']), $m['in_stock']], $mismatches),
+        );
+
+        $alerts->finishedGoodMismatches($mismatches);
+
+        return false;
+    }
+
+    private function checkBalances(StockAlertService $alerts): bool
     {
         $rows = DB::select(<<<'SQL'
             SELECT p.id, p.code, p.name, b.quantity AS balance, COALESCE(m.total, 0) AS movements_total
@@ -32,9 +85,7 @@ class ReconcileStock extends Command
         SQL);
 
         if ($rows === []) {
-            $this->info('Stok bakiyeleri tutarlı.');
-
-            return self::SUCCESS;
+            return true;
         }
 
         $mismatches = array_map(fn (object $row): array => [
@@ -60,6 +111,6 @@ class ReconcileStock extends Command
 
         $alerts->reconcileMismatches($mismatches);
 
-        return self::FAILURE;
+        return false;
     }
 }

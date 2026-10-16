@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\MotorUnitStatus;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -40,6 +41,16 @@ class OrderItem extends Model
     public function workOrders(): HasMany
     {
         return $this->hasMany(WorkOrder::class);
+    }
+
+    /** Bu kalem için üretilmiş (iptal edilmemiş) motor sayısı. */
+    public function producedQuantity(): int
+    {
+        return MotorUnit::query()
+            ->where('order_id', $this->order_id)
+            ->where('motor_model_id', $this->motor_model_id)
+            ->where('status', '!=', MotorUnitStatus::Voided->value)
+            ->count();
     }
 
     public function getActivitylogOptions(): LogOptions

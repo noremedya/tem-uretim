@@ -101,7 +101,7 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 2. Herhangi bir malzeme yetersizse (yarı mamul dahil) işlem tamamen iptal edilir; hangi malzemeden ne kadar eksik olduğu kullanıcıya listelenir. Eksik yarı mamul otomatik üretilmez.
 3. Üretilen kart `production_output` hareketiyle stoğa girer.
 4. Mamulde `adet` kadar `motor_units` kaydı oluşturulur. Seri no formatı yapılandırılabilir (varsayılan: `{MODEL_KODU}-{YY}{AA}-{SIRA:5}`; sıra model ve ay bazında sıfırlanır), sıra numarası çakışmasız üretilir (`NumberSequenceService`, bkz. "Numara üretimi").
-5. İş emri siparişe bağlıysa motorlar siparişe bağlanır, sipariş durumu yeniden hesaplanır.
+5. İş emri siparişe bağlıysa motorlar siparişe bağlanır, sipariş durumu yeniden hesaplanır (hiç motor yoksa açık, eksik kalem varsa kısmi, tüm kalemler kadar motor üretildiyse tamamlandı; iptal edilmiş motorlar sayılmaz). Sipariş bu arada iptal edildiyse motorlar siparişe bağlanmaz.
 
 **İş emri geri alma** (yalnızca yönetici, açıklama zorunlu, tek transaction): yalnızca tamamlanmış iş emri; motorların hepsi stokta olmalı (sevk edilmiş motor varsa reddedilir). Sarf, fire ve üretimden giriş hareketleri ters kaydedilir (`correction`); üretilen yarı mamul bu arada tüketildiyse ters kayıt stoğu eksiye düşüreceği için reddedilir. Motorlar `voided` olur, iş emri `in_progress`'e döner, sipariş durumu yeniden hesaplanır.
 
@@ -114,7 +114,7 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - Mamul kartında elle hareket yoktur: yalnızca `production_output`, `shipment` ve geri almadaki `correction` (servis + veritabanı trigger'ı). Kural: **mamul bakiyesi = o modelin `in_stock` motor sayısı**; `stock:reconcile` bunu da kontrol eder.
 - Yarı mamulde lot/seri takibi yoktur; yarı mamul satılmaz (sipariş kalemi yalnızca motor modeline bağlıdır).
 
-**Sevk** (yönetici ve depo): stoktaki motorlar seçilip sevk edilir; motor `shipped` olur, mamul kartından `shipment` hareketiyle düşülür. E-irsaliye bağlantısı Aşama 6'da eklenir.
+**Sevk** (yönetici ve depo, yetki `motor_units.ship`): stoktaki motorlar seçilip sevk edilir (isteğe bağlı sevk notu); motor `shipped` olur, mamul kartından motor başına bir `shipment` hareketiyle düşülür. Seçilenlerden biri stokta değilse hiçbiri sevk edilmez. Pasifleştirilen modelin stoktaki motorları da sevk edilebilir (pasif parçada yalnızca sayım kuralının istisnası; mamulde sayım olmadığından stok başka türlü çıkamaz). E-irsaliye bağlantısı Aşama 6'da eklenir.
 
 **Stok**
 - Bakiye hiçbir zaman negatife düşemez (servis + check constraint).
@@ -123,7 +123,7 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - Açıklama zorunlu: `stock_out`, `count_adjustment`, `correction`. `stock_in` ve `return`'de isteğe bağlı.
 - **Sayım:** kullanıcı sayılan miktarı girer, sistem farkı hesaplar; fark 0 ise hareket oluşmaz, "bakiye zaten doğru" mesajı gösterilir.
 - **Kritik seviye:** `bakiye <= critical_level` ise parça kritiktir. `critical_level = 0` takip yok demektir, bildirim gitmez.
-- **Pasif parçaya** yalnızca sayım (`count_adjustment`) yapılabilir; diğer tüm hareketler reddedilir.
+- **Pasif parçaya** yalnızca sayım (`count_adjustment`) yapılabilir; diğer tüm hareketler reddedilir (istisna: pasif mamulün sevki, bkz. "Sevk").
 - **Küsurat:** birimi `allows_decimal = false` olan parçada küsuratlı miktar (hareket miktarı, sayılan miktar) servis seviyesinde reddedilir.
 - **Ters kayıt (`correction`):** miktar orijinal hareketin tam tersidir; bir hareket yalnızca bir kez ters kaydedilebilir (`corrected_movement_id` unique); ters kaydın kendisi ters kaydedilemez; stoğu eksiye düşürecekse reddedilir. Bu kurallar servis + veritabanı (unique, insert trigger'ı) seviyesinde zorlanır.
 - **Üretim hareketleri (`production_consumption`, `production_scrap`, `production_output`) ve `shipment` elle ters kaydedilemez.** Motor kayıtlarıyla tutarlılık için yalnızca iş emri geri alma akışı bunları ters kaydeder.

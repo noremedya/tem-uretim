@@ -178,6 +178,82 @@ class StockService
     }
 
     /**
+     * İş emri tamamlama: net sarf (production_consumption), fire (production_scrap) ve üretilen kartın girişi
+     * (production_output) tek transaction'da. Tüm bakiyeler part_id sırasıyla kilitlenir. Herhangi bir malzeme
+     * (fire dahil) yetersizse hiçbir şey değişmez ve tüm eksikler InsufficientStockException ile listelenir.
+     *
+     * @param  list<array{part_id: int, consumption: string, scrap: string}>  $materials
+     * @return Collection<int, StockMovement>
+     */
+    public function recordProduction(array $materials, Part $output, string|int $outputQuantity, Model $reference, User $user, ?string $description = null): Collection
+    {
+        $outputQuantity = $this->positive($outputQuantity);
+
+        return DB::transaction(function () use ($materials, $output, $outputQuantity, $reference, $user, $description): Collection {
+            $partIds = array_values(array_unique([...array_column($materials, 'part_id'), $output->getKey()]));
+            $balances = $this->lockBalances($partIds);
+            $parts = Part::query()->with('unit')->findMany($partIds)->keyBy('id');
+
+            $shortages = [];
+            foreach ($materials as $line) {
+                $part = $parts[$line['part_id']];
+                $this->ensureTypeAllowed($part, StockMovementType::ProductionConsumption);
+                $this->ensureUnitPrecision($part, $line['consumption']);
+                $this->ensureUnitPrecision($part, $line['scrap']);
+
+                $needed = Quantity::add($line['consumption'], $line['scrap']);
+                $available = (string) $balances[$part->getKey()]->quantity;
+
+                if (Quantity::compare($available, $needed) < 0) {
+                    $shortages[] = $this->shortage($part, $needed, $available);
+                }
+            }
+
+            if ($shortages !== []) {
+                throw new InsufficientStockException($shortages);
+            }
+
+            $product = $parts[$output->getKey()];
+            $this->ensureTypeAllowed($product, StockMovementType::ProductionOutput);
+            $this->ensureUnitPrecision($product, $outputQuantity);
+
+            $movements = collect();
+            foreach ($materials as $line) {
+                $part = $parts[$line['part_id']];
+
+                if (Quantity::compare($line['consumption'], '0') > 0) {
+                    $movements->push($this->apply($part, $balances[$part->getKey()], StockMovementType::ProductionConsumption, Quantity::negate($line['consumption']), $user, $description, reference: $reference));
+                }
+
+                if (Quantity::compare($line['scrap'], '0') > 0) {
+                    $movements->push($this->apply($part, $balances[$part->getKey()], StockMovementType::ProductionScrap, Quantity::negate($line['scrap']), $user, $description, reference: $reference));
+                }
+            }
+
+            $movements->push($this->apply($product, $balances[$product->getKey()], StockMovementType::ProductionOutput, $outputQuantity, $user, $description, reference: $reference));
+
+            return $movements;
+        });
+    }
+
+    /**
+     * Sevk: mamul kartından düşüm (shipment). Referans sevk edilen motor kaydıdır.
+     */
+    public function recordShipment(Part $part, string|int $quantity, Model $reference, User $user, ?string $description = null): StockMovement
+    {
+        $quantity = Quantity::negate($this->positive($quantity));
+
+        return DB::transaction(function () use ($part, $quantity, $reference, $user, $description): StockMovement {
+            $balance = $this->lockBalances([$part->getKey()])[$part->getKey()];
+            $part = Part::query()->with('unit')->findOrFail($part->getKey());
+            $this->ensureTypeAllowed($part, StockMovementType::Shipment);
+            $this->ensureUnitPrecision($part, $quantity);
+
+            return $this->apply($part, $balance, StockMovementType::Shipment, $quantity, $user, $description, reference: $reference);
+        });
+    }
+
+    /**
      * @param  Closure(Part, string): ?string  $resolveDelta  Kilitli bakiyeye göre işaretli miktar; null ise hareket yok.
      */
     private function record(

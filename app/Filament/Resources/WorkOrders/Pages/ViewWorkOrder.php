@@ -15,6 +15,7 @@ class ViewWorkOrder extends ViewRecord
     {
         return [
             WorkOrderStatusActions::start(),
+            WorkOrderStatusActions::complete(),
             WorkOrderStatusActions::revertToPlanned(),
             WorkOrderStatusActions::refreshMaterials(),
             EditAction::make(),

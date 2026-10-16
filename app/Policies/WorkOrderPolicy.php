@@ -46,6 +46,12 @@ class WorkOrderPolicy
             && $workOrder->status === WorkOrderStatus::Planned;
     }
 
+    public function complete(User $actor, WorkOrder $workOrder): bool
+    {
+        return $workOrder->status === WorkOrderStatus::InProgress
+            && $this->transitions()->canTransition($actor, $workOrder, WorkOrderStatus::Completed);
+    }
+
     public function revertToPlanned(User $actor, WorkOrder $workOrder): bool
     {
         return $workOrder->status === WorkOrderStatus::InProgress
