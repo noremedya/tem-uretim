@@ -56,6 +56,28 @@ final class Quantity
         return bcmul($a, $b, self::SCALE);
     }
 
+    /**
+     * Pozitif bir değeri verilen ondalık basamağa yukarı yuvarlar (ör. ceil("0.08", 0) = "1.000").
+     * Ara hesaplar için daha yüksek hassasiyetli girdi kabul eder.
+     */
+    public static function ceil(string $value, int $scale = self::SCALE): string
+    {
+        $truncated = bcadd($value, '0', $scale);
+
+        if (bccomp($truncated, $value, 10) < 0) {
+            $step = $scale === 0 ? '1' : '0.'.str_repeat('0', $scale - 1).'1';
+            $truncated = bcadd($truncated, $step, $scale);
+        }
+
+        return bcadd($truncated, '0', self::SCALE);
+    }
+
+    /** Yüzde: $value × $percent / 100 (yüksek hassasiyetli ara değer, yuvarlanmadan). */
+    public static function percentOf(string $value, string $percent): string
+    {
+        return bcdiv(bcmul($value, $percent, 10), '100', 10);
+    }
+
     public static function negate(string $quantity): string
     {
         return bcmul($quantity, '-1', self::SCALE);

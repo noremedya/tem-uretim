@@ -7,6 +7,7 @@
  * Kullanım:
  *   php worker.php <in|out|correct> <part_id> <user_id> <miktar|hareket_id> [idempotency_key]
  *   php worker.php order <customer_id> <motor_model_id>
+ *   php worker.php work_order <product_part_id> <order_item_id> <user_id> <adet>
  */
 
 use App\Exceptions\BusinessRuleException;
@@ -15,6 +16,7 @@ use App\Models\StockMovement;
 use App\Models\User;
 use App\Services\OrderService;
 use App\Services\StockService;
+use App\Services\WorkOrderService;
 use Illuminate\Contracts\Console\Kernel;
 use Tests\TestCase;
 
@@ -39,6 +41,21 @@ try {
         ]);
 
         echo json_encode(['ok' => true, 'id' => $order->id, 'number' => $order->order_number]);
+
+        exit;
+    }
+
+    if ($operation === 'work_order') {
+        [, , $productId, $orderItemId, $userId, $quantity] = $argv;
+
+        $workOrder = app(WorkOrderService::class)->create([
+            'product_part_id' => (int) $productId,
+            'order_item_id' => (int) $orderItemId,
+            'quantity' => $quantity,
+            'planned_end' => today()->addWeek()->toDateString(),
+        ], User::query()->findOrFail($userId));
+
+        echo json_encode(['ok' => true, 'id' => $workOrder->id, 'number' => $workOrder->work_order_number]);
 
         exit;
     }

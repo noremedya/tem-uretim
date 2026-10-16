@@ -46,6 +46,7 @@ enum Role: string implements HasLabel
                 Permission::CustomersView,
                 Permission::OrdersView,
                 Permission::WorkOrdersView,
+                Permission::WorkOrdersViewAll,
                 Permission::PartsView,
                 Permission::PartsManage,
                 Permission::StockMove,

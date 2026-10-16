@@ -8,9 +8,11 @@ use App\Models\MotorModel;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Part;
+use App\Models\ProductionBatch;
 use App\Models\StockMovement;
 use App\Models\Unit;
 use App\Models\User;
+use App\Models\WorkOrder;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -46,6 +48,8 @@ class AppServiceProvider extends ServiceProvider
             'customer' => Customer::class,
             'order' => Order::class,
             'order_item' => OrderItem::class,
+            'production_batch' => ProductionBatch::class,
+            'work_order' => WorkOrder::class,
         ]);
 
         // N+1 ve yanlışlıkla atılan alanları geliştirmede erken yakala.

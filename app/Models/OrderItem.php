@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 
@@ -33,6 +34,12 @@ class OrderItem extends Model
     public function motorModel(): BelongsTo
     {
         return $this->belongsTo(MotorModel::class);
+    }
+
+    /** @return HasMany<WorkOrder, $this> */
+    public function workOrders(): HasMany
+    {
+        return $this->hasMany(WorkOrder::class);
     }
 
     public function getActivitylogOptions(): LogOptions

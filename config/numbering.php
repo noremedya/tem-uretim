@@ -11,4 +11,5 @@
 
 return [
     'order' => env('NUMBER_FORMAT_ORDER', 'SIP-{YIL}-{SIRA:5}'),
+    'work_order' => env('NUMBER_FORMAT_WORK_ORDER', 'IE-{YIL}-{SIRA:5}'),
 ];

@@ -67,9 +67,9 @@ Tablo adları, kolon adları ve enum değerleri İngilizce; arayüz etiketleri T
 - **order_items**: order_id, motor_model_id, quantity (tam sayı, > 0); (order_id, motor_model_id) unique
 - **number_sequences** (numara sayaçları): name, scope, last_value; (name, scope) unique — bkz. bölüm 5 "Numara üretimi"
 - **production_batches** (parti): batch_number (unique, elle girilir), date, notes, lock_version
-- **work_orders**: work_order_number (unique, otomatik), product_part_id (üretilen kart: yarı mamul veya mamul), motor_model_id (nullable; mamulde dolu), order_item_id (nullable; yalnızca mamulde, kalemin modeli aynı olmalı), quantity (> 0; birimin küsurat kuralına uyar), production_batch_id (nullable), status (enum: planned, in_progress, completed, cancelled — planlandı, üretimde, tamamlandı, iptal), assigned_user_id, planned_start, planned_end, started_at, completed_at, lock_version
+- **work_orders**: work_order_number (unique, otomatik), product_part_id (üretilen kart: yarı mamul veya mamul), motor_model_id (nullable; mamulde dolu), order_item_id (nullable; yalnızca mamulde, kalemin modeli aynı olmalı), quantity (> 0; birimin küsurat kuralına uyar), production_batch_id (nullable), status (enum: planned, in_progress, completed, cancelled — planlandı, üretimde, tamamlandı, iptal), assigned_user_id (nullable; aktif saha operatörü), planned_start (tarih, isteğe bağlı), planned_end (tarih, zorunlu, >= planned_start), started_at, completed_at, cancellation_reason (iptalde zorunlu), notes, lock_version
 - **work_order_materials** (iş emrinin malzeme listesi; oluşturulurken reçeteden kopyalanır): work_order_id, part_id, quantity_per_unit, scrap_rate, required_quantity (adet × birim başına), planned_scrap (standart fire), actual_scrap (tamamlamada girilen fire, nullable); (work_order_id, part_id) unique
-- **work_order_status_histories**: work_order_id, from_status, to_status, user_id, description, created_at
+- **work_order_status_histories**: work_order_id, from_status (oluşturmada null), to_status, user_id, description, created_at. Update/delete yok (veritabanı trigger'ı ile de engellenir).
 - **motor_units** (üretilen motor): serial_number (unique), motor_model_id, work_order_id, production_batch_id, order_id (nullable), production_date, status (enum: in_stock, shipped, voided — stokta, sevk edildi, iptal edildi), shipped_at, shipped_by_user_id, notes. Silinmez; seri no tekrar kullanılmaz.
 
 Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara index ekle.
@@ -87,6 +87,12 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 **İş emri**
 - Bir stok kartı üretir: yarı mamul veya mamul. Mamul iş emri siparişin aynı modeldeki kalemine bağlanabilir. Numara: `IE-{YIL}-{SIRA:5}`.
 - **Malzeme listesi** oluşturulurken reçeteden `work_order_materials`'a kopyalanır; reçete sonradan değişse de açık iş emri etkilenmez. `planned` iş emrinde "reçeteyi yenile" ile güncel reçete yeniden kopyalanır. Reçetesi olmayan karta iş emri açılamaz.
+- **Atama:** atanan operatör isteğe bağlıdır ve sonradan atanabilir; yalnızca aktif saha operatörleri atanabilir. Atanmamış iş emrini yalnızca yönetici başlatır ve tamamlar.
+- **Tarihler:** planlanan bitiş zorunlu (gecikme buna göre hesaplanır), planlanan başlangıç isteğe bağlı.
+- **İptal** (`planned` → `cancelled`) açıklaması zorunludur; `cancellation_reason`'a ve durum geçmişine yazılır.
+- **Sipariş kalemi kotası:** bir kaleme birden fazla iş emri bağlanabilir; iptal edilmemiş iş emirlerinin toplam adedi kalem adedini aşamaz (kalem satırı kilitlenerek kontrol edilir). Fazla üretim siparişe bağlanmadan yapılır. İptal edilmemiş iş emri olan kalem silinemez, miktarı bu iş emirlerinin toplamının altına inemez. Yalnızca `open`/`partial` siparişin kalemine iş emri bağlanır.
+- **Standart fire** = ihtiyaç × oran / 100; tam sayılı birimde yukarı yuvarlanır (ör. 4 civata × %2 → 1). Operatör tamamlamada gerçek fireyi girer.
+- Reçetesinde pasif bileşen olan karta iş emri açılamaz (pasif parça hareket görmez).
 - Adet yönetici tarafından `planned` ve `in_progress` iken değiştirilebilir (malzeme ihtiyacı yeniden hesaplanır). **Kısmi tamamlama yoktur**: az üretildiyse önce adet düşürülür.
 - **Yetersiz malzeme uyarısı:** iş emri ekranında her malzeme için ihtiyaç (fire dahil), mevcut ve eksik gösterilir. Uyarıdır; oluşturma ve başlatmayı engellemez, başka iş emirlerinin ihtiyacını hesaba katmaz.
 

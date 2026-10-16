@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\OrderStatus;
+use App\Enums\WorkOrderStatus;
 use App\Exceptions\BusinessRuleException;
 use App\Models\Customer;
 use App\Models\MotorModel;
@@ -121,7 +122,8 @@ class OrderService
      */
     private function syncItems(Order $order, array $items): void
     {
-        $existing = $order->items()->get()->keyBy('motor_model_id');
+        // Kalem satırları kilitlenir: WorkOrderService iş emri bağlarken aynı satırları kilitler (kota kontrolü).
+        $existing = $order->items()->with('motorModel')->lockForUpdate()->get()->keyBy('motor_model_id');
 
         $newModelIds = array_diff(array_keys($items), $existing->keys()->all());
 
@@ -139,8 +141,18 @@ class OrderService
 
         foreach ($existing as $modelId => $item) {
             if (! array_key_exists($modelId, $items)) {
+                if ($item->workOrders()->exists()) {
+                    throw new BusinessRuleException("{$item->motorModel->code} kalemine bağlı iş emri var; kalem silinemez.");
+                }
+
                 $item->delete();
             } elseif ($item->quantity !== $items[$modelId]) {
+                $planned = (int) $item->workOrders()->where('status', '!=', WorkOrderStatus::Cancelled->value)->sum('quantity');
+
+                if ($items[$modelId] < $planned) {
+                    throw new BusinessRuleException("{$item->motorModel->code} kalemine bağlı iş emirlerinin toplamı {$planned} adet; kalem miktarı bunun altına inemez.");
+                }
+
                 $item->quantity = $items[$modelId];
                 $item->save();
             }
