@@ -41,4 +41,6 @@ Stok tutarlılık kontrolü elle: `docker compose exec app php artisan stock:rec
 
 Hareketsiz stok özeti elle: `docker compose exec app php artisan stock:idle-report` (üretimde her pazartesi 08:00; eşik `config/stock.php`, varsayılan 90 gün).
 
+Raporlar 2.000 satırı aşınca Excel dosyası kuyrukta hazırlanır. Geliştirmede kuyruk işçisi otomatik çalışmaz; denemek için: `docker compose exec app php artisan queue:work` (üretimde `worker` servisi çalıştırır). Hazırlanan dosyalar 7 gün saklanır (`reports:prune-exports`, her gün 04:00).
+
 Kod biçimi: `docker compose exec app vendor/bin/pint`

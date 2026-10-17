@@ -277,6 +277,16 @@ Tarih aralığı (günlük/haftalık/aylık hazır seçimlerle) ve filtreler (mo
 
 Hepsi Excel (.xlsx) olarak dışa aktarılabilir. Büyük dışa aktarımlar kuyrukta çalışır, bitince bildirim gelir.
 
+**Kararlar (Aşama 8)**
+- Hazır aralıklar: bugün, dün, bu hafta, geçen hafta, bu ay, geçen ay, özel; hafta pazartesi başlar.
+- Her rapor tek bir sınıfta tanımlanır (`app/Reports`); ekran tablosu ve Excel aynı tanımdan üretilir.
+- **Üretim adedi** üretilen motorlardan (iptal edilenler hariç, üretim tarihine göre); "yarı mamul dahil" seçilirse tamamlanan yarı mamul iş emirleri ayrı satırlarla eklenir.
+- **Üretim süresi** takvim süresidir (başlama → bitiş, saat); vardiya/mesai takvimi yoktur. **Zamanında** = tamamlanma tarihi ≤ planlanan bitiş. Operatör raporunda iş emri atanan operatöre yazılır; atanmamışlar "Atanmamış" satırındadır.
+- **Stok raporu** parça başına açılış bakiyesi, hareket tiplerine göre giriş/çıkış ve dönem sonu bakiyesi (muhasebe koduna göre gruplu); ayrıca hareket listesi. Depo da görür.
+- **Sipariş durumu** kalem başına sipariş, üretilen, sevk edilen, kalan adet; termin ve gecikme.
+- Excel: openspout (`openspout/openspout`, doğrudan bağımlılık); Türkçe başlıklar, sayılar sayı hücresi, ayrıca "Özet" sayfası (filtreler ve özet). 2.000 satıra kadar doğrudan iner; fazlası kuyrukta hazırlanır, bitince bildirim gelir; dosyayı yalnızca hazırlayan indirir; 7 günden eski dosyalar silinir (`reports:prune-exports`, günlük).
+- Muhasebe raporları (cari bakiye listesi, kasa/banka özeti) 5d ile birlikte en sona bırakıldı.
+
 ## 9. Dağıtım dosyaları (üretim)
 
 Kurulum kılavuzu bu dosya adlarına dayanır; isimleri değiştirme.
@@ -356,7 +366,7 @@ Testler PostgreSQL üzerinde çalışmalı (SQLite değil), çünkü kilitler ve
 - **Geliştirme veritabanında veri silen komut çalıştırmadan önce mutlaka onay iste:** `migrate:fresh`, `migrate:refresh`, `migrate:reset`, `migrate:rollback`, `db:wipe`, `db:seed` ile üzerine yazma, doğrudan `DELETE`/`TRUNCATE`/`DROP` vb. Şema değişikliği için yalnızca `migrate` (ileri) onaysız çalıştırılabilir. Test veritabanı (`tem_uretim_test`) bu kuralın dışındadır.
 - **Çalıştırılmış (herhangi bir veritabanında, geliştirme dahil) veya commit edilmiş bir migration dosyası asla değiştirilmez.** Her şema değişikliği, düzeltmeler dahil, yeni bir migration ile yapılır; böylece her ortam aynı şemaya ileri `migrate` ile ulaşır.
 
-**Aşamalar** (sıra: 1–5c tamam → 7, 8, 9, 10, 11, 12 → en son 5d ve 6; 5d ve 6 dış bilgi bekliyor: Luca örnek dosyası, Uyumsoft test hesabı)
+**Aşamalar** (sıra: 1–5c tamam → 7, 8, 9, 10, 11, 12 → en son 5d ve 6; gerçek cihaz denemeleri (USB okuyucu, telefon kamerası) teslim öncesinde kurulum kılavuzundaki kontrol listesiyle topluca yapılır; 5d ve 6 dış bilgi bekliyor: Luca örnek dosyası, Uyumsoft test hesabı)
 1. Proje iskeleti: Laravel + Filament kurulumu, geliştirme için `docker-compose.yml`, PostgreSQL, Türkçe dil/saat dilimi, roller ve yetkiler, `app:create-admin`, kullanıcı yönetimi, Pest kurulumu
 2. Stok: birimler, parçalar, `StockService`, stok hareketleri, stok işlemi sayfası, kritik stok bildirimi, `stock:reconcile`, testler
    - Ek (Aşama 4'ten önce): stok kartı türleri ve muhasebe kodları (6 tür, mevcut sarf kartları direkt sarfa), hareketsiz stok uyarısı
