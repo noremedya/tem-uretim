@@ -2,6 +2,7 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\AvatarProviders\InitialsAvatarProvider;
 use App\Filament\Pages\Auth\Login;
 use App\Http\Middleware\LogoutInactiveUser;
 use Filament\FontProviders\LocalFontProvider;
@@ -42,6 +43,8 @@ class AppPanelProvider extends PanelProvider
             // Ortak Alpine bileşenleri (submitGuard vb.), Vite ile derlenir.
             ->renderHook(PanelsRenderHook::HEAD_END, fn (): string => Blade::render("@vite('resources/js/filament/app.js')"))
             ->databaseNotifications()
+            // Varsayılan avatar ui-avatars.com'a gider; yerel baş harf avatarı kullanılır.
+            ->defaultAvatarProvider(InitialsAvatarProvider::class)
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->pages([

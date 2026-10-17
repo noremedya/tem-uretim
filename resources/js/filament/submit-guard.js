@@ -13,7 +13,8 @@
  *   bir isteğinin bitişi kilidi açar.
  * - failsafeMs: Beklenmedik durumda (ör. istek hiç başlamadıysa) kilidin kendiliğinden açılacağı süre.
  *
- * Kilitliyken öğeye data-submit-guard-busy özniteliği eklenir (görsel geri bildirim için).
+ * Kilitliyken öğeye data-submit-guard-busy özniteliği eklenir (görsel geri bildirim için). Kilitliyken engellenen
+ * her gönderimde öğeden "submit-guard-blocked" olayı yayılır (ör. Hızlı İşlem'de "İşleniyor, tekrar okutun").
  */
 export function submitGuard({ action = null, failsafeMs = 30000 } = {}) {
     return {
@@ -34,6 +35,7 @@ export function submitGuard({ action = null, failsafeMs = 30000 } = {}) {
                     if (this.busy) {
                         event.preventDefault()
                         event.stopImmediatePropagation()
+                        this.$dispatch?.('submit-guard-blocked')
 
                         return
                     }

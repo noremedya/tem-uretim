@@ -75,9 +75,13 @@ test('ilk gönderim geçer, istek sürerken ikinci gönderim kesilir', () => {
     assert.equal(guard.busy, true)
     assert.ok(guard.$el.attributes.has('data-submit-guard-busy'))
 
+    const dispatched = []
+    guard.$dispatch = (name) => dispatched.push(name)
+
     const second = submit()
     assert.equal(second.prevented, true)
     assert.equal(second.stopped, true, 'Olay Livewire dinleyicisine ulaşmamalı')
+    assert.deepEqual(dispatched, ['submit-guard-blocked'], 'Engellenen gönderim için olay yayılmalı')
 
     message.finish()
     guard.destroy()

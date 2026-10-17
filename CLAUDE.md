@@ -26,7 +26,7 @@ Kapsam:
 - Kuyruk, önbellek ve oturum sürücüsü: `database` (Redis kullanma; hareketli parça sayısını az tut)
 - spatie/laravel-permission (roller/yetkiler), spatie/laravel-activitylog (denetim izi)
 - Pest (testler)
-- QR/barkod kamera okuma: npm paketi (ör. html5-qrcode), Vite ile derlenip pakete dahil edilir
+- QR/barkod kamera okuma: `@zxing/browser` npm paketi (QR ve 1D barkod; html5-qrcode 2023'ten beri bakımsız olduğu için seçilmedi), Vite ile derlenip pakete dahil edilir. Kamera yalnızca HTTPS'te (geliştirmede localhost) çalışır.
 - e-Dönüşüm: Uyumsoft e-Dönüşüm SOAP servisi (`https://edonusumapi.uyum.com.tr/`, SOAP 1.1, WS-Security UsernameToken), PHP `soap` eklentisi; WSDL/XSD dosyaları repoda tutulur (çalışma anında internetten çekilmez), kimlik bilgileri yalnızca `.env`'de
 - Üretim sunucusu: Docker Compose, FrankenPHP tabanlı uygulama imajı, önde Caddy (Cloudflare DNS modülüyle), cloudflared
 - Paket eklemeden önce güncel Laravel/Filament sürümüyle uyumluluğunu kontrol et; uyumsuzsa bana sor.
@@ -247,7 +247,7 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - "En az bir rol" ve yönetici güvenliği kuralları **servis seviyesinde** (UserService, kilitli) zorlanır; bunlar için veritabanı trigger'ı eklenmez (bölüm 3 kural 5'in bilinçli istisnası).
 - Filament paneli kök adreste (`/`) çalışır.
 
-Yetkiler Laravel Policy'leriyle uygulanır; Filament menüsü de yetkiye göre gizlenir. Saha operatörü arayüzü sade olmalı: ana ekranı "Bana atanan iş emirleri" + "Hızlı işlem".
+Yetkiler Laravel Policy'leriyle uygulanır; Filament menüsü de yetkiye göre gizlenir. Saha operatörü arayüzü sade olmalı: ana ekranı "Bana atanan iş emirleri" + büyük "Hızlı işlem" butonu (Aşama 7).
 
 ## 7. Ekranlar
 
@@ -255,11 +255,13 @@ Yetkiler Laravel Policy'leriyle uygulanır; Filament menüsü de yetkiye göre g
 - Standart Filament kaynakları: kullanıcılar, birimler, parçalar, motor modelleri (reçete ilişki yöneticisiyle), müşteriler, siparişler (kalemleriyle), partiler, iş emirleri, üretilen motorlar, stok hareketleri (salt okunur liste)
 - **Stok işlemi sayfası**: giriş / çıkış / sayım düzeltme formu
 - **Hızlı İşlem sayfası** (dokunmatik ve büyük butonlu):
-  - Otomatik odaklı tek bir okuma alanı; USB okuyucunun gönderdiği Enter ile işlem tetiklenir. Okuma alanı bir form içindedir ve Enter formu gönderir; form, istek sürerken ikinci gönderimi engelleyen ortak Alpine bileşeni **`submitGuard`** ile korunur (`resources/js/filament/submit-guard.js`, kullanım: `x-data="submitGuard({ action: '...' })"`). Açık soru (Aşama 7'de karar verilecek): guard, istek sürerken gelen okumayı düşürür; hızlı art arda farklı kodların okunması durumunda düşürmek mi, sıraya almak mı istendiği sorulacak.
+  - Otomatik odaklı tek bir okuma alanı; USB okuyucunun gönderdiği Enter ile işlem tetiklenir. Okuma alanı bir form içindedir ve Enter formu gönderir; form, istek sürerken ikinci gönderimi engelleyen ortak Alpine bileşeni **`submitGuard`** ile korunur (`resources/js/filament/submit-guard.js`, kullanım: `x-data="submitGuard({ action: '...' })"`). İstek sürerken gelen okuma **düşürülür** ve sesli/görsel uyarı verilir ("İşleniyor, tekrar okutun"); sıraya alınmaz (her okuma bir form açar).
+  - Kod çözümü (büyük/küçük harf ve baştaki/sondaki boşluk önemsiz): parça barkodu veya parça kodu → seri no → iş emri no; hiçbiri değilse "Kod bulunamadı". Tüm roller kullanır; her işlem kendi yetkisine bağlıdır.
+  - Başarılı okumada kısa bip, hatada farklı ses, telefonda titreşim (ses dosyası yok; tarayıcıda üretilir).
   - "Kamera ile okut" butonu (telefon/tablet)
-  - Okunan değer parça barkoduysa → hızlı stok giriş/çıkış formu
-  - Seri no ise → motor detay kartı
-  - İş emri numarası ise → durum değiştirme butonları. Saha operatörü yalnızca kendine atanan iş emirlerini görür (listede, detayda ve burada); başkasına atanmış bir iş emri okutulursa iş emri bilgisi gösterilmez, "Bu iş emri size atanmamış." mesajı çıkar
+  - Okunan değer parça barkoduysa → parça kartı (bakiye) ve hızlı stok giriş/çıkış formu (stok hareketi yetkisi olanlara; sayım tam stok işlemi sayfasındadır)
+  - Seri no ise → motor detay kartı; stoktaki motor için yönetici ve depoya "Sevk et"
+  - İş emri numarası ise → yetkiye göre "Başlat" ve "Tamamla" (fire giriş penceresiyle, standart fireyle dolu); diğer işlemler için iş emri sayfasına bağlantı. Saha operatörü yalnızca kendine atanan iş emirlerini görür (listede, detayda ve burada); başkasına atanmış bir iş emri okutulursa iş emri bilgisi gösterilmez, "Bu iş emri size atanmamış." mesajı çıkar
   - Aynı kodun 2 saniye içinde tekrar okunması yok sayılır
   - Okuma sonrası odak otomatik olarak okuma alanına döner
 - **Etiket yazdırma** (opsiyonel aşama): seri no ve iş emri için QR etiketli, tarayıcıdan yazdırılabilir sayfa
@@ -354,7 +356,7 @@ Testler PostgreSQL üzerinde çalışmalı (SQLite değil), çünkü kilitler ve
 - **Geliştirme veritabanında veri silen komut çalıştırmadan önce mutlaka onay iste:** `migrate:fresh`, `migrate:refresh`, `migrate:reset`, `migrate:rollback`, `db:wipe`, `db:seed` ile üzerine yazma, doğrudan `DELETE`/`TRUNCATE`/`DROP` vb. Şema değişikliği için yalnızca `migrate` (ileri) onaysız çalıştırılabilir. Test veritabanı (`tem_uretim_test`) bu kuralın dışındadır.
 - **Çalıştırılmış (herhangi bir veritabanında, geliştirme dahil) veya commit edilmiş bir migration dosyası asla değiştirilmez.** Her şema değişikliği, düzeltmeler dahil, yeni bir migration ile yapılır; böylece her ortam aynı şemaya ileri `migrate` ile ulaşır.
 
-**Aşamalar**
+**Aşamalar** (sıra: 1–5c tamam → 7, 8, 9, 10, 11, 12 → en son 5d ve 6; 5d ve 6 dış bilgi bekliyor: Luca örnek dosyası, Uyumsoft test hesabı)
 1. Proje iskeleti: Laravel + Filament kurulumu, geliştirme için `docker-compose.yml`, PostgreSQL, Türkçe dil/saat dilimi, roller ve yetkiler, `app:create-admin`, kullanıcı yönetimi, Pest kurulumu
 2. Stok: birimler, parçalar, `StockService`, stok hareketleri, stok işlemi sayfası, kritik stok bildirimi, `stock:reconcile`, testler
    - Ek (Aşama 4'ten önce): stok kartı türleri ve muhasebe kodları (6 tür, mevcut sarf kartları direkt sarfa), hareketsiz stok uyarısı

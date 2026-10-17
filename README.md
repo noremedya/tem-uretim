@@ -33,6 +33,8 @@ docker compose exec app php artisan test
 
 Tarayıcı tarafı JS mantık testleri Node'un yerleşik test çalıştırıcısıyla yazılır (`tests/js`, ek paket yok) ve `php artisan test` içinden de çalışır; tek başına: `docker compose exec app npm run test:js`.
 
+Hızlı İşlem sayfasındaki "Kamera ile okut" yalnızca güvenli bağlantıda çalışır: geliştirmede `http://localhost:8000`, fabrikada `https://` adresi (telefon/tablet yerel IP ile `http://` üzerinden bağlanırsa kamera açılmaz). Kamera kütüphanesi (`@zxing/browser`) ayrı bir parça olarak derlenir ve yalnızca kamera açılınca yüklenir.
+
 Panel JS'i değiştiğinde varlıkları yeniden derleyin: `docker compose exec app npm run build` (veya `npm run dev`).
 
 Stok tutarlılık kontrolü elle: `docker compose exec app php artisan stock:reconcile` (üretimde scheduler her gün 03:00'te çalıştırır).
