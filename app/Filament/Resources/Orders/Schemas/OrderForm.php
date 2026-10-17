@@ -38,8 +38,10 @@ class OrderForm
                             ->relationship(
                                 'customer',
                                 'name',
+                                // Yalnızca müşteri işaretli cariler.
                                 modifyQueryUsing: fn (Builder $query, ?Order $record) => $query
-                                    ->where(fn (Builder $q) => $q->where('is_active', true)->orWhere('id', $record?->customer_id)),
+                                    ->where(fn (Builder $q) => $q->where(fn (Builder $active) => $active->where('is_active', true)->where('is_customer', true))
+                                        ->orWhere('id', $record?->customer_id)),
                             )
                             ->searchable()
                             ->preload()

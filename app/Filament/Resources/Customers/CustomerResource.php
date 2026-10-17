@@ -28,11 +28,11 @@ class CustomerResource extends Resource
 
     protected static ?int $navigationSort = 20;
 
-    protected static ?string $modelLabel = 'müşteri';
+    protected static ?string $modelLabel = 'cari hesap';
 
-    protected static ?string $pluralModelLabel = 'müşteriler';
+    protected static ?string $pluralModelLabel = 'cari hesaplar';
 
-    protected static ?string $navigationLabel = 'Müşteriler';
+    protected static ?string $navigationLabel = 'Cari hesaplar';
 
     protected static ?string $recordTitleAttribute = 'name';
 

@@ -4,11 +4,13 @@ namespace App\Providers;
 
 use App\Models\BomItem;
 use App\Models\Customer;
+use App\Models\ExchangeRate;
 use App\Models\MotorModel;
 use App\Models\MotorUnit;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Part;
+use App\Models\Price;
 use App\Models\ProductionBatch;
 use App\Models\StockMovement;
 use App\Models\Unit;
@@ -52,6 +54,8 @@ class AppServiceProvider extends ServiceProvider
             'production_batch' => ProductionBatch::class,
             'work_order' => WorkOrder::class,
             'motor_unit' => MotorUnit::class,
+            'exchange_rate' => ExchangeRate::class,
+            'price' => Price::class,
         ]);
 
         // N+1 ve yanlışlıkla atılan alanları geliştirmede erken yakala.

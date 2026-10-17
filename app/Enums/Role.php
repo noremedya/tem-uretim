@@ -9,6 +9,7 @@ enum Role: string implements HasLabel
     case Admin = 'admin';
     case Operator = 'operator';
     case Warehouse = 'warehouse';
+    case Accounting = 'accounting';
 
     public function label(): string
     {
@@ -16,6 +17,7 @@ enum Role: string implements HasLabel
             self::Admin => 'Yönetici',
             self::Operator => 'Saha operatörü',
             self::Warehouse => 'Depo',
+            self::Accounting => 'Muhasebe',
         };
     }
 
@@ -53,6 +55,15 @@ enum Role: string implements HasLabel
                 Permission::StockMove,
                 Permission::StockMovementsView,
                 Permission::ReportsStock,
+            ],
+            self::Accounting => [
+                Permission::MotorModelsView,
+                Permission::CustomersView,
+                Permission::CustomersManage,
+                Permission::OrdersView,
+                Permission::PartsView,
+                Permission::PricesManage,
+                Permission::ExchangeRatesManage,
             ],
         };
     }

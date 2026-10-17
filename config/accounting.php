@@ -13,4 +13,13 @@ return [
         'semi_finished' => '151',
         'finished_good' => '152',
     ],
+
+    /*
+    | Dövizli faturada TL karşılığı için kullanılan TCMB kuru: 'forex_selling' (döviz satış) veya
+    | 'forex_buying' (döviz alış). Mali müşavirle teyit edilmeli (VUK 280 değerlemede alış kurunu öngörür).
+    */
+    'invoice_rate_type' => env('INVOICE_RATE_TYPE', 'forex_selling'),
+
+    // TCMB günlük kurlar (internet varken exchange-rates:fetch ile çekilir).
+    'tcmb_rates_url' => env('TCMB_RATES_URL', 'https://www.tcmb.gov.tr/kurlar/today.xml'),
 ];

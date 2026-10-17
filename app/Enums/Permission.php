@@ -35,6 +35,10 @@ enum Permission: string
     case StockMove = 'stock.move';
     case StockMovementsView = 'stock_movements.view';
 
+    // Ön muhasebe (Aşama 5).
+    case PricesManage = 'prices.manage';
+    case ExchangeRatesManage = 'exchange_rates.manage';
+
     case ReportsProduction = 'reports.production';
     case ReportsStock = 'reports.stock';
 
@@ -60,6 +64,8 @@ enum Permission: string
             self::PartsManage => 'Stok kartı yönetimi',
             self::StockMove => 'Stok giriş/çıkış/sayım',
             self::StockMovementsView => 'Stok hareketleri görüntüleme',
+            self::PricesManage => 'Fiyat yönetimi',
+            self::ExchangeRatesManage => 'Döviz kuru yönetimi',
             self::ReportsProduction => 'Üretim raporları',
             self::ReportsStock => 'Stok raporları',
             self::AuditLogView => 'Denetim izi',

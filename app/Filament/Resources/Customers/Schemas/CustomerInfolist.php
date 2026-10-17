@@ -22,6 +22,15 @@ class CustomerInfolist
                         TextEntry::make('tax_number')->label('Vergi no / TCKN')->placeholder('—'),
                         TextEntry::make('tax_office')->label('Vergi dairesi')->placeholder('—'),
                         TextEntry::make('phone')->label('Telefon')->placeholder('—'),
+                        TextEntry::make('kind')
+                            ->label('Tür')
+                            ->badge()
+                            ->state(fn ($record): array => array_values(array_filter([
+                                $record->is_customer ? 'Müşteri' : null,
+                                $record->is_supplier ? 'Tedarikçi' : null,
+                            ]))),
+                        TextEntry::make('payment_term_days')->label('Vade')->suffix(' gün'),
+                        TextEntry::make('default_currency')->label('Varsayılan para birimi'),
                         TextEntry::make('email')->label('E-posta')->placeholder('—'),
                         TextEntry::make('address')->label('Adres')->placeholder('—')->columnSpan(2),
                     ]),

@@ -11,7 +11,7 @@ Kapsam:
 - Motor modeli, seri no ve üretim partisi bazlı kayıt
 - Stok takibi muhasebe kodlarıyla: hammadde, komponent, direkt/endirekt sarf, yarı mamul, mamul; kritik stok, hareketsiz stok ve yetersiz malzeme uyarıları
 - Müşteri ve sipariş kaydı, sipariş–iş emri–motor ilişkilendirme
-- Rol bazlı yetkilendirme: yönetici, saha operatörü, depo
+- Rol bazlı yetkilendirme: yönetici, saha operatörü, depo, muhasebe
 - Günlük/haftalık/aylık üretim ve verimlilik raporları, Excel'e aktarım
 - Barkod/QR ile hızlı işlem (USB okuyucu + telefon kamerası)
 - Denetim izi (kim neyi ne zaman değiştirdi)
@@ -62,7 +62,9 @@ Tablo adları, kolon adları ve enum değerleri İngilizce; arayüz etiketleri T
 - **stock_movements**: part_id, type (enum: stock_in, stock_out, production_consumption, production_scrap, production_output, shipment, count_adjustment, return, correction — giriş, çıkış, üretim sarfı, üretim firesi, üretimden giriş, sevk, sayım düzeltme, iade, ters kayıt), quantity (işaretli decimal, 0 olamaz), balance_before, balance_after, reference (morph: work_order vb., nullable), corrected_movement_id (nullable, unique — ters kaydedilen hareket), idempotency_key (uuid, nullable, unique — çift gönderim koruması), description, user_id, created_at. Update/delete/truncate yok (veritabanı trigger'ı ile de engellenir).
 - **motor_models**: code (unique), name, teknik alanlar (hepsi isteğe bağlı): power_kw (güç, kW, decimal), speed_rpm (devir, d/dk, integer), voltage (gerilim, metin), frequency_hz (frekans, Hz), pole_count (kutup sayısı), frame_size (gövde ölçüsü, metin), phase (enum: single_phase / three_phase), mounting_type (montaj şekli, metin, ör. B3/B5/B14), protection_class (koruma sınıfı, metin, ör. IP55), efficiency_class (verim sınıfı, metin, ör. IE3); description, is_active, lock_version, finished_part_id (unique — modelin mamul kartı, model oluşturulunca otomatik açılır)
 - **bom_items** (ürün reçetesi, stok kartına bağlı): parent_part_id (yarı mamul veya mamul kartı), component_part_id (endirekt sarf ve mamul olamaz), quantity_per_unit (> 0), scrap_rate (standart fire yüzdesi, 0 ≤ oran < 100); (parent_part_id, component_part_id) unique, parent ≠ component. Motorun reçetesi mamul kartının reçetesidir.
-- **customers**: name (ad/ünvan, zorunlu), tax_number (isteğe bağlı; doluysa unique, 10–11 rakam ve kontrol hanesi geçerli — VKN/TCKN), tax_office (vergi dairesi; vergi no ile birlikte: biri doluysa diğeri de zorunlu), phone (zorunlu), email, address, is_active, lock_version
+- **customers**: name (ad/ünvan, zorunlu), tax_number (isteğe bağlı; doluysa unique, 10–11 rakam ve kontrol hanesi geçerli — VKN/TCKN), tax_office (vergi dairesi; vergi no ile birlikte: biri doluysa diğeri de zorunlu), phone (zorunlu), email, address, is_active, lock_version, is_customer ve is_supplier (cari türü; en az biri), payment_term_days (vade günü, 0–365), default_currency (TRY/EUR/USD). Arayüzde "cari hesap".
+- **exchange_rates** (döviz kurları): currency (EUR/USD), rate_date, forex_buying ve forex_selling (> 0, 6 ondalık), source (tcmb/manual), user_id (nullable), lock_version; (currency, rate_date) unique
+- **prices** (satış fiyatları): motor_model_id, customer_id (nullable — boşsa liste fiyatı), currency, unit_price (> 0, 2 ondalık), valid_from, lock_version; (motor_model_id, customer_id, valid_from) unique
 - **orders**: order_number (unique, otomatik), customer_reference (müşteri sipariş no, isteğe bağlı, aranabilir), customer_id, order_date, due_date (zorunlu, >= order_date), status (enum: open, partial, completed, cancelled — açık, kısmi, tamamlandı, iptal), cancellation_reason (iptalde zorunlu), notes, lock_version
 - **order_items**: order_id, motor_model_id, quantity (tam sayı, > 0); (order_id, motor_model_id) unique
 - **number_sequences** (numara sayaçları): name, scope, last_value; (name, scope) unique — bkz. bölüm 5 "Numara üretimi"
@@ -142,14 +144,23 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - Ayrıntılı kurallar: yukarıdaki "İş emri", "Reçete", "Mamul ve yarı mamul", "Sevk".
 - Açık soru: fabrikada sistem öncesinden stokta bitmiş motor varsa açılış kaydı nasıl yapılacak (mamulde elle giriş kapalı).
 
-**Ön muhasebe ve e-dönüşüm** (ayrıntılar Aşama 5 ve 6 planlarında netleşir)
-- Mikro bırakılır; cari takibi bu sistemde yapılır (müşteri ve tedarikçi).
-- Fiyat: motor modeli bazında ve müşteriye özel. KDV %20. İskonto oranları: %15, %20, %30.
-- Döviz ile işlem yapılır. Tahsilat ve ödeme: nakit, banka, çek/senet.
-- Mali müşavir Luca kullanır; dönemsel aktarım yapılır (biçim Aşama 5'te).
+**Cari, döviz ve fiyat** (Aşama 5a)
+- Cari hesap = `customers` kaydı; müşteri ve/veya tedarikçi işaretlidir (en az biri, check constraint). Siparişe yalnızca müşteri işaretli aktif cari seçilir (servis + trigger).
+- Para birimleri: TRY, EUR, USD (`Currency` enum). Cari bakiyesi para birimi bazında ayrı tutulur; raporlarda TL karşılığı da gösterilir.
+- **Kur:** TCMB `today.xml`'den döviz alış ve döviz satış kurları `exchange-rates:fetch` ile çekilir (iş günleri 16:00–22:00 saatte bir; o tarihin kuru varsa bir şey yapmaz). İnternet yoksa uyarı loglanır, komut çökmez; kur elle girilir veya düzeltilir (yönetici, muhasebe). Bir tarihin kuru = o tarih ve öncesindeki en son kur. Faturada kullanılan tür `config/accounting.php` `invoice_rate_type` ile seçilir; varsayılan döviz satış. **Mali müşavirle teyit edilecek:** VUK 280 değerlemede döviz alış kurunu öngörür. Fatura kuru fatura tarihinde faturaya kopyalanır ve taslakta düzeltilebilir.
+- **Fiyat:** motor modeli liste fiyatı (müşterisiz) ve müşteriye özel fiyat; para birimi ve geçerlilik başlangıcıyla. Etkin fiyat = tarihe kadar başlamış en son kayıt; önce müşteri fiyatı, yoksa liste fiyatı. Geçerliliği başlamış fiyat değiştirilemez ve silinemez (yeni fiyat kaydı açılır); yalnızca ileri tarihli fiyat düzenlenir veya silinir.
+- Cari, kur ve fiyat değişiklikleri denetim izine yazılır.
+
+**Ön muhasebe ve e-dönüşüm** (Aşama 5b–5d ve 6 planlarında ayrıntılanır)
+- Mikro bırakılır; cari takibi bu sistemde yapılır.
+- **Satış faturası** sevk edilen motorlardan oluşturulur (seri numaralarıyla; bir motor bir kez faturalanır); elle satır (nakliye, hizmet) eklenebilir. **Alış faturası** depoda yapılmış stok girişlerine bağlanır; bağlanacak giriş yoksa fatura kaydedilirken stok girişi oluşur (aynı mal iki kez girilmez).
+- Fatura durumları: taslak (düzenlenebilir) → kesildi (numara `FTR-{YIL}-{SIRA:6}`, kilitli) → iptal (açıklama zorunlu). E-fatura numarası Aşama 6'da Uyumsoft'tan gelir.
+- İskonto satır bazında tek oran: %15, %20, %30 hazır seçenek, başka oran da girilebilir; art arda iskonto yok. KDV varsayılan %20, satırda değiştirilebilir; KDV satır bazında hesaplanıp toplanır, tutarlar kuruş hassasiyetinde (bcmath).
+- Tahsilat ve ödeme: nakit (kasa), banka hesapları, çek/senet (vade, banka, keşideci; durum: portföyde, tahsil edildi, ciro edildi, karşılıksız; ciro edilen çek tedarikçiye ödeme sayılır). Kasa ve banka hesaplarının bakiyesi ve hareket listesi tutulur. Cari hareketleri değiştirilemez; düzeltme ters kayıtla.
+- Mali müşavir Luca kullanır; dönemsel Excel aktarımı yapılır. **Biçim için mali müşavirden örnek dosya bekleniyor** (gelene kadar 5d bekler).
 - Uyumsoft: e-fatura, e-arşiv, e-irsaliye. Gelen e-faturalar otomatik çekilip alış kaydına ve stok girişine bağlanır. Geliştirme Uyumsoft test ortamıyla yapılır; canlı ortama deneme belgesi gönderilmez.
 - Kesilen fatura değiştirilemez; düzeltme iptal veya iade faturasıyla yapılır.
-- Açık soru: firma notundaki "Mikro'ya satış / genel satış" ayrımının anlamı.
+- Açık sorular: firma notundaki "Mikro'ya satış / genel satış" ayrımının anlamı; ihracat yapılıyor mu (KDV istisnası gerekir mi).
 
 **Numara üretimi** (`NumberSequenceService`): sipariş no, iş emri no ve seri no aynı servisle üretilir.
 - Numara, yapılandırılabilir bir şablondan üretilir (`config/numbering.php`). Belirteçler: `{YIL}` (4 hane), `{YY}`, `{AA}` (ay), `{SIRA:n}` (n haneli sıra) ve çağıranın verdiği bağlam değerleri (ör. `{MODEL_KODU}`).
@@ -172,27 +183,30 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - `completed` ve `cancelled` siparişler düzenlenemez. `partial` siparişte yalnızca termin, müşteri sipariş no ve notlar değişebilir (müşteri ve kalemler değişmez).
 - Pasif motor modeli yeni kaleme eklenemez; mevcut kalemler korunur.
 
-**Denetim izi:** users, parts, motor_models, bom_items, customers, orders, order_items, work_orders, motor_units değişiklikleri activitylog ile kaydedilir. Yönetici için görüntüleme ekranı olsun.
+**Denetim izi:** users, parts, motor_models, bom_items, customers, orders, order_items, production_batches, work_orders, motor_units, exchange_rates, prices değişiklikleri activitylog ile kaydedilir. Yönetici için görüntüleme ekranı olsun.
 
 ## 6. Roller ve yetkiler
 
-| | Yönetici | Saha operatörü | Depo |
-|---|---|---|---|
-| Kullanıcı yönetimi | ✓ | | |
-| Motor modeli, reçete | ✓ | görüntüleme | görüntüleme |
-| Müşteri, sipariş | ✓ | görüntüleme | görüntüleme |
-| İş emri görüntüleme | ✓ | kendine atananlar | ✓ (salt okunur) |
-| İş emri oluşturma/atama | ✓ | | |
-| İş emri geri alma | ✓ | | |
-| İş emri durum değiştirme | ✓ | yalnızca kendine atananlar | |
-| Stok kartları | ✓ | görüntüleme | ✓ |
-| Stok giriş/çıkış/sayım | ✓ | | ✓ |
-| Reçete | ✓ (motor modeli yetkisiyle) | görüntüleme | görüntüleme |
-| Üretim partileri | ✓ | görüntüleme | görüntüleme |
-| Üretilen motorlar | ✓ | görüntüleme | görüntüleme |
-| Sevk | ✓ | | ✓ |
-| Raporlar ve Excel | ✓ | | stok raporları |
-| Denetim izi | ✓ | | |
+| | Yönetici | Saha operatörü | Depo | Muhasebe |
+|---|---|---|---|---|
+| Kullanıcı yönetimi | ✓ | | | |
+| Motor modeli, reçete | ✓ | görüntüleme | görüntüleme | görüntüleme |
+| Cari hesaplar (müşteri, tedarikçi) | ✓ | görüntüleme | görüntüleme | ✓ |
+| Sipariş | ✓ | görüntüleme | görüntüleme | görüntüleme |
+| İş emri görüntüleme | ✓ | kendine atananlar | ✓ (salt okunur) | |
+| İş emri oluşturma/atama | ✓ | | | |
+| İş emri geri alma | ✓ | | | |
+| İş emri durum değiştirme | ✓ | yalnızca kendine atananlar | | |
+| Stok kartları | ✓ | görüntüleme | ✓ | görüntüleme |
+| Stok giriş/çıkış/sayım | ✓ | | ✓ | |
+| Reçete | ✓ (motor modeli yetkisiyle) | görüntüleme | görüntüleme | |
+| Üretim partileri | ✓ | görüntüleme | görüntüleme | |
+| Üretilen motorlar | ✓ | görüntüleme | görüntüleme | görüntüleme |
+| Sevk | ✓ | | ✓ | |
+| Fiyatlar, döviz kurları | ✓ | | | ✓ |
+| Faturalar, tahsilat/ödeme, kasa/banka, Luca aktarımı (Aşama 5b–5d) | ✓ | | alış faturaları görüntüleme | ✓ |
+| Raporlar ve Excel | ✓ | | stok raporları | |
+| Denetim izi | ✓ | | | |
 
 - Bir kullanıcının **birden fazla rolü** olabilir (yetkiler birleşir); **en az bir rol zorunludur.** Kullanıcı formunda roller çoklu seçimle atanır.
 - Giriş **kullanıcı adı (username) + şifre** ile yapılır; e-posta isteğe bağlıdır. Şifre sıfırlamayı yönetici yapar (e-posta ile sıfırlama yok).
@@ -317,6 +331,7 @@ Testler PostgreSQL üzerinde çalışmalı (SQLite değil), çünkü kilitler ve
 4. Üretim: reçete (çok seviyeli, direkt sarf ve fire dahil), yarı mamul ve mamul üretimi, partiler, iş emirleri, durum makinesi, tamamlama akışı, seri no üretimi, üretilen motorlar, yetersiz malzeme uyarısı, testler
    - Alt adımlar (her biri testler ve commit ile biter): 4a hareket tipleri, mamul kartı, reçete · 4b iş emirleri, malzeme listesi, durum makinesi · 4c tamamlama, motorlar, seri no, sevk · 4d iş emri geri alma
 5. Ön muhasebe: cari hesaplar (müşteri ve tedarikçi), fiyat/iskonto/KDV, döviz, alış ve satış faturası, tahsilat ve ödeme, Luca aktarımı
+   - Alt adımlar: 5a cari hesaplar, döviz kurları, fiyatlar, Muhasebe rolü · 5b faturalar · 5c tahsilat/ödeme, kasa/banka, çek/senet, cari ekstre · 5d Luca aktarımı (örnek dosya bekleniyor)
 6. e-Dönüşüm: Uyumsoft e-fatura, e-arşiv, e-irsaliye, gelen faturaların alışa bağlanması, gönderim kuyruğu ve durum takibi
 7. Hızlı İşlem sayfası: USB barkod ve kamera ile okuma
 8. Raporlar ve Excel dışa aktarım

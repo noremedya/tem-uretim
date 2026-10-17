@@ -271,6 +271,10 @@ class OrderService
         if (! $customer->is_active) {
             throw new BusinessRuleException('Pasif müşteriye sipariş açılamaz.');
         }
+
+        if (! $customer->is_customer) {
+            throw new BusinessRuleException('Seçilen cari hesap müşteri olarak işaretli değil; siparişe yalnızca müşteri seçilebilir.');
+        }
     }
 
     /** Kısmi siparişte müşteri, sipariş tarihi veya kalemler değiştirilmek isteniyor mu? */

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\Currency;
 use App\Models\Concerns\HasOptimisticLocking;
 use Database\Factories\CustomerFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -19,7 +20,18 @@ class Customer extends Model
     /** @use HasFactory<CustomerFactory> */
     use HasFactory, HasOptimisticLocking, LogsActivity;
 
-    public const FIELDS = ['name', 'tax_number', 'tax_office', 'phone', 'email', 'address'];
+    public const FIELDS = [
+        'name', 'tax_number', 'tax_office', 'phone', 'email', 'address',
+        'is_customer', 'is_supplier', 'payment_term_days', 'default_currency',
+    ];
+
+    /** Veritabanı varsayılanlarıyla aynı (yeni kayıt kaydedilmeden önce de geçerli olsun). */
+    protected $attributes = [
+        'is_customer' => true,
+        'is_supplier' => false,
+        'payment_term_days' => 0,
+        'default_currency' => 'TRY',
+    ];
 
     /** Veritabanındaki customers_tax_number_format_check ile aynı kural: VKN (10) veya TCKN (11). */
     public const TAX_NUMBER_PATTERN = '/^[0-9]{10,11}$/';
@@ -28,6 +40,10 @@ class Customer extends Model
     {
         return [
             'is_active' => 'boolean',
+            'is_customer' => 'boolean',
+            'is_supplier' => 'boolean',
+            'payment_term_days' => 'integer',
+            'default_currency' => Currency::class,
         ];
     }
 
@@ -75,6 +91,12 @@ class Customer extends Model
         $query->where('is_active', true)
             ->whereRaw(sprintf(self::NORMALIZED_NAME_SQL, 'name').' = '.sprintf(self::NORMALIZED_NAME_SQL, '?'), [(string) $name])
             ->when($exceptId !== null, fn (Builder $q) => $q->whereKeyNot($exceptId));
+    }
+
+    /** @return HasMany<Price, $this> */
+    public function prices(): HasMany
+    {
+        return $this->hasMany(Price::class);
     }
 
     /** @return HasMany<Order, $this> */

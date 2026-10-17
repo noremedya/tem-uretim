@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\Currency;
 use App\Exceptions\BusinessRuleException;
 use App\Models\Customer;
 use App\Support\TaxNumber;
@@ -10,7 +11,8 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Müşteri yönetimi. Kurallar (CLAUDE.md bölüm 5):
+ * Cari hesap (müşteri ve/veya tedarikçi) yönetimi. Kurallar (CLAUDE.md bölüm 5):
+ * - Müşteri veya tedarikçi işaretlerinden en az biri seçilir; siparişi/fiyatı olan carinin müşteri işareti kaldırılamaz.
  * - Telefon zorunlu; vergi no ve vergi dairesi birlikte girilir.
  * - Aynı adla aktif bir müşteri varsa kayıt yalnızca açık onayla yapılır ($confirmDuplicateName).
  */
@@ -20,7 +22,13 @@ class CustomerService
 
     public function create(array $data, bool $confirmDuplicateName = false): Customer
     {
-        $customer = new Customer(Arr::only($this->normalize($data), Customer::FIELDS));
+        $customer = new Customer(Arr::only([
+            'is_customer' => true,
+            'is_supplier' => false,
+            'payment_term_days' => 0,
+            'default_currency' => Currency::TRY,
+            ...$this->normalize($data),
+        ], Customer::FIELDS));
         $customer->is_active = true;
 
         $this->ensureValid($customer, $confirmDuplicateName);
@@ -85,6 +93,19 @@ class CustomerService
 
     private function ensureValid(Customer $customer, bool $confirmDuplicateName): void
     {
+        if (! $customer->is_customer && ! $customer->is_supplier) {
+            throw new BusinessRuleException('Cari hesap müşteri, tedarikçi veya ikisi birden olmalıdır.');
+        }
+
+        if ($customer->exists && $customer->isDirty('is_customer') && ! $customer->is_customer
+            && ($customer->orders()->exists() || $customer->prices()->exists())) {
+            throw new BusinessRuleException('Siparişi veya müşteri fiyatı olan carinin müşteri işareti kaldırılamaz.');
+        }
+
+        if ($customer->payment_term_days < 0 || $customer->payment_term_days > 365) {
+            throw new BusinessRuleException('Vade günü 0 ile 365 arasında olmalıdır.');
+        }
+
         if (blank($customer->phone)) {
             throw new BusinessRuleException('Telefon zorunludur.');
         }
@@ -109,6 +130,28 @@ class CustomerService
 
             if ($data['tax_number'] !== null && ! TaxNumber::isValid($data['tax_number'])) {
                 throw new BusinessRuleException(TaxNumber::INVALID_MESSAGE);
+            }
+        }
+
+        if (array_key_exists('payment_term_days', $data)) {
+            $days = filled($data['payment_term_days']) ? $data['payment_term_days'] : 0;
+
+            if (filter_var($days, FILTER_VALIDATE_INT) === false) {
+                throw new BusinessRuleException('Vade günü tam sayı olmalıdır.');
+            }
+
+            $data['payment_term_days'] = (int) $days;
+        }
+
+        if (array_key_exists('default_currency', $data)) {
+            $data['default_currency'] = $data['default_currency'] instanceof Currency
+                ? $data['default_currency']
+                : (Currency::tryFrom((string) $data['default_currency']) ?? throw new BusinessRuleException('Geçersiz para birimi.'));
+        }
+
+        foreach (['is_customer', 'is_supplier'] as $field) {
+            if (array_key_exists($field, $data)) {
+                $data[$field] = (bool) $data[$field];
             }
         }
 

@@ -2,13 +2,16 @@
 
 namespace App\Filament\Resources\Customers\Schemas;
 
+use App\Enums\Currency;
 use App\Models\Customer;
 use App\Services\CustomerService;
 use App\Support\TaxNumber;
 use Closure;
 use Filament\Forms\Components\Checkbox;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
@@ -21,10 +24,41 @@ class CustomerForm
     {
         return $schema
             ->components([
-                Section::make('Müşteri bilgileri')
+                Section::make('Cari bilgileri')
                     ->columns(2)
                     ->columnSpanFull()
                     ->schema(static::fields()),
+                Section::make('Cari türü ve ödeme')
+                    ->columns(4)
+                    ->columnSpanFull()
+                    ->schema([
+                        Toggle::make('is_customer')
+                            ->label('Müşteri')
+                            ->default(true)
+                            ->helperText('Siparişe ve satış faturasına seçilebilir.'),
+                        Toggle::make('is_supplier')
+                            ->label('Tedarikçi')
+                            ->default(false)
+                            ->helperText('Alış faturasına seçilebilir.')
+                            // En az biri seçilmeli (servis ve veritabanında da zorunlu).
+                            ->rule(fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
+                                if (! $value && ! $get('is_customer')) {
+                                    $fail('Cari hesap müşteri, tedarikçi veya ikisi birden olmalıdır.');
+                                }
+                            }),
+                        TextInput::make('payment_term_days')
+                            ->label('Vade (gün)')
+                            ->integer()
+                            ->minValue(0)
+                            ->maxValue(365)
+                            ->default(0)
+                            ->required(),
+                        Select::make('default_currency')
+                            ->label('Varsayılan para birimi')
+                            ->options(Currency::class)
+                            ->default(Currency::TRY->value)
+                            ->required(),
+                    ]),
             ]);
     }
 
