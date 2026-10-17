@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Payments\Pages;
 
 use App\Exceptions\BusinessRuleException;
 use App\Filament\Resources\Payments\PaymentResource;
+use App\Filament\Support\AuditTrailAction;
 use App\Filament\Support\BusinessRuleNotification;
 use App\Models\Payment;
 use App\Services\PaymentService;
@@ -21,6 +22,7 @@ class ViewPayment extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            AuditTrailAction::make(),
             Action::make('cancel')
                 ->label('İptal et')
                 ->icon(Heroicon::OutlinedXCircle)

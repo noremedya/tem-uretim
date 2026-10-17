@@ -5,6 +5,7 @@ namespace App\Filament\Resources\ProductionBatches\Pages;
 use App\Filament\Concerns\HandlesBusinessRules;
 use App\Filament\Concerns\TracksLockVersion;
 use App\Filament\Resources\ProductionBatches\ProductionBatchResource;
+use App\Filament\Support\AuditTrailAction;
 use App\Services\ProductionBatchService;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Database\Eloquent\Model;
@@ -27,5 +28,12 @@ class EditProductionBatch extends EditRecord
             },
             refreshUrl: static::getUrl(['record' => $record]),
         );
+    }
+
+    protected function getHeaderActions(): array
+    {
+        return [
+            AuditTrailAction::make(),
+        ];
     }
 }

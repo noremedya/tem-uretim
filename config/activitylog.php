@@ -15,6 +15,7 @@ return [
      * When the clean command is executed, all recording activities older than
      * the number of days specified here will be deleted.
      */
+    // Bu projede denetim izi kalıcıdır: activitylog:clean zamanlanmaz ve çalıştırılmaz (CLAUDE.md bölüm 5).
     'clean_after_days' => 365,
 
     /*

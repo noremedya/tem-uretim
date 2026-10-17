@@ -6,6 +6,7 @@ use App\Enums\Permission;
 use App\Filament\Pages\StockOperation;
 use App\Filament\Resources\Parts\Actions\PartStatusActions;
 use App\Filament\Resources\Parts\PartResource;
+use App\Filament\Support\AuditTrailAction;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
@@ -19,6 +20,7 @@ class ViewPart extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            AuditTrailAction::make(),
             Action::make('stockOperation')
                 ->label('Stok işlemi')
                 ->icon(Heroicon::OutlinedArrowsRightLeft)

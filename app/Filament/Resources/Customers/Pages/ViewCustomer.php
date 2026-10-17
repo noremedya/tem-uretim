@@ -8,6 +8,7 @@ use App\Exceptions\BusinessRuleException;
 use App\Filament\Resources\Customers\Actions\CustomerStatusActions;
 use App\Filament\Resources\Customers\CustomerResource;
 use App\Filament\Resources\Orders\OrderResource;
+use App\Filament\Support\AuditTrailAction;
 use App\Filament\Support\BusinessRuleNotification;
 use App\Models\Customer;
 use App\Models\Order;
@@ -31,6 +32,7 @@ class ViewCustomer extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            AuditTrailAction::make(),
             Action::make('newOrder')
                 ->label('Yeni sipariş')
                 ->icon(Heroicon::OutlinedPlus)

@@ -5,6 +5,7 @@ namespace App\Filament\Resources\CashAccounts\Pages;
 use App\Enums\CashMovementType;
 use App\Exceptions\BusinessRuleException;
 use App\Filament\Resources\CashAccounts\CashAccountResource;
+use App\Filament\Support\AuditTrailAction;
 use App\Filament\Support\BusinessRuleNotification;
 use App\Models\CashAccount;
 use App\Services\LedgerService;
@@ -25,6 +26,7 @@ class ViewCashAccount extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            AuditTrailAction::make(),
             EditAction::make(),
             Action::make('opening')
                 ->label('Açılış bakiyesi')

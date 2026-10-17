@@ -214,7 +214,10 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - `completed` ve `cancelled` siparişler düzenlenemez. `partial` siparişte yalnızca termin, müşteri sipariş no ve notlar değişebilir (müşteri ve kalemler değişmez).
 - Pasif motor modeli yeni kaleme eklenemez; mevcut kalemler korunur.
 
-**Denetim izi:** users, parts, motor_models, bom_items, customers, orders, order_items, production_batches, work_orders, motor_units, exchange_rates, prices değişiklikleri activitylog ile kaydedilir. Yönetici için görüntüleme ekranı olsun.
+**Denetim izi:** users, parts, motor_models, bom_items, customers, orders, order_items, production_batches, work_orders, motor_units, exchange_rates, prices, invoices, invoice_lines, cash_accounts, payments, cheques değişiklikleri activitylog ile kaydedilir. Yönetici için görüntüleme ekranı olsun.
+- Kayıtlar **kalıcıdır**; otomatik silinmez (`activitylog:clean` zamanlanmaz).
+- Kullanıcı girişleri de yazılır: başarılı giriş, başarısız giriş (denenen kullanıcı adı) ve çıkış; zaman ve IP ile (log adı `auth`; şifre hiçbir zaman yazılmaz).
+- Ekran: tarih, kullanıcı, kayıt türü ve kaydı, işlem; filtreler (kayıt türü, kullanıcı, işlem, tarih); detayda değişen alanlar eski → yeni, Türkçe alan adları, enum etiketleri ve bağlı kayıtların adlarıyla. Yönetici, kayıt sayfalarındaki "Geçmiş" butonuyla o kaydın denetim izini açar.
 
 ## 6. Roller ve yetkiler
 
@@ -251,7 +254,7 @@ Yetkiler Laravel Policy'leriyle uygulanır; Filament menüsü de yetkiye göre g
 
 ## 7. Ekranlar
 
-- **Dashboard**: bugün/bu hafta tamamlanan motor sayısı, üretimdeki iş emirleri, gecikmiş iş emirleri (planlanan bitiş geçmiş), kritik stoktaki parçalar
+- **Dashboard** (rol bazlı, 60 saniyede bir yenilenir): bugün/bu hafta tamamlanan motor sayısı, üretimdeki iş emirleri, gecikmiş iş emirleri (planlanan bitiş geçmiş), kritik stoktaki parçalar, hareketsiz stok — yönetici ve depo; son 14 günün günlük motor üretimi grafiği — yönetici; vadesi geçmiş alacak toplamı ve kasa/banka bakiyeleri — yönetici ve muhasebe; "Bana atanan iş emirleri" ve Hızlı İşlem — operatör
 - Standart Filament kaynakları: kullanıcılar, birimler, parçalar, motor modelleri (reçete ilişki yöneticisiyle), müşteriler, siparişler (kalemleriyle), partiler, iş emirleri, üretilen motorlar, stok hareketleri (salt okunur liste)
 - **Stok işlemi sayfası**: giriş / çıkış / sayım düzeltme formu
 - **Hızlı İşlem sayfası** (dokunmatik ve büyük butonlu):

@@ -6,6 +6,7 @@ use App\Filament\Concerns\HandlesBusinessRules;
 use App\Filament\Concerns\TracksLockVersion;
 use App\Filament\Resources\Users\Actions\UserStatusActions;
 use App\Filament\Resources\Users\UserResource;
+use App\Filament\Support\AuditTrailAction;
 use App\Models\User;
 use App\Services\UserService;
 use Filament\Resources\Pages\EditRecord;
@@ -21,6 +22,7 @@ class EditUser extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            AuditTrailAction::make(),
             // Aksiyon kaydın sürümünü artırır; form güncel veriyle yeniden doldurulur.
             UserStatusActions::deactivate()->after(fn () => $this->fillForm()),
             UserStatusActions::activate()->after(fn () => $this->fillForm()),

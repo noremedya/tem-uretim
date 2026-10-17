@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Invoices\Pages;
 
 use App\Exceptions\BusinessRuleException;
 use App\Filament\Resources\Invoices\InvoiceResource;
+use App\Filament\Support\AuditTrailAction;
 use App\Filament\Support\BusinessRuleNotification;
 use App\Models\Invoice;
 use App\Services\InvoiceService;
@@ -22,6 +23,7 @@ class ViewInvoice extends ViewRecord
     protected function getHeaderActions(): array
     {
         return [
+            AuditTrailAction::make(),
             EditAction::make(),
             Action::make('issue')
                 ->label('Faturayı kes')

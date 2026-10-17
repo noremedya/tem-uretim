@@ -23,11 +23,14 @@ use App\Models\StockMovement;
 use App\Models\Unit;
 use App\Models\User;
 use App\Models\WorkOrder;
+use App\Policies\ActivityPolicy;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Number;
 use Illuminate\Support\ServiceProvider;
+use Spatie\Activitylog\Models\Activity;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -44,6 +47,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Paket modeli için policy (App\Models dışında olduğu için otomatik bulunmaz).
+        Gate::policy(Activity::class, ActivityPolicy::class);
+
         Number::useLocale(config('app.locale'));
         Carbon::setLocale(config('app.locale'));
 
