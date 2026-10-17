@@ -38,6 +38,9 @@ enum Permission: string
     // Ön muhasebe (Aşama 5).
     case PricesManage = 'prices.manage';
     case ExchangeRatesManage = 'exchange_rates.manage';
+    case InvoicesManage = 'invoices.manage';
+    // Alış faturalarını salt okunur görme (depo).
+    case InvoicesViewPurchase = 'invoices.view_purchase';
 
     case ReportsProduction = 'reports.production';
     case ReportsStock = 'reports.stock';
@@ -66,6 +69,8 @@ enum Permission: string
             self::StockMovementsView => 'Stok hareketleri görüntüleme',
             self::PricesManage => 'Fiyat yönetimi',
             self::ExchangeRatesManage => 'Döviz kuru yönetimi',
+            self::InvoicesManage => 'Fatura yönetimi',
+            self::InvoicesViewPurchase => 'Alış faturalarını görüntüleme',
             self::ReportsProduction => 'Üretim raporları',
             self::ReportsStock => 'Stok raporları',
             self::AuditLogView => 'Denetim izi',

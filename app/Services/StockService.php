@@ -297,6 +297,24 @@ class StockService
     }
 
     /**
+     * Alış faturasıyla gelen malın girişi (stock_in, referans fatura). Bağlanacak stok girişi olmayan alış
+     * faturası satırı için InvoiceService çağırır.
+     */
+    public function receiveForInvoice(Part $part, string|int $quantity, Model $reference, User $user, string $description): StockMovement
+    {
+        $quantity = $this->positive($quantity);
+
+        return DB::transaction(function () use ($part, $quantity, $reference, $user, $description): StockMovement {
+            $balance = $this->lockBalances([$part->getKey()])[$part->getKey()];
+            $part = Part::query()->with('unit')->findOrFail($part->getKey());
+            $this->ensureTypeAllowed($part, StockMovementType::StockIn);
+            $this->ensureUnitPrecision($part, $quantity);
+
+            return $this->apply($part, $balance, StockMovementType::StockIn, $quantity, $user, $description, reference: $reference);
+        });
+    }
+
+    /**
      * Sevk: mamul kartından düşüm (shipment). Referans sevk edilen motor kaydıdır.
      */
     public function recordShipment(Part $part, string|int $quantity, Model $reference, User $user, ?string $description = null): StockMovement

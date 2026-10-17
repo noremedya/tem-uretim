@@ -50,6 +50,7 @@ enum Role: string implements HasLabel
                 Permission::WorkOrdersView,
                 Permission::WorkOrdersViewAll,
                 Permission::MotorUnitsShip,
+                Permission::InvoicesViewPurchase,
                 Permission::PartsView,
                 Permission::PartsManage,
                 Permission::StockMove,
@@ -64,6 +65,7 @@ enum Role: string implements HasLabel
                 Permission::PartsView,
                 Permission::PricesManage,
                 Permission::ExchangeRatesManage,
+                Permission::InvoicesManage,
             ],
         };
     }

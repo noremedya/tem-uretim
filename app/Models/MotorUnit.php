@@ -6,6 +6,7 @@ use App\Enums\MotorUnitStatus;
 use App\Exceptions\BusinessRuleException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 
@@ -60,6 +61,12 @@ class MotorUnit extends Model
     public function shippedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'shipped_by_user_id');
+    }
+
+    /** Motorun yer aldığı fatura satırları (iptal edilmiş faturalar dahil). @return BelongsToMany<InvoiceLine, $this> */
+    public function invoiceLines(): BelongsToMany
+    {
+        return $this->belongsToMany(InvoiceLine::class, 'invoice_line_motor_units');
     }
 
     public function getActivitylogOptions(): LogOptions

@@ -5,6 +5,8 @@ namespace App\Providers;
 use App\Models\BomItem;
 use App\Models\Customer;
 use App\Models\ExchangeRate;
+use App\Models\Invoice;
+use App\Models\InvoiceLine;
 use App\Models\MotorModel;
 use App\Models\MotorUnit;
 use App\Models\Order;
@@ -56,6 +58,8 @@ class AppServiceProvider extends ServiceProvider
             'motor_unit' => MotorUnit::class,
             'exchange_rate' => ExchangeRate::class,
             'price' => Price::class,
+            'invoice' => Invoice::class,
+            'invoice_line' => InvoiceLine::class,
         ]);
 
         // N+1 ve yanlışlıkla atılan alanları geliştirmede erken yakala.

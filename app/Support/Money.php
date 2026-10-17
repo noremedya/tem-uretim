@@ -41,6 +41,38 @@ final class Money
         return bccomp($a, $b, $scale);
     }
 
+    public static function add(string $a, string $b, int $scale = self::SCALE): string
+    {
+        return bcadd($a, $b, $scale);
+    }
+
+    public static function sub(string $a, string $b, int $scale = self::SCALE): string
+    {
+        return bcsub($a, $b, $scale);
+    }
+
+    /** Çarpım, $scale ondalığa yarım yukarı yuvarlanır. */
+    public static function mul(string $a, string $b, int $scale = self::SCALE): string
+    {
+        return self::round(bcmul($a, $b, 10), $scale);
+    }
+
+    /** $value × $percent / 100, $scale ondalığa yarım yukarı yuvarlanır. */
+    public static function percent(string $value, string $percent, int $scale = self::SCALE): string
+    {
+        return self::round(bcdiv(bcmul($value, $percent, 10), '100', 10), $scale);
+    }
+
+    /** Yarım yukarı yuvarlama (negatifte sıfırdan uzağa): round("2.345") = "2.35". */
+    public static function round(string $value, int $scale = self::SCALE): string
+    {
+        $half = '0.'.str_repeat('0', $scale).'5';
+
+        return bccomp($value, '0', 10) >= 0
+            ? bcadd($value, $half, $scale)
+            : bcsub($value, $half, $scale);
+    }
+
     /** Türkçe biçim: "1234.5" → "1.234,50". */
     public static function format(string|int|float|null $amount, ?string $currency = null, int $scale = self::SCALE): string
     {
@@ -69,9 +101,13 @@ final class Money
 
         $value = trim(is_float($value) ? number_format($value, $scale, '.', '') : $value);
 
-        // Türkçe biçim: binlik nokta, ondalık virgül. Virgül yoksa nokta ondalık sayılır.
+        // Türkçe biçim: binlik nokta, ondalık virgül.
         if (str_contains($value, ',')) {
             $value = str_replace(['.', ','], ['', '.'], $value);
+        } elseif ($scale < self::RATE_SCALE && preg_match('/^-?[1-9]\d{0,2}(\.\d{3})+$/', $value)) {
+            // Virgülsüz "10.000" / "1.250.000" tutarda binlik ayırıcıdır (Türkçe yazım). "0.045", "12.5" ondalık kalır.
+            // Kurlarda uygulanmaz ("41.987" bir kurdur).
+            $value = str_replace('.', '', $value);
         }
 
         if (! preg_match('/^-?\d+(\.\d{1,'.$scale.'})?$/', $value)) {
