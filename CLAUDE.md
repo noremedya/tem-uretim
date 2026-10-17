@@ -394,4 +394,8 @@ Testler PostgreSQL üzerinde çalışmalı (SQLite değil), çünkü kilitler ve
 10. Üretim dağıtım dosyaları, betikler, `.env.production.example`, README
    - **Ayrı uygulama veritabanı rolü:** uygulama, tablo sahibi olmayan bir rolle bağlanır (yalnızca gereken tablo yetkileri; `ALTER TABLE ... DISABLE TRIGGER` yapamaz). Migration'lar tablo sahibi kullanıcıyla çalışır. `deploy.sh`, `.env.production.example` ve kurulum kılavuzu buna göre düzenlenir.
 11. Demo veri, genel gözden geçirme (güvenlik, N+1 sorgular, eksik index'ler, CDN kontrolü)
+   - **Kararlar:** `DemoDataSeeder` kayıtları servislerle, işlemi yapan kullanıcının oturumu ve o anın tarihiyle oluşturur (120 gün önce açılış sayımı ve devir, sonra 7 haftalık tempo; şu andan sonraki adımlar yapılmaz); üretimde çalışmaz, ikinci kez yüklenmez; şifre `demo1234`.
+   - **Tarama testi** (`tests/Feature/Seeders/PanelSweepTest.php`): demo veriyle her panel GET sayfası her rolle açılır; yanıt bölüm 6'daki tabloya uyar (izinli 200, değilse 403/404), sayfa başı sorgu ≤ 30, harici src/href yok. Yeni sayfa eklenince beklenti tablosuna da eklenir (eklenmezse test hata verir).
+   - **Index kuralı:** tek kolonlu her foreign key bir index'in ilk kolonudur (`tests/Feature/Database/IndexTest.php`).
+   - **Güvenlik başlıkları** (`App\Http\Middleware\SecurityHeaders`, global): CSP yalnızca `'self'` (Livewire/Alpine için `'unsafe-inline'`, `'unsafe-eval'`; geliştirmede Vite sunucusu), `X-Frame-Options: SAMEORIGIN`, `nosniff`, `Referrer-Policy: same-origin`, `Permissions-Policy` (kamera yalnızca kendi sayfalarımız). HSTS eklenmedi (yerel ağda IP ile http'ye düşme ihtimali; gerekirse Caddy'de).
 12. (Opsiyonel) Etiket yazdırma

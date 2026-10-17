@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\LogoutInactiveUser;
+use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -17,6 +18,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // Üretimde Caddy ve Cloudflare Tunnel arkasında çalışır; doğru şema/IP için proxy başlıklarına güven.
         // Uygulama portu dışarı açılmaz, yalnızca bu proxy'ler erişebilir.
         $middleware->trustProxies(at: '*');
+
+        // Güvenlik başlıkları ve yalnızca kendi sunucumuza izin veren CSP (harici kaynak yasağı tarayıcıda da).
+        $middleware->append(SecurityHeaders::class);
 
         // Pasif kullanıcıyı çıkışa zorlayan middleware, Authenticate'in 403 vermesinden önce çalışmalı.
         // Authenticate öncelik listesinde olduğu için sıralamada öne alınır; bu yüzden listeye ekliyoruz.

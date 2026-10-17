@@ -28,6 +28,8 @@ docker compose exec app php artisan app:create-admin
 
 Uygulama: http://localhost:8000 (kullanıcı adı ve şifreyle giriş).
 
+**Demo veri** (yalnızca geliştirme; üretimde çalışmaz): `docker compose exec app php artisan db:seed --class=DemoDataSeeder`. Yaklaşık 7 haftalık üretim, stok, sipariş, fatura ve tahsilat kaydı oluşturur (~30 sn). Kullanıcılar `yonetici`, `operator1`, `operator2`, `depo`, `muhasebe`; şifre `demo1234`. Temiz kurmak için (geliştirme verisini siler): `php artisan migrate:fresh --seed && php artisan db:seed --class=DemoDataSeeder`.
+
 ## Testler
 
 Testler PostgreSQL'de, ayrı `tem_uretim_test` veritabanında çalışır (veritabanı konteyneri ilk açılışta oluşturur).

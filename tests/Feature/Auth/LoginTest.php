@@ -85,3 +85,21 @@ it('aktif kullanıcı çıkışa zorlanmaz ve mesaj görmez', function () {
 it('çıkış middleware\'i Livewire isteklerinde de çalışır (persistent)', function () {
     expect(Livewire::getPersistentMiddleware())->toContain(LogoutInactiveUser::class);
 });
+
+it('art arda yanlış denemeler sınırlanır: beşten sonra doğru şifre de bir süre kabul edilmez', function () {
+    User::factory()->create(['username' => 'sinir.deneme', 'password' => 'dogru-sifre']);
+
+    foreach (range(1, 5) as $_) {
+        Livewire::test(Login::class)
+            ->fillForm(['username' => 'sinir.deneme', 'password' => 'yanlis'])
+            ->call('authenticate')
+            ->assertHasFormErrors(['username']);
+    }
+
+    Livewire::test(Login::class)
+        ->fillForm(['username' => 'sinir.deneme', 'password' => 'dogru-sifre'])
+        ->call('authenticate')
+        ->assertNotified();
+
+    $this->assertGuest();
+});
