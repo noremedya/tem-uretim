@@ -4,6 +4,13 @@ Laravel 13 + Filament 5 + PostgreSQL 17 ile üretim, stok ve sipariş takibi. Uy
 
 Sunucuya kurulum ve dağıtım için: [KURULUM_KILAVUZU.md](KURULUM_KILAVUZU.md)
 
+## Üretim dağıtımı (özet)
+
+- `docker-compose.prod.yml`: app, worker, scheduler, db, caddy, cloudflared; değişkenler `.env` (örnek: `.env.production.example`).
+- `deploy/Dockerfile` üretim imajı, `deploy/caddy/` HTTPS ön yüzü, `deploy/db/app-role.sql` uygulama veritabanı kullanıcısı.
+- `deploy/scripts/`: `deploy.sh` (güncelleme), `backup.sh` (gece yedeği), `restore.sh` (geri yükleme), `db-migrate.sh` (migration + kullanıcı yetkileri).
+- Uygulama tablo sahibi olmayan bir kullanıcıyla bağlanır; migration'lar her zaman `db-migrate.sh` ile tablo sahibi olarak çalışır.
+
 ## Geliştirme ortamı
 
 Bilgisayarda yalnızca Docker gerekir; PHP, Composer ve Node konteynerin içindedir.

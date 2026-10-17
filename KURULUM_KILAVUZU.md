@@ -177,23 +177,27 @@ cp .env.production.example .env
 nano .env
 ```
 
-`.env` içinde doldurulacak başlıca değerler:
+`.env` içinde doldurulacak değerler (her birinin açıklaması `.env.production.example` içindedir):
 ```
-APP_ENV=production
-APP_DEBUG=false
-APP_URL=https://uretim.alanadi.com
 APP_KEY=                       # ilk çalıştırmada üretilecek (bkz. Bölüm 10)
+APP_URL=https://uretim.alanadi.com
 
-DB_CONNECTION=pgsql
-DB_HOST=db
 DB_DATABASE=uretim
-DB_USERNAME=uretim
-DB_PASSWORD=UZUN_RASTGELE_SIFRE
+DB_OWNER_USERNAME=uretim       # tablo sahibi: migration, yedek ve geri yükleme
+DB_OWNER_PASSWORD=...          # openssl rand -hex 24
+DB_USERNAME=uretim_app         # uygulamanın bağlandığı kullanıcı (tablo sahibi değil)
+DB_PASSWORD=...                # openssl rand -hex 24 (yukarıdakinden farklı)
 
 APP_DOMAIN=uretim.alanadi.com
 CF_API_TOKEN=                  # Bölüm 9.A
 TUNNEL_TOKEN=                  # Bölüm 11
 ```
+
+Şifreleri `openssl rand -hex 24` ile üret; yalnızca harf ve rakam kullan (`$`, tırnak ve boşluk Docker Compose tarafından farklı yorumlanır).
+
+**Neden iki veritabanı kullanıcısı?** Uygulama, tabloların sahibi olmayan `uretim_app` kullanıcısıyla bağlanır: veri okuyup yazabilir ama tablo yapısını değiştiremez, stok hareketlerini koruyan trigger'ları kapatamaz, TRUNCATE/DROP yapamaz. Migration'lar, yedek ve geri yükleme tablo sahibi `uretim` ile yapılır. `DB_OWNER_PASSWORD` yalnızca veritabanı konteynerine ve betiklere verilir; uygulama konteynerleri bu şifreyi görmez. Uygulama kullanıcısı ve yetkileri `deploy/scripts/db-migrate.sh` tarafından (her güncellemede) ayarlanır.
+
+Sabit ayarlar (dil, saat dilimi, `DB_HOST=db`, kuyruk/önbellek/oturum sürücüsü) `docker-compose.prod.yml` içindedir; `.env`'e yazılmaz. `.env` değiştirildiğinde servisleri yenile: `dc up -d`.
 
 ```bash
 chmod 600 .env
@@ -265,15 +269,17 @@ nslookup uretim.alanadi.com      → 192.168.1.50 dönmeli
 
 ```bash
 cd /opt/uretim
-dc build
+dc build                                            # Caddy derlemesi ilk seferde birkaç dakika sürer
 dc run --rm app php artisan key:generate --show     # çıkan değeri .env içindeki APP_KEY'e yaz
+./deploy/scripts/db-migrate.sh                      # veritabanı, uygulama kullanıcısı ve migration'lar
 dc up -d
-dc exec app php artisan migrate --force
 dc exec app php artisan db:seed --class=RolesAndPermissionsSeeder --force
 dc exec app php artisan app:create-admin            # ilk yönetici kullanıcısını oluşturur
 dc exec app php artisan optimize
-dc ps                                               # tüm servisler "running/healthy" olmalı
+dc ps                                               # app "healthy", diğerleri "running" olmalı
 ```
+
+> Migration'ları `dc exec app php artisan migrate` ile **çalıştırma**: uygulama kullanıcısının tablo oluşturma yetkisi yoktur. Her zaman `db-migrate.sh` (veya `deploy.sh`) kullan.
 
 Fabrikadaki bir bilgisayardan `https://uretim.alanadi.com` aç, yönetici ile giriş yap.
 
@@ -366,7 +372,9 @@ cd /opt/uretim
 ./deploy/scripts/deploy.sh
 ```
 
-Betik sırasıyla: yedek alır → `git pull` → imajı yeniden derler → konteynerleri yeniler → migration'ları çalıştırır → önbellekleri yeniler → uygulamanın sağlık kontrolünü yapar. Sağlık kontrolü başarısız olursa hata verip durur; bu durumda son yedekten dönmek için Bölüm 14'e bak.
+Betik sırasıyla: yedek alır (`sudo` ile `backup.sh`; şifre sorabilir) → `git pull --ff-only` → imajları yeniden derler → migration'ları tablo sahibiyle çalıştırır ve uygulama kullanıcısının yetkilerini yeniler → konteynerleri yeniler → önbellekleri yeniler → uygulamanın sağlık kontrolünü (`/up`) yapar. Migration, yeni kod çalışmaya başlamadan önce yapılır. Herhangi bir adım başarısız olursa hata verip durur; son yedekten dönmek için Bölüm 14'e bak.
+
+Uygulama logları: `dc logs --tail=200 app` (aynı şekilde `worker`, `scheduler`). Docker log dosyaları servis başına en fazla 5 × 10 MB tutar.
 
 ---
 
@@ -376,9 +384,13 @@ Betik sırasıyla: yedek alır → `git pull` → imajı yeniden derler → kont
 
 ```bash
 cd /opt/uretim
-ls /var/backups/uretim/                         # veya /mnt/yedek/uretim/
-./deploy/scripts/restore.sh /var/backups/uretim/db-20260924-0230.dump
+sudo ls /var/backups/uretim/                    # veya /mnt/yedek/uretim/
+sudo ./deploy/scripts/restore.sh /var/backups/uretim/db-20260924-0230.dump
+# yüklenen dosyalarla birlikte:
+sudo ./deploy/scripts/restore.sh /var/backups/uretim/db-20260924-0230.dump /var/backups/uretim/files-20260924-0230.tar.gz
 ```
+
+Betik onay ister (`EVET` yazılır), önce mevcut veritabanının güvenlik dökümünü `/var/backups/uretim/pre-restore-*.dump` olarak alır, sonra uygulamayı durdurup yedeği yükler, migration'ları ve uygulama kullanıcısını günceller ve servisleri başlatır. Bir şey ters giderse aynı betikle güvenlik dökümüne dönülebilir. Güvenlik dökümleri otomatik silinmez; işin bitince elle sil.
 
 Buluttan dosya çekmek gerekirse:
 ```bash

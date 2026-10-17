@@ -1,0 +1,149 @@
+# Üretim ortamı (fabrika sunucusu). Kurulum ve kullanım: KURULUM_KILAVUZU.md
+#   docker compose -f docker-compose.prod.yml --env-file .env <komut>
+#
+# Değişkenler .env dosyasından gelir (örnek: .env.production.example). Uygulama konteynerlerine
+# .env dosyasının tamamı verilmez; yalnızca aşağıdaki x-app-environment listesindekiler geçer.
+# Böylece tablo sahibi veritabanı şifresi (DB_OWNER_PASSWORD) ve tünel/Cloudflare anahtarları
+# uygulamaya ulaşmaz. .env'e uygulamanın okuyacağı yeni bir değişken eklenirse buraya da eklenir.
+
+# Sabit proje adı: konteyner ve volume adları (ör. uretim_pgdata) klasör adından bağımsızdır ve
+# aynı klasördeki geliştirme ortamıyla (docker-compose.yml) çakışmaz.
+name: uretim
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-app-environment: &app-environment
+  APP_NAME: "Tem Motor Üretim"
+  APP_ENV: production
+  APP_DEBUG: "false"
+  # İlk kurulumda boştur; "key:generate --show" ile üretilip .env'e yazılır (KURULUM_KILAVUZU bölüm 10).
+  APP_KEY: ${APP_KEY:-}
+  APP_URL: ${APP_URL:?APP_URL .env içinde tanımlı olmalı}
+  APP_TIMEZONE: Europe/Istanbul
+  APP_LOCALE: tr
+  APP_FALLBACK_LOCALE: tr
+  APP_FAKER_LOCALE: tr_TR
+  APP_MAINTENANCE_DRIVER: file
+  BCRYPT_ROUNDS: "12"
+  LOG_CHANNEL: stderr
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  LOG_DEPRECATIONS_CHANNEL: "null"
+  DB_CONNECTION: pgsql
+  DB_HOST: db
+  DB_PORT: "5432"
+  DB_DATABASE: ${DB_DATABASE:-uretim}
+  # Uygulama kullanıcısı: tablo sahibi değildir (deploy/db/app-role.sql).
+  DB_USERNAME: ${DB_USERNAME:-uretim_app}
+  DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD .env içinde tanımlı olmalı}
+  SESSION_DRIVER: database
+  SESSION_LIFETIME: "120"
+  SESSION_ENCRYPT: "false"
+  SESSION_SECURE_COOKIE: "true"
+  QUEUE_CONNECTION: database
+  CACHE_STORE: database
+  FILESYSTEM_DISK: local
+  BROADCAST_CONNECTION: log
+  MAIL_MAILER: log
+  INVOICE_RATE_TYPE: ${INVOICE_RATE_TYPE:-forex_selling}
+
+x-app: &app
+  build:
+    context: .
+    dockerfile: deploy/Dockerfile
+  image: uretim-app:latest
+  restart: unless-stopped
+  environment: *app-environment
+  volumes:
+    - storage:/app/storage
+  depends_on:
+    db:
+      condition: service_healthy
+  logging: *logging
+
+services:
+  app:
+    <<: *app
+    # İçeride düz HTTP, port 80. Dışarı yayınlanmaz: yalnızca caddy ve cloudflared erişir.
+    expose:
+      - "80"
+    # Taban imajdan (dunglas/frankenphp) gelen healthcheck Caddy admin API'sini
+    # (localhost:2019/metrics) yoklar; php-server bu portu açmadığı için konteyner
+    # hep "unhealthy" görünür. Yerine Laravel'in /up endpoint'i kullanılır.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS -o /dev/null http://localhost:80/up || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  worker:
+    <<: *app
+    command: ["php", "artisan", "queue:work", "--tries=3", "--max-time=3600"]
+    # Uzun süren bir iş (ör. büyük Excel) bitirilsin diye kapanışta bekleme süresi.
+    stop_grace_period: 2m
+    healthcheck:
+      disable: true
+
+  scheduler:
+    <<: *app
+    command: ["php", "artisan", "schedule:work"]
+    healthcheck:
+      disable: true
+
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_DATABASE:-uretim}
+      # Tablo sahibi: migration, yedek ve geri yükleme bu kullanıcıyla yapılır.
+      POSTGRES_USER: ${DB_OWNER_USERNAME:-uretim}
+      POSTGRES_PASSWORD: ${DB_OWNER_PASSWORD:?DB_OWNER_PASSWORD .env içinde tanımlı olmalı}
+      TZ: Europe/Istanbul
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Port dışarı açılmaz.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    logging: *logging
+
+  caddy:
+    build:
+      context: deploy/caddy
+      dockerfile: Dockerfile
+    image: uretim-caddy:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?APP_DOMAIN .env içinde tanımlı olmalı}
+      CF_API_TOKEN: ${CF_API_TOKEN:-}
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    logging: *logging
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on:
+      - app
+    logging: *logging
+
+volumes:
+  storage:
+  pgdata:
+  caddy_data:
+  caddy_config:

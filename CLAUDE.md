@@ -333,8 +333,17 @@ Kurulum kılavuzu bu dosya adlarına dayanır; isimleri değiştirme.
   6. `restic forget --keep-daily 30 --keep-monthly 12 --prune`
   7. Sunucuda 14 günden, USB diskte 60 günden eski dosyaları siler
   8. Başarıda `$HC_YEDEK_URL`, hatada `$HC_YEDEK_URL/fail` adresine ping atar (curl zaman aşımlı, sessiz)
-- `deploy.sh`: backup.sh çalıştırır → `git pull --ff-only` → `docker compose -f docker-compose.prod.yml build` → `up -d` → `migrate --force` → `optimize` → `/up` sağlık kontrolü (başarısızsa açık hata mesajıyla çıkar)
-- `restore.sh <dump-dosyası>`: onay ister → app/worker/scheduler durdurur → `pg_restore --clean --if-exists` → servisleri başlatır → `optimize`
+- `deploy.sh`: backup.sh çalıştırır → `git pull --ff-only` → `docker compose -f docker-compose.prod.yml build` → `db-migrate.sh` (migration, yeni kod başlamadan önce) → `up -d` → `optimize` → `/up` sağlık kontrolü (başarısızsa açık hata mesajıyla çıkar)
+- `restore.sh <dump-dosyası> [files-arşivi]` (root): onay ister → mevcut veritabanının güvenlik dökümü (`pre-restore-*.dump`) → app/worker/scheduler durdurur → şema boşaltılır (dökümde olmayan yeni tablolar migration'ı bozmasın) → `pg_restore --clean --if-exists --single-transaction` → (verildiyse) `storage/app` geri yüklenir → `db-migrate.sh` → servisleri başlatır → `optimize` → `/up`
+- `db-migrate.sh`: migration'ları tablo sahibiyle tek seferlik konteynerde çalıştırır (ayar önbelleği kurulmaz) ve uygulama kullanıcısını `deploy/db/app-role.sql` ile ayarlar; ilk kurulumda da kullanılır. Ortak yardımcılar `lib.sh`'tadır.
+
+**Veritabanı kullanıcıları ve ortam değişkenleri (Aşama 10 kararları)**
+- Tablo sahibi `DB_OWNER_USERNAME` (varsayılan `uretim`; postgres konteynerinin `POSTGRES_USER`'ı) migration, yedek ve geri yüklemeyi yapar. Uygulama `DB_USERNAME` (varsayılan `uretim_app`) ile bağlanır: tablo/sekans/fonksiyon üzerinde yalnızca SELECT/INSERT/UPDATE/DELETE, USAGE/SELECT/UPDATE, EXECUTE; varsayılan yetkilerle yeni tablolar da kapsanır; TRUNCATE, TRIGGER, REFERENCES, CREATE yok. `app-role.sql` tekrar çalıştırılabilir; şifre ortam değişkeninden (`APP_DB_PASSWORD`) okunur, boşsa hata verir. Bu davranış `tests/Feature/Deployment` ile test edilir.
+- Uygulama konteynerlerine `.env`'in tamamı verilmez (`env_file` yok); yalnızca compose'daki `x-app-environment` listesi geçer. `DB_OWNER_PASSWORD`, `CF_API_TOKEN`, `TUNNEL_TOKEN` uygulamaya ulaşmaz. Uygulamanın okuyacağı yeni bir değişken bu listeye de eklenir (test, `.env.production.example`'daki her anahtarın compose'da kullanıldığını denetler).
+- Compose proje adı sabit `name: uretim`; imajlar `uretim-app`, `uretim-caddy` (geliştirme ortamının `tem-uretim-*` adlarıyla çakışmaz).
+- İmaj: `deploy/Dockerfile` (base → vendor → assets → son), eklentilere ek olarak `pcntl` ve Aşama 6 için `soap`; kullanıcı `app` (UID 1000), FrankenPHP'ye yalnızca `CAP_NET_BIND_SERVICE`. Giriş betiği (`deploy/docker-entrypoint.sh`) web sunucusu, kuyruk işçisi ve zamanlayıcı başlarken `optimize` çalıştırır; tek seferlik komutlarda çalıştırmaz.
+- Loglar `stderr` → Docker json-file (servis başına 5 × 10 MB). Şifreler yalnızca harf/rakam (`openssl rand -hex 24`).
+- Yedekte bulut gönderimi başarısızsa yerel yedek korunur, healthchecks'e `/fail` gönderilir; USB disk yoksa yalnızca uyarı.
 
 Ayrıca kısa bir `README.md`: geliştirme ortamını çalıştırma, testleri çalıştırma, dağıtım için KURULUM_KILAVUZU.md'ye yönlendirme.
 

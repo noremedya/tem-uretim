@@ -1,0 +1,7 @@
+{$APP_DOMAIN} {
+    tls {
+        dns cloudflare {env.CF_API_TOKEN}
+    }
+    encode zstd gzip
+    reverse_proxy app:80
+}
