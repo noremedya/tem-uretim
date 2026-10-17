@@ -44,6 +44,8 @@ Tarayıcı tarafı JS mantık testleri Node'un yerleşik test çalıştırıcıs
 
 Hızlı İşlem sayfasındaki "Kamera ile okut" yalnızca güvenli bağlantıda çalışır: geliştirmede `http://localhost:8000`, fabrikada `https://` adresi (telefon/tablet yerel IP ile `http://` üzerinden bağlanırsa kamera açılmaz). Kamera kütüphanesi (`@zxing/browser`) ayrı bir parça olarak derlenir ve yalnızca kamera açılınca yüklenir.
 
+QR etiketleri motor/iş emri sayfalarındaki "Etiket yazdır" butonlarıyla açılır (termal 100×50 mm veya A4 3×8; ölçüler `config/labels.php`). Yazdırırken ölçek %100 ve kenar boşluğu "yok" seçilmelidir.
+
 Panel JS'i değiştiğinde varlıkları yeniden derleyin: `docker compose exec app npm run build` (veya `npm run dev`).
 
 Stok tutarlılık kontrolü elle: `docker compose exec app php artisan stock:reconcile` (üretimde scheduler her gün 03:00'te çalıştırır).

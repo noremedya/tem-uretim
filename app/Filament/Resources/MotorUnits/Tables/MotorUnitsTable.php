@@ -4,6 +4,7 @@ namespace App\Filament\Resources\MotorUnits\Tables;
 
 use App\Enums\MotorUnitStatus;
 use App\Filament\Resources\MotorUnits\Actions\ShipMotorUnitsAction;
+use App\Filament\Support\LabelActions;
 use App\Models\MotorUnit;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\ViewAction;
@@ -44,6 +45,7 @@ class MotorUnitsTable
             ->toolbarActions([
                 BulkActionGroup::make([
                     ShipMotorUnitsAction::bulk(),
+                    LabelActions::motorsBulk(),
                 ]),
             ]);
     }

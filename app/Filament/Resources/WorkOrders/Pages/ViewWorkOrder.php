@@ -5,6 +5,7 @@ namespace App\Filament\Resources\WorkOrders\Pages;
 use App\Filament\Resources\WorkOrders\Actions\WorkOrderStatusActions;
 use App\Filament\Resources\WorkOrders\WorkOrderResource;
 use App\Filament\Support\AuditTrailAction;
+use App\Filament\Support\LabelActions;
 use Filament\Actions\EditAction;
 use Filament\Resources\Pages\ViewRecord;
 
@@ -16,6 +17,8 @@ class ViewWorkOrder extends ViewRecord
     {
         return [
             AuditTrailAction::make(),
+            LabelActions::workOrder(),
+            LabelActions::workOrderMotors(),
             WorkOrderStatusActions::start(),
             WorkOrderStatusActions::complete(),
             WorkOrderStatusActions::reverse(),

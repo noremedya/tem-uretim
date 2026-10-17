@@ -267,7 +267,11 @@ Yetkiler Laravel Policy'leriyle uygulanır; Filament menüsü de yetkiye göre g
   - İş emri numarası ise → yetkiye göre "Başlat" ve "Tamamla" (fire giriş penceresiyle, standart fireyle dolu); diğer işlemler için iş emri sayfasına bağlantı. Saha operatörü yalnızca kendine atanan iş emirlerini görür (listede, detayda ve burada); başkasına atanmış bir iş emri okutulursa iş emri bilgisi gösterilmez, "Bu iş emri size atanmamış." mesajı çıkar
   - Aynı kodun 2 saniye içinde tekrar okunması yok sayılır
   - Okuma sonrası odak otomatik olarak okuma alanına döner
-- **Etiket yazdırma** (opsiyonel aşama): seri no ve iş emri için QR etiketli, tarayıcıdan yazdırılabilir sayfa
+- **Etiket yazdırma** (Aşama 12): seri no ve iş emri için QR etiketli, tarayıcıdan yazdırılabilir sayfa
+  - QR sunucuda SVG olarak üretilir (`chillerlan/php-qrcode`, `App\Support\QrCode`) ve yalnızca kodu taşır (seri no / iş emri no); Hızlı İşlem doğrudan okur. Takip etiketidir; motorun yasal plakası (CE vb.) değildir.
+  - Sayfalar panel dışıdır (`/etiket/motorlar?ids=…` veya `?work_order=…`, `/etiket/is-emri/{id}?copies=n`), oturum ister, pasif kullanıcıyı çıkışa zorlar; açılınca yazdırma penceresi gelir. Düzenler `config/labels.php`: termal 100×50 mm (sayfa başına bir) ve A4 3×8 (70×37 mm); sayfada seçilir. Tek seferde en fazla 500 etiket.
+  - Butonlar: motor detayı ve motor listesi (toplu), iş emri detayı (iş emri etiketi; tamamlanmış mamul iş emrinde "Motor etiketleri"). Yetki: kaydı görebilen etiketini de alır (operatör yalnızca kendi iş emri).
+  - İçerik: firma adı (TEM MOTOR, logo yok), kod, model/kart adı, motor etiketinde kW · d/dk · V · Hz, IP · verim sınıfı, üretim ay/yılı, iş emri ve parti; iş emri etiketinde adet, planlanan bitiş, sipariş ve müşteri, parti, operatör.
 
 ## 8. Raporlar
 

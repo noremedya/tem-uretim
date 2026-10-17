@@ -5,6 +5,7 @@ namespace App\Filament\Resources\MotorUnits\Pages;
 use App\Filament\Resources\MotorUnits\Actions\ShipMotorUnitsAction;
 use App\Filament\Resources\MotorUnits\MotorUnitResource;
 use App\Filament\Support\AuditTrailAction;
+use App\Filament\Support\LabelActions;
 use Filament\Resources\Pages\ViewRecord;
 
 class ViewMotorUnit extends ViewRecord
@@ -15,6 +16,7 @@ class ViewMotorUnit extends ViewRecord
     {
         return [
             AuditTrailAction::make(),
+            LabelActions::motor(),
             ShipMotorUnitsAction::single(),
         ];
     }

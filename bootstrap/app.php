@@ -22,6 +22,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // Güvenlik başlıkları ve yalnızca kendi sunucumuza izin veren CSP (harici kaynak yasağı tarayıcıda da).
         $middleware->append(SecurityHeaders::class);
 
+        // Oturumsuz kullanıcı panel dışı sayfalarda (rapor indirme, etiket) da panelin giriş sayfasına gider.
+        $middleware->redirectGuestsTo(fn () => route('filament.app.auth.login'));
+
         // Pasif kullanıcıyı çıkışa zorlayan middleware, Authenticate'in 403 vermesinden önce çalışmalı.
         // Authenticate öncelik listesinde olduğu için sıralamada öne alınır; bu yüzden listeye ekliyoruz.
         $middleware->prependToPriorityList(
