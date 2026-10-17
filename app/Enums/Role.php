@@ -66,6 +66,7 @@ enum Role: string implements HasLabel
                 Permission::PricesManage,
                 Permission::ExchangeRatesManage,
                 Permission::InvoicesManage,
+                Permission::FinanceManage,
             ],
         };
     }

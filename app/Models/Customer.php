@@ -93,6 +93,12 @@ class Customer extends Model
             ->when($exceptId !== null, fn (Builder $q) => $q->whereKeyNot($exceptId));
     }
 
+    /** @return HasMany<AccountTransaction, $this> */
+    public function accountTransactions(): HasMany
+    {
+        return $this->hasMany(AccountTransaction::class);
+    }
+
     /** @return HasMany<Price, $this> */
     public function prices(): HasMany
     {

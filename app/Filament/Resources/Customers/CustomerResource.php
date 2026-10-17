@@ -6,6 +6,7 @@ use App\Filament\Resources\Customers\Pages\CreateCustomer;
 use App\Filament\Resources\Customers\Pages\EditCustomer;
 use App\Filament\Resources\Customers\Pages\ListCustomers;
 use App\Filament\Resources\Customers\Pages\ViewCustomer;
+use App\Filament\Resources\Customers\RelationManagers\AccountTransactionsRelationManager;
 use App\Filament\Resources\Customers\RelationManagers\OrdersRelationManager;
 use App\Filament\Resources\Customers\Schemas\CustomerForm;
 use App\Filament\Resources\Customers\Schemas\CustomerInfolist;
@@ -55,6 +56,7 @@ class CustomerResource extends Resource
     {
         return [
             OrdersRelationManager::class,
+            AccountTransactionsRelationManager::class,
         ];
     }
 

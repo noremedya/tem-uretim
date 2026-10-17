@@ -2,7 +2,11 @@
 
 namespace App\Providers;
 
+use App\Models\AccountTransaction;
 use App\Models\BomItem;
+use App\Models\CashAccount;
+use App\Models\CashMovement;
+use App\Models\Cheque;
 use App\Models\Customer;
 use App\Models\ExchangeRate;
 use App\Models\Invoice;
@@ -12,6 +16,7 @@ use App\Models\MotorUnit;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Part;
+use App\Models\Payment;
 use App\Models\Price;
 use App\Models\ProductionBatch;
 use App\Models\StockMovement;
@@ -60,6 +65,11 @@ class AppServiceProvider extends ServiceProvider
             'price' => Price::class,
             'invoice' => Invoice::class,
             'invoice_line' => InvoiceLine::class,
+            'cash_account' => CashAccount::class,
+            'cash_movement' => CashMovement::class,
+            'account_transaction' => AccountTransaction::class,
+            'payment' => Payment::class,
+            'cheque' => Cheque::class,
         ]);
 
         // N+1 ve yanlışlıkla atılan alanları geliştirmede erken yakala.

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\AccountTransactionType;
 use App\Enums\Currency;
 use App\Enums\InvoiceKind;
 use App\Enums\InvoiceStatus;
@@ -36,6 +37,7 @@ class InvoiceService
         private readonly ExchangeRateService $rates,
         private readonly PriceService $prices,
         private readonly StockService $stock,
+        private readonly LedgerService $ledger,
     ) {}
 
     /**
@@ -256,6 +258,21 @@ class InvoiceService
             $invoice->issued_by_user_id = $actor->getKey();
             $invoice->save();
 
+            // Cari hareketi: satış faturası ve alış iadesi cariyi borçlandırır, alış faturası ve satış iadesi alacaklandırır.
+            if (Money::compare((string) $invoice->grand_total, '0') !== 0) {
+                $this->ledger->post(
+                    $invoice->customer_id,
+                    $invoice->currency,
+                    AccountTransactionType::Invoice,
+                    $this->receivableSign($type) > 0 ? (string) $invoice->grand_total : bcmul((string) $invoice->grand_total, '-1', 2),
+                    $invoice->invoice_date,
+                    $invoice,
+                    $actor,
+                    "{$type->label()} {$invoice->displayNumber()}",
+                    dueDate: $invoice->due_date,
+                );
+            }
+
             return $invoice;
         });
     }
@@ -294,6 +311,8 @@ class InvoiceService
                     throw new BusinessRuleException("Faturayla girilen malzeme kullanılmış; iptal stoğu eksiye düşürür.\n".implode("\n", array_slice(explode("\n", $exception->getMessage()), 1)));
                 }
             }
+
+            $this->ledger->reverseFor($locked, $actor, "Fatura iptali ({$locked->displayNumber()}): {$reason}");
 
             $locked->status = InvoiceStatus::Cancelled;
             $locked->cancelled_at = now();
@@ -345,6 +364,12 @@ class InvoiceService
                 ->when($except, fn ($q) => $q->where('l.invoice_line_id', '!=', $except->getKey())))
             ->orderByDesc('id')
             ->get();
+    }
+
+    /** Belge cariyi borçlandırıyor mu (+1) yoksa alacaklandırıyor mu (−1)? */
+    public function receivableSign(InvoiceType $type): int
+    {
+        return in_array($type, [InvoiceType::SalesInvoice, InvoiceType::PurchaseReturn], true) ? 1 : -1;
     }
 
     private function receivePurchaseLine(Invoice $invoice, InvoiceLine $line, User $actor): void

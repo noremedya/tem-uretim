@@ -39,6 +39,8 @@ enum Permission: string
     case PricesManage = 'prices.manage';
     case ExchangeRatesManage = 'exchange_rates.manage';
     case InvoicesManage = 'invoices.manage';
+    // Tahsilat/ödeme, kasa/banka, çek/senet, cari ekstre.
+    case FinanceManage = 'finance.manage';
     // Alış faturalarını salt okunur görme (depo).
     case InvoicesViewPurchase = 'invoices.view_purchase';
 
@@ -70,6 +72,7 @@ enum Permission: string
             self::PricesManage => 'Fiyat yönetimi',
             self::ExchangeRatesManage => 'Döviz kuru yönetimi',
             self::InvoicesManage => 'Fatura yönetimi',
+            self::FinanceManage => 'Tahsilat, ödeme, kasa ve banka',
             self::InvoicesViewPurchase => 'Alış faturalarını görüntüleme',
             self::ReportsProduction => 'Üretim raporları',
             self::ReportsStock => 'Stok raporları',
