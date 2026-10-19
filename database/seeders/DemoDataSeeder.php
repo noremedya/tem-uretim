@@ -468,7 +468,7 @@ class DemoDataSeeder extends Seeder
                 $this->schedule($monday->addDays(1)->setTime(15, 0), fn () => $this->as('depo', function (): void {
                     $stock = app(StockService::class);
                     $stock->returnToStock($this->parts['KOM-RUL-6202'], '4', $this->users['depo'], 'Üretimden artan rulman iadesi');
-                    $stock->stockOut($this->parts['KOM-KLEMENS'], '20', $this->users['depo'], 'Tedarikçiye iade: kapak kilitleri kırık parti (Rulman Market)');
+                    $stock->stockOut($this->parts['KOM-KLEMENS'], '20', $this->users['depo'], 'Tedarikçiye iade: kapak kilitleri kırık parti');
                 }));
             }
         }
