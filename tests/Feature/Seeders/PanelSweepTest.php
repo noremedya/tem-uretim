@@ -22,6 +22,7 @@ use Database\Seeders\DemoDataSeeder;
 use Illuminate\Routing\Route as RouteDefinition;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Activitylog\Models\Activity;
 
 /*
@@ -132,6 +133,9 @@ function sweepRecords(): array
         'cash-accounts' => CashAccount::query()->value('id'),
     ];
 }
+
+// Demo görselleri geliştirme ortamının diskine yazılmasın.
+beforeEach(fn () => Storage::fake('local'));
 
 it('her panel sayfası her rolde yetki tablosuna uyar, sorgu sınırını aşmaz ve harici kaynak yüklemez', function () {
     $seeder = app(DemoDataSeeder::class);

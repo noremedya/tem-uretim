@@ -127,7 +127,7 @@ it('reçete satırı güncellenir (optimistic locking), kaldırılır ve denetim
     $this->boms->remove($item->fresh());
     expect(BomItem::count())->toBe(0);
 
-    expect(Activity::where('subject_type', 'bom_item')->where('subject_id', $item->id)->pluck('event')->all())
+    expect(Activity::where('subject_type', 'bom_item')->where('subject_id', $item->id)->orderBy('id')->pluck('event')->all())
         ->toBe(['created', 'updated', 'deleted']);
 });
 

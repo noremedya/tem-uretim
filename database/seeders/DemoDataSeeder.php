@@ -54,6 +54,7 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
 /**
@@ -162,6 +163,7 @@ class DemoDataSeeder extends Seeder
             $this->createModelsAndBoms();
             $this->createCustomers();
         });
+        $this->as('yonetici', fn () => $this->attachImages());
         $this->as('muhasebe', fn () => $this->createRatesAndPrices($start));
         $this->as('yonetici', fn () => $this->createAccountsAndOpenings($start));
 
@@ -315,6 +317,35 @@ class DemoDataSeeder extends Seeder
             'phase' => MotorPhase::SinglePhase, 'mounting_type' => 'B14', 'protection_class' => 'IP54',
         ]);
         $models->deactivate($old);
+    }
+
+    /** Serbest lisanslı örnek görseller (database/seeders/demo-images, kaynaklar KAYNAKLAR.md'de). */
+    private function attachImages(): void
+    {
+        $images = [
+            'HM-BAKIR-063' => 'bakir-tel', 'HM-ALU-ETIAL' => 'aluminyum', 'HM-MIL-C45' => 'mil-celigi',
+            'KOM-RUL-6202' => 'rulman', 'KOM-RUL-6204' => 'rulman', 'KOM-RUL-6205' => 'rulman',
+        ];
+
+        foreach ($this->models as $frame => $model) {
+            $images["YM-STATOR-{$frame}"] = 'bobinajli-stator';
+            $images["YM-ROTOR-{$frame}"] = 'rotor';
+            $images[$model->finishedPart->code] = 'motor';
+        }
+
+        $disk = Storage::disk(PartService::IMAGE_DISK);
+        $service = app(PartService::class);
+
+        foreach ($images as $code => $file) {
+            $part = Part::query()->where('code', $code)->firstOrFail();
+            $path = PartService::IMAGE_DIRECTORY."/demo-{$file}.jpg";
+
+            if (! $disk->exists($path)) {
+                $disk->put($path, file_get_contents(database_path("seeders/demo-images/{$file}.jpg")));
+            }
+
+            $service->update($part, ['image_path' => $path], $part->lock_version);
+        }
     }
 
     private function createCustomers(): void

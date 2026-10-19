@@ -9,6 +9,7 @@ use App\Support\Quantity;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
@@ -23,6 +24,12 @@ class PartsTable
         return $table
             ->defaultSort('code')
             ->columns([
+                ImageColumn::make('image')
+                    ->label('')
+                    ->state(fn (Part $record): ?string => $record->imageUrl())
+                    ->imageHeight(36)
+                    ->square()
+                    ->toggleable(),
                 TextColumn::make('code')
                     ->label('Kod')
                     ->searchable()

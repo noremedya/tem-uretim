@@ -6,10 +6,12 @@ use App\Enums\PartType;
 use App\Filament\Resources\Units\Schemas\UnitForm;
 use App\Models\Part;
 use App\Models\Unit;
+use App\Services\PartService;
 use App\Services\UnitService;
 use App\Support\Quantity;
 use Closure;
 use Filament\Actions\Action;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
@@ -85,6 +87,22 @@ class PartForm
                                 }
                             })
                             ->helperText('Bakiye bu değere eşit veya altındaysa kritik sayılır. 0 = takip yok.'),
+                        // Görsel sunucunun kendi diskinde tutulur (CDN yok); yüklerken uzun kenar 1200 px'e küçültülür.
+                        FileUpload::make('image_path')
+                            ->label('Görsel')
+                            ->image()
+                            ->disk(PartService::IMAGE_DISK)
+                            ->directory(PartService::IMAGE_DIRECTORY)
+                            ->visibility('private')
+                            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+                            ->maxSize(5120)
+                            ->imageResizeMode('contain')
+                            ->imageResizeTargetWidth('1200')
+                            ->imageResizeTargetHeight('1200')
+                            ->imageResizeUpscale(false)
+                            ->imagePreviewHeight('160')
+                            ->columnSpanFull()
+                            ->helperText('JPG, PNG veya WebP; en fazla 5 MB. Parçanın kendi fotoğrafını yükleyin.'),
                     ]),
             ]);
     }

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\LabelController;
+use App\Http\Controllers\PartImageController;
 use App\Http\Controllers\ReportExportDownloadController;
 use App\Http\Middleware\LogoutInactiveUser;
 use Illuminate\Support\Facades\Route;
@@ -14,4 +15,7 @@ Route::middleware([LogoutInactiveUser::class, 'auth'])->group(function (): void 
     // Yazdırılabilir QR etiketleri (Aşama 12).
     Route::get('/etiket/motorlar', [LabelController::class, 'motors'])->name('labels.motors');
     Route::get('/etiket/is-emri/{workOrder}', [LabelController::class, 'workOrder'])->name('labels.work-order');
+
+    // Stok kartı görselleri.
+    Route::get('/parca-gorsel/{part}', PartImageController::class)->name('parts.image');
 });

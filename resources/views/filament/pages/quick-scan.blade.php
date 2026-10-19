@@ -56,6 +56,9 @@
         @if ($part = $this->part())
             <x-filament::section>
                 <x-slot name="heading">Parça: {{ $part->code }}</x-slot>
+                @if ($part->imageUrl())
+                    <img src="{{ $part->imageUrl() }}" alt="{{ $part->name }}" class="mb-4 h-40 rounded-lg object-contain">
+                @endif
                 <div class="space-y-2 text-lg">
                     <p class="text-2xl font-semibold">{{ $part->name }}</p>
                     <p>Tür: {{ $part->type->getLabel() }}</p>

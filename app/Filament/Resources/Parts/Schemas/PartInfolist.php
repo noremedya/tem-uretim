@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Parts\Schemas;
 use App\Models\Part;
 use App\Support\Quantity;
 use Filament\Infolists\Components\IconEntry;
+use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -19,6 +20,14 @@ class PartInfolist
                     ->columns(4)
                     ->columnSpanFull()
                     ->schema([
+                        // Tıklanınca görsel yeni sekmede tam boyutta açılır.
+                        ImageEntry::make('image')
+                            ->hiddenLabel()
+                            ->state(fn (Part $record): ?string => $record->imageUrl())
+                            ->visible(fn (Part $record): bool => $record->image_path !== null)
+                            ->imageHeight(180)
+                            ->url(fn (Part $record): ?string => $record->imageUrl(), shouldOpenInNewTab: true)
+                            ->columnSpanFull(),
                         TextEntry::make('code')->label('Kod'),
                         TextEntry::make('name')->label('Ad'),
                         TextEntry::make('type')->label('Tür')->badge(),

@@ -18,7 +18,11 @@ use Database\Seeders\DemoDataSeeder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Activitylog\Models\Activity;
+
+// Demo görselleri geliştirme ortamının diskine yazılmasın.
+beforeEach(fn () => Storage::fake('local'));
 
 it('demo veri servislerle, kurallara uygun ve tutarlı yüklenir', function () {
     app(DemoDataSeeder::class)->run();

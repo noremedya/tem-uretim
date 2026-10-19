@@ -10,13 +10,19 @@ use App\Models\Unit;
 use App\Support\Quantity;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 /**
  * Stok kartı yönetimi. Bakiye burada değişmez; yalnızca StockService değiştirir.
  */
 class PartService
 {
-    private const FIELDS = ['code', 'name', 'unit_id', 'type', 'barcode', 'critical_level'];
+    private const FIELDS = ['code', 'name', 'unit_id', 'type', 'barcode', 'critical_level', 'image_path'];
+
+    /** Stok kartı görsellerinin diski ve klasörü (yerel; gece yedeğine dahil). */
+    public const IMAGE_DISK = 'local';
+
+    public const IMAGE_DIRECTORY = 'part-images';
 
     /** Mamul kartında motor modelinden yönetilen alanlar. */
     private const FINISHED_GOOD_MANAGED_FIELDS = ['code', 'name', 'unit_id', 'type'];
@@ -119,7 +125,14 @@ class PartService
                 }
             }
 
+            $replacedImage = $part->isDirty('image_path') ? $part->getRawOriginal('image_path') : null;
+
             $part->saveExpectingVersion($expectedLockVersion);
+
+            // Değiştirilen veya kaldırılan görselin dosyası, kayıt kesinleşince silinir.
+            if ($replacedImage !== null) {
+                DB::afterCommit(fn () => Storage::disk(self::IMAGE_DISK)->delete($replacedImage));
+            }
 
             return $part;
         });
@@ -182,6 +195,18 @@ class PartService
 
     private function normalize(array $data): array
     {
+        if (array_key_exists('image_path', $data)) {
+            $path = filled($data['image_path']) ? (string) $data['image_path'] : null;
+
+            // Yalnızca görsel klasöründeki bir dosya (başka dosyaya, ör. rapor çıktılarına, yol verilemez).
+            if ($path !== null && (! str_starts_with($path, self::IMAGE_DIRECTORY.'/') || str_contains($path, '..')
+                || ! preg_match('/\.(jpe?g|png|webp)$/i', $path))) {
+                throw new BusinessRuleException('Geçersiz görsel dosyası.');
+            }
+
+            $data['image_path'] = $path;
+        }
+
         if (array_key_exists('critical_level', $data)) {
             $level = Quantity::parse($data['critical_level'] ?? 0);
 

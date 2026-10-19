@@ -8,6 +8,7 @@ use App\Filament\Resources\Parts\PartResource;
 use App\Models\WorkOrder;
 use App\Services\WorkOrderService;
 use App\Support\Quantity;
+use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -30,6 +31,12 @@ class WorkOrderInfolist
                 ->columns(4)
                 ->columnSpanFull()
                 ->schema([
+                    ImageEntry::make('product_image')
+                        ->hiddenLabel()
+                        ->state(fn (WorkOrder $record): ?string => $record->product->imageUrl())
+                        ->visible(fn (WorkOrder $record): bool => $record->product->image_path !== null)
+                        ->imageHeight(140)
+                        ->columnSpanFull(),
                     TextEntry::make('work_order_number')->label('İş emri no')->weight('bold')->copyable(),
                     TextEntry::make('status')->label('Durum')->badge(),
                     TextEntry::make('product.code')

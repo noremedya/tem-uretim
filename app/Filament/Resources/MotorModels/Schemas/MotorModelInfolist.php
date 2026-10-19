@@ -7,6 +7,7 @@ use App\Models\MotorModel;
 use App\Support\Gtip;
 use App\Support\Quantity;
 use Filament\Infolists\Components\IconEntry;
+use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -22,6 +23,13 @@ class MotorModelInfolist
                     ->columns(3)
                     ->columnSpanFull()
                     ->schema([
+                        ImageEntry::make('image')
+                            ->hiddenLabel()
+                            ->state(fn (MotorModel $record): ?string => $record->finishedPart?->imageUrl())
+                            ->visible(fn (MotorModel $record): bool => $record->finishedPart?->image_path !== null)
+                            ->imageHeight(180)
+                            ->url(fn (MotorModel $record): ?string => $record->finishedPart?->imageUrl(), shouldOpenInNewTab: true)
+                            ->columnSpanFull(),
                         TextEntry::make('code')->label('Kod'),
                         TextEntry::make('name')->label('Ad'),
                         IconEntry::make('is_active')->label('Aktif')->boolean(),
