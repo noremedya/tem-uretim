@@ -35,9 +35,9 @@ enum Role: string implements HasLabel
     {
         return match ($this) {
             self::Admin => Permission::cases(),
+            // Operatör ve depo cari hesapları ve müşteri adlarını görmez (CLAUDE.md bölüm 6).
             self::Operator => [
                 Permission::MotorModelsView,
-                Permission::CustomersView,
                 Permission::OrdersView,
                 Permission::WorkOrdersView,
                 Permission::WorkOrdersChangeStatus,
@@ -45,12 +45,10 @@ enum Role: string implements HasLabel
             ],
             self::Warehouse => [
                 Permission::MotorModelsView,
-                Permission::CustomersView,
                 Permission::OrdersView,
                 Permission::WorkOrdersView,
                 Permission::WorkOrdersViewAll,
                 Permission::MotorUnitsShip,
-                Permission::InvoicesViewPurchase,
                 Permission::PartsView,
                 Permission::PartsManage,
                 Permission::StockMove,

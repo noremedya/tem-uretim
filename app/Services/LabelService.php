@@ -70,7 +70,8 @@ class LabelService
             'lines' => array_values(array_filter([
                 'Adet: '.Quantity::format((string) $workOrder->quantity, $workOrder->product->unit->name)
                     .' · Bitiş: '.$workOrder->planned_end->format('d.m.Y'),
-                $order ? "Sipariş: {$order->order_number} · {$order->customer->name}" : null,
+                // Müşteri adı yalnızca cari görebilene (operatör ve depo görmez).
+                $order ? "Sipariş: {$order->order_number}".($user->canSeeCustomers() ? " · {$order->customer->name}" : '') : null,
                 implode(' · ', array_filter([
                     $workOrder->productionBatch ? 'Parti: '.$workOrder->productionBatch->batch_number : null,
                     'Operatör: '.($workOrder->assignedUser?->name ?? 'Atanmadı'),

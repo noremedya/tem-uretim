@@ -16,6 +16,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 use UnitEnum;
 
 class OrderResource extends Resource
@@ -41,10 +42,12 @@ class OrderResource extends Resource
         return parent::getEloquentQuery()->with(['customer', 'items.motorModel']);
     }
 
-    /** Genel aramada müşteri sipariş no'su ve müşteri adıyla da bulunur. */
+    /** Genel aramada müşteri sipariş no'su ve (müşteri görebilene) müşteri adıyla da bulunur. */
     public static function getGloballySearchableAttributes(): array
     {
-        return ['order_number', 'customer_reference', 'customer.name'];
+        return Auth::user()?->canSeeCustomers()
+            ? ['order_number', 'customer_reference', 'customer.name']
+            : ['order_number', 'customer_reference'];
     }
 
     public static function form(Schema $schema): Schema

@@ -160,20 +160,14 @@ it('aktif müşteride "Yeni sipariş" müşteriyi önceden seçili açar', funct
         ->assertSee($customer->name);
 });
 
-it('operatör ve depo müşterileri yalnızca görüntüler', function (string $role) {
-    $user = User::factory()->{$role}()->create();
+it('operatör ve depo cari hesapları göremez', function (string $role) {
     $customer = Customer::factory()->create();
+    $this->actingAs(User::factory()->{$role}()->create());
 
-    $this->actingAs($user);
-    $this->get(CustomerResource::getUrl('index'))->assertOk()->assertSee($customer->name);
-    $this->get(CustomerResource::getUrl('view', ['record' => $customer]))->assertOk();
+    $this->get(CustomerResource::getUrl('index'))->assertForbidden();
+    $this->get(CustomerResource::getUrl('view', ['record' => $customer]))->assertForbidden();
     $this->get(CustomerResource::getUrl('create'))->assertForbidden();
-    $this->get(CustomerResource::getUrl('edit', ['record' => $customer]))->assertForbidden();
-
-    Livewire::test(ViewCustomer::class, ['record' => $customer->getRouteKey()])
-        ->assertActionHidden('edit')
-        ->assertActionHidden('deactivate')
-        ->assertActionHidden('newOrder');
+    expect(CustomerResource::canViewAny())->toBeFalse();
 })->with(['operator', 'warehouse']);
 
 it('telefon yaygın Türkçe biçimlerde girilebilir', function (string $phone) {

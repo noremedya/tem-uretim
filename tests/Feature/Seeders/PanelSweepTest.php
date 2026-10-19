@@ -66,9 +66,10 @@ function sweepExpectations(): array
         'motor-models/create' => ['yonetici'],
         'motor-models/{record}' => $all,
         'motor-models/{record}/edit' => ['yonetici'],
-        'customers' => $all,
+        // Operatör ve depo cari hesapları görmez.
+        'customers' => ['yonetici', 'muhasebe'],
         'customers/create' => ['yonetici', 'muhasebe'],
-        'customers/{record}' => $all,
+        'customers/{record}' => ['yonetici', 'muhasebe'],
         'customers/{record}/edit' => ['yonetici', 'muhasebe'],
         'orders' => $all,
         'orders/create' => ['yonetici'],
@@ -89,10 +90,10 @@ function sweepExpectations(): array
         'exchange-rates' => ['yonetici', 'muhasebe'],
         'exchange-rates/create' => ['yonetici', 'muhasebe'],
         'exchange-rates/{record}/edit' => ['yonetici', 'muhasebe'],
-        // Depo alış faturalarını salt okunur görür; kesilmiş fatura düzenlenemez.
-        'invoices' => ['yonetici', 'depo', 'muhasebe'],
+        // Faturaları yalnızca yönetici ve muhasebe görür; kesilmiş fatura düzenlenemez.
+        'invoices' => ['yonetici', 'muhasebe'],
         'invoices/create' => ['yonetici', 'muhasebe'],
-        'invoices/{record}' => ['yonetici', 'depo', 'muhasebe'],
+        'invoices/{record}' => ['yonetici', 'muhasebe'],
         'invoices/{record}/edit' => [],
         'payments' => ['yonetici', 'muhasebe'],
         'payments/create' => ['yonetici', 'muhasebe'],

@@ -13,6 +13,7 @@ use Filament\Tables\Filters\Filter;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 
 class OrdersTable
 {
@@ -29,7 +30,7 @@ class OrdersTable
                     ->label('Müşteri')
                     ->searchable()
                     ->sortable()
-                    ->visible($showCustomer),
+                    ->visible(fn (): bool => $showCustomer && (Auth::user()?->canSeeCustomers() ?? false)),
                 TextColumn::make('customer_reference')
                     ->label('Müşteri sipariş no')
                     ->searchable()
@@ -64,7 +65,7 @@ class OrdersTable
                     ->relationship('customer', 'name')
                     ->searchable()
                     ->preload()
-                    ->visible($showCustomer),
+                    ->visible(fn (): bool => $showCustomer && (Auth::user()?->canSeeCustomers() ?? false)),
                 Filter::make('order_date')
                     ->label('Sipariş tarihi')
                     ->schema([

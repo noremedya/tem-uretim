@@ -136,22 +136,13 @@ it('taslak düzenlenir: para birimi değişince kur yeniden dolar; taslak silini
     expect(Invoice::count())->toBe(0);
 });
 
-it('depo yalnızca alış faturalarını salt okunur görür', function () {
-    $sale = newDraft(InvoiceType::SalesInvoice, $this->customer);
+it('depo faturalara erişemez (alış faturaları dahil)', function () {
     $purchase = newDraft(InvoiceType::PurchaseInvoice, $this->supplier);
     $this->actingAs(User::factory()->warehouse()->create());
 
-    Livewire::test(ListInvoices::class)
-        ->assertCanSeeTableRecords([$purchase])
-        ->assertCanNotSeeTableRecords([$sale])
-        ->assertActionHidden('create');
-
-    $this->get(InvoiceResource::getUrl('view', ['record' => $purchase]))->assertOk();
-    $this->get(InvoiceResource::getUrl('view', ['record' => $sale]))->assertNotFound();
+    $this->get(InvoiceResource::getUrl('index'))->assertForbidden();
+    $this->get(InvoiceResource::getUrl('view', ['record' => $purchase]))->assertForbidden();
     $this->get(InvoiceResource::getUrl('create'))->assertForbidden();
-
-    Livewire::test(LinesRelationManager::class, ['ownerRecord' => $purchase, 'pageClass' => ViewInvoice::class])
-        ->assertActionHidden(TestAction::make('addLine')->table());
 });
 
 it('operatör faturalara erişemez; sayfalar açılır', function () {

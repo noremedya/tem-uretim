@@ -36,6 +36,7 @@ class OrderInfolist
                         TextEntry::make('status')->label('Durum')->badge(),
                         TextEntry::make('customer.name')
                             ->label('Müşteri')
+                            ->visible(fn (): bool => Auth::user()?->canSeeCustomers() ?? false)
                             ->url(fn (Order $record): ?string => Auth::user()->can('view', $record->customer)
                                 ? CustomerResource::getUrl('view', ['record' => $record->customer])
                                 : null),

@@ -233,7 +233,7 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 |---|---|---|---|---|
 | Kullanıcı yönetimi | ✓ | | | |
 | Motor modeli, reçete | ✓ | görüntüleme | görüntüleme | görüntüleme |
-| Cari hesaplar (müşteri, tedarikçi) | ✓ | görüntüleme | görüntüleme | ✓ |
+| Cari hesaplar (müşteri, tedarikçi) | ✓ | | | ✓ |
 | Sipariş | ✓ | görüntüleme | görüntüleme | görüntüleme |
 | İş emri görüntüleme | ✓ | kendine atananlar | ✓ (salt okunur) | |
 | İş emri oluşturma/atama | ✓ | | | |
@@ -246,10 +246,11 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 | Üretilen motorlar | ✓ | görüntüleme | görüntüleme | görüntüleme |
 | Sevk | ✓ | | ✓ | |
 | Fiyatlar, döviz kurları | ✓ | | | ✓ |
-| Faturalar, tahsilat/ödeme, kasa/banka, Luca aktarımı (Aşama 5b–5d) | ✓ | | alış faturaları görüntüleme | ✓ |
+| Faturalar, tahsilat/ödeme, kasa/banka, Luca aktarımı (Aşama 5b–5d) | ✓ | | | ✓ |
 | Raporlar ve Excel | ✓ | | stok raporları | |
 | Denetim izi | ✓ | | | |
 
+- **Operatör ve depo müşteri bilgisi görmez:** cari hesap ekranları kapalı; sipariş listesi/detayı, genel arama, Hızlı İşlem motor kartı ve iş emri etiketinde müşteri adı gösterilmez (yalnızca sipariş no ve müşteri sipariş no). Kontrol `User::canSeeCustomers()` (`customers.view`). Depo faturalara da erişmez (`invoices.view_purchase` atanmaz).
 - Bir kullanıcının **birden fazla rolü** olabilir (yetkiler birleşir); **en az bir rol zorunludur.** Kullanıcı formunda roller çoklu seçimle atanır.
 - Giriş **kullanıcı adı (username) + şifre** ile yapılır; e-posta isteğe bağlıdır. Şifre sıfırlamayı yönetici yapar (e-posta ile sıfırlama yok).
 - Kullanıcı adı yalnızca ASCII'dir (küçük harf, rakam, `.`, `_`, `-`). Formda, girişte ve komutta Türkçe karakterler otomatik çevrilir (ş→s, ç→c, ğ→g, ü→u, ö→o, ı→i, İ→i) ve büyük harfler küçültülür; kullanıcı hata almadan düzeltilmiş hâlini görür.

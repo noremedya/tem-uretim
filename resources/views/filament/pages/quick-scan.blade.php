@@ -82,7 +82,7 @@
                     <p>Durum: <x-filament::badge :color="$motor->status->getColor()" class="inline-flex">{{ $motor->status->getLabel() }}</x-filament::badge></p>
                     <p>Üretim tarihi: {{ $motor->production_date->format('d.m.Y') }} · İş emri: {{ $motor->workOrder->work_order_number }}</p>
                     @if ($motor->order)
-                        <p>Sipariş: {{ $motor->order->order_number }} — {{ $motor->order->customer->name }}</p>
+                        <p>Sipariş: {{ $motor->order->order_number }}@if (auth()->user()->canSeeCustomers()) — {{ $motor->order->customer->name }}@endif</p>
                     @endif
                     @if ($motor->shipped_at)
                         <p>Sevk: {{ $motor->shipped_at->format('d.m.Y H:i') }} ({{ $motor->shippedBy?->name }})</p>

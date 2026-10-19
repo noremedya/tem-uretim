@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\Permission;
 use App\Models\Concerns\HasOptimisticLocking;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
@@ -67,6 +68,12 @@ class User extends Authenticatable implements FilamentUser, HasName
     protected function email(): Attribute
     {
         return Attribute::make(set: fn (?string $value) => filled($value) ? mb_strtolower(trim($value)) : null);
+    }
+
+    /** Cari hesapları ve müşteri adlarını görebilir mi (operatör ve depo göremez)? */
+    public function canSeeCustomers(): bool
+    {
+        return $this->can(Permission::CustomersView);
     }
 
     public function canAccessPanel(Panel $panel): bool
