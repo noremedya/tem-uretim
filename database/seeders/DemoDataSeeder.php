@@ -4,13 +4,17 @@ namespace Database\Seeders;
 
 use App\Enums\CashAccountKind;
 use App\Enums\Currency;
+use App\Enums\ExportType;
+use App\Enums\Incoterm;
 use App\Enums\InvoiceType;
 use App\Enums\MotorPhase;
 use App\Enums\MotorUnitStatus;
+use App\Enums\PackageType;
 use App\Enums\PartType;
 use App\Enums\PaymentDirection;
 use App\Enums\PaymentMethod;
 use App\Enums\Role;
+use App\Enums\TransportMode;
 use App\Enums\WorkOrderStatus;
 use App\Models\CashAccount;
 use App\Models\Cheque;
@@ -249,19 +253,20 @@ class DemoDataSeeder extends Seeder
         $boms = app(BomService::class);
         $piece = $this->units['Adet']->getKey();
 
-        // çerçeve => [model kodu, ad, kW, d/dk, kutup, rulman, ölçek, verim sınıfı]
+        // çerçeve => [model kodu, ad, kW, d/dk, kutup, rulman, ölçek, verim sınıfı, GTİP, net ağırlık]
+        // GTİP değerleri demo içindir; gerçek kodlar dış ticaret sorumlusuyla teyit edilmelidir.
         $frames = [
-            '71' => ['M71-037-4', '71 Tip 0,37 kW 4 Kutup Trifaze', '0,37', 1400, 4, 'KOM-RUL-6202', '1', 'IE2'],
-            '80' => ['M80-075-4', '80 Tip 0,75 kW 4 Kutup Trifaze', '0,75', 1420, 4, 'KOM-RUL-6204', '1,6', 'IE3'],
-            '90S' => ['M90S-110-4', '90S Tip 1,1 kW 4 Kutup Trifaze', '1,1', 1430, 4, 'KOM-RUL-6205', '2,2', 'IE3'],
+            '71' => ['M71-037-4', '71 Tip 0,37 kW 4 Kutup Trifaze', '0,37', 1400, 4, 'KOM-RUL-6202', '1', 'IE2', '850151000000', '5,8'],
+            '80' => ['M80-075-4', '80 Tip 0,75 kW 4 Kutup Trifaze', '0,75', 1420, 4, 'KOM-RUL-6204', '1,6', 'IE3', '850151000000', '9,6'],
+            '90S' => ['M90S-110-4', '90S Tip 1,1 kW 4 Kutup Trifaze', '1,1', 1430, 4, 'KOM-RUL-6205', '2,2', 'IE3', '850152200000', '14,2'],
         ];
 
-        foreach ($frames as $frame => [$code, $name, $kw, $rpm, $poles, $bearing, $scale, $efficiency]) {
+        foreach ($frames as $frame => [$code, $name, $kw, $rpm, $poles, $bearing, $scale, $efficiency, $gtip, $weight]) {
             $model = $models->create([
                 'code' => $code, 'name' => $name, 'power_kw' => $kw, 'speed_rpm' => $rpm, 'voltage' => '230/400 V',
                 'frequency_hz' => 50, 'pole_count' => $poles, 'frame_size' => $frame, 'phase' => MotorPhase::ThreePhase,
                 'mounting_type' => 'B3', 'protection_class' => 'IP55', 'efficiency_class' => $efficiency,
-                'description' => 'Alüminyum gövdeli asenkron motor',
+                'description' => 'Alüminyum gövdeli asenkron motor', 'gtip_code' => $gtip, 'net_weight_kg' => $weight,
             ]);
             $this->models[$frame] = $model;
 
@@ -323,6 +328,9 @@ class DemoDataSeeder extends Seeder
             'anadolu' => ['Anadolu Konveyör Makine San. Tic. Ltd. Şti.', true, false, 15, Currency::TRY, '0312 815 20 30', 'Sincan', 'Ankara Sanayi Sitesi 1. Blok No: 22, Sincan / Ankara', '234567891'],
             'ege' => ['Ege Tarım Makinaları A.Ş.', true, false, 60, Currency::TRY, '0256 231 77 44', 'Efeler', 'İzmir Yolu 8. km, Efeler / Aydın', '345678912'],
             'marmara' => ['Marmara Su Teknolojileri A.Ş.', true, false, 30, Currency::EUR, '0216 593 18 00', 'Tuzla', 'Tuzla Kimya OSB, Kristal Cad. No: 4, Tuzla / İstanbul', '456789123'],
+            // Doğrudan ihracat (KDV 11/1-a) ve ihraç kayıtlı satış (KDV 11/1-c) yapılan cariler.
+            'hellas' => ['Hellas Pumps S.A.', true, false, 45, Currency::EUR, '+30 2310 795 400', null, 'Sindos Industrial Area, Block 31, 57022 Thessaloniki', null],
+            'ihracatci' => ['Anadolu Dış Ticaret A.Ş.', true, false, 30, Currency::TRY, '0212 444 32 10', 'Bakırköy', 'Ataköy 7-8-9-10. Kısım, Bakırköy / İstanbul', '135792468'],
             'ozturk' => ['Öztürk Elektrik Motor Servis Ltd. Şti.', true, true, 15, Currency::TRY, '0262 641 09 09', 'Gebze', 'Gebze Plastikçiler OSB, Gebze / Kocaeli', '567891234'],
             'demirsan' => ['Demirsan Silisli Sac San. Ltd. Şti.', false, true, 30, Currency::TRY, '0262 751 33 00', 'Dilovası', 'Dilovası OSB 2. Kısım, Kocaeli', '678912345'],
             'kablotel' => ['Kablo-Tel Bakır Sanayi A.Ş.', false, true, 45, Currency::TRY, '0216 394 66 20', 'Kartal', 'Yakacık Sanayi, Kartal / İstanbul', '789123456'],
@@ -331,10 +339,13 @@ class DemoDataSeeder extends Seeder
         ];
 
         foreach ($customers as $key => [$name, $isCustomer, $isSupplier, $term, $currency, $phone, $office, $address, $firstNine]) {
+            $foreign = $key === 'hellas';
             $this->customers[$key] = $service->create([
                 'name' => $name, 'is_customer' => $isCustomer, 'is_supplier' => $isSupplier, 'payment_term_days' => $term,
                 'default_currency' => $currency, 'phone' => $phone, 'tax_office' => $office, 'address' => $address,
-                'tax_number' => $firstNine.TaxNumber::vknCheckDigit($firstNine),
+                'tax_number' => $firstNine ? $firstNine.TaxNumber::vknCheckDigit($firstNine) : null,
+                'country_code' => $foreign ? 'GR' : 'TR',
+                'foreign_tax_id' => $foreign ? 'EL094019245' : null,
                 'email' => 'muhasebe@'.$key.'.example',
             ]);
         }
@@ -368,6 +379,7 @@ class DemoDataSeeder extends Seeder
 
         foreach (['71' => '88', '80' => '142', '90S' => '195'] as $frame => $price) {
             $prices->create(['motor_model_id' => $this->models[$frame]->getKey(), 'customer_id' => $this->customers['marmara']->getKey(), 'currency' => Currency::EUR, 'unit_price' => $price, 'valid_from' => $start]);
+            $prices->create(['motor_model_id' => $this->models[$frame]->getKey(), 'customer_id' => $this->customers['hellas']->getKey(), 'currency' => Currency::EUR, 'unit_price' => (string) round((int) $price * 0.95), 'valid_from' => $start]);
         }
 
         // İleri tarihli zam: liste fiyatları gelecek ayın başında %8 artar.
@@ -418,7 +430,7 @@ class DemoDataSeeder extends Seeder
             $this->parts['ES-KESMEYAGI'], '10', $this->users['depo'], 'Atölye kullanımı (torna)'
         )));
 
-        $customerCycle = ['akdeniz', 'bursafan', 'anadolu', 'ege', 'marmara', 'ozturk', 'akdeniz', 'bursafan'];
+        $customerCycle = ['akdeniz', 'hellas', 'anadolu', 'ege', 'ihracatci', 'marmara', 'ozturk', 'hellas', 'bursafan', 'ihracatci'];
 
         for ($w = $this->weeks - 1; $w >= 0; $w--) {
             $monday = $thisMonday->subWeeks($w);
@@ -679,7 +691,15 @@ class DemoDataSeeder extends Seeder
 
         $this->as('muhasebe', function () use ($order, $customer, $discount): void {
             $invoices = app(InvoiceService::class);
-            $invoice = $invoices->createDraft(['type' => InvoiceType::SalesInvoice, 'customer_id' => $customer->getKey(), 'notes' => "Sipariş {$order->order_number}"]);
+            $key = $this->customerKey($customer);
+            $invoice = $invoices->createDraft([
+                'type' => InvoiceType::SalesInvoice, 'customer_id' => $customer->getKey(), 'notes' => "Sipariş {$order->order_number}",
+                'export_type' => match ($key) {
+                    'hellas' => ExportType::Export,
+                    'ihracatci' => ExportType::RegisteredExport,
+                    default => null,
+                },
+            ]);
             $hasLine = false;
 
             foreach ($order->items as $item) {
@@ -704,9 +724,34 @@ class DemoDataSeeder extends Seeder
                 $invoices->addLine($invoice, ['description' => 'Nakliye', 'quantity' => 1, 'unit' => 'Adet', 'unit_price' => $customer->default_currency === Currency::EUR ? '45' : '1750']);
             }
 
+            if ($key === 'hellas') {
+                // Kap ve ağırlık: 8 motorluk paletler, ambalajla brüt ağırlık %15 fazla (net ağırlık kesimde hesaplanır).
+                $motors = MotorUnit::query()->whereHas('invoiceLines', fn ($q) => $q->where('invoice_id', $invoice->getKey()))->with('motorModel')->get();
+                $net = $motors->reduce(fn (string $sum, MotorUnit $m) => Quantity::add($sum, (string) $m->motorModel->net_weight_kg), '0');
+                $invoice = $invoices->updateDraft($invoice->fresh(), [
+                    'incoterm' => Incoterm::FCA, 'transport_mode' => TransportMode::Road, 'package_type' => PackageType::Pallet,
+                    'package_count' => (int) ceil($motors->count() / 8), 'gross_weight_kg' => Quantity::add(Quantity::mul($net, '1.15'), '25'),
+                ], $invoice->fresh()->lock_version);
+            }
+
             $invoice = $invoices->issue($invoice->fresh(), $this->users['muhasebe']);
             $this->scheduleCollection($invoice);
+            $this->scheduleCustomsDeclaration($invoice);
         });
+    }
+
+    /** Gümrük beyannamesi: ihracatta birkaç gün içinde, ihraç kayıtlı satışta ihracatçı malı çıkarınca (yaklaşık 3 hafta). */
+    private function scheduleCustomsDeclaration(Invoice $invoice): void
+    {
+        if ($invoice->export_type === null) {
+            return;
+        }
+
+        $date = CarbonImmutable::parse($invoice->invoice_date)->addDays($invoice->export_type === ExportType::Export ? 2 : 20)->setTime(11, 30);
+
+        $this->schedule($date, fn () => $this->as('muhasebe', fn () => app(InvoiceService::class)->recordCustomsDeclaration(
+            $invoice, $date->format('y').'341300EX'.str_pad((string) $this->rand(1, 999999), 6, '0', STR_PAD_LEFT), $date, $this->users['muhasebe']
+        )));
     }
 
     /** Müşterinin ödeme alışkanlığına göre tahsilat. */
@@ -721,6 +766,8 @@ class DemoDataSeeder extends Seeder
             'bursafan' => $this->schedule($date->addDays(40), fn () => $this->receive($key, $total, PaymentMethod::Bank)),
             'ozturk' => $this->schedule($date->addDays(12), fn () => $this->receive($key, $total, PaymentMethod::Bank)),
             'marmara' => $this->schedule($date->addDays(25), fn () => $this->receive($key, $total, PaymentMethod::Bank)),
+            'hellas' => $this->schedule($date->addDays(35), fn () => $this->receive($key, $total, PaymentMethod::Bank)),
+            'ihracatci' => $this->schedule($date->addDays(30), fn () => $this->receive($key, $total, PaymentMethod::Bank)),
             'ege' => $this->schedule($date->addDays(5), fn () => $this->receive($key, $total, PaymentMethod::Cheque, $date->addDays(65))),
             // Anadolu yalnızca ilk faturasının bir kısmını öder: vadesi geçmiş alacak örneği.
             'anadolu' => Invoice::query()->where('customer_id', $invoice->customer_id)->count() === 1

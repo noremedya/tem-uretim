@@ -65,7 +65,7 @@ class InvoiceLine extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['invoice_id', 'part_id', 'motor_model_id', 'description', 'quantity', 'unit', 'unit_price', 'discount_rate', 'vat_rate', 'line_total'])
+            ->logOnly(['invoice_id', 'part_id', 'motor_model_id', 'description', 'quantity', 'unit', 'unit_price', 'discount_rate', 'vat_rate', 'line_total', 'gtip_code'])
             ->logOnlyDirty()
             ->dontLogEmptyChanges();
     }

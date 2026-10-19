@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Exceptions\BusinessRuleException;
 use App\Models\MotorModel;
 use App\Models\Part;
+use App\Support\Gtip;
 use App\Support\Quantity;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -112,6 +113,20 @@ class MotorModelService
             }
 
             $data['power_kw'] = $power;
+        }
+
+        if (array_key_exists('gtip_code', $data)) {
+            $data['gtip_code'] = Gtip::normalize($data['gtip_code']);
+        }
+
+        if (($data['net_weight_kg'] ?? null) !== null) {
+            $weight = Quantity::parse($data['net_weight_kg']);
+
+            if (Quantity::compare($weight, '0') <= 0) {
+                throw new BusinessRuleException('Net ağırlık sıfırdan büyük olmalıdır.');
+            }
+
+            $data['net_weight_kg'] = $weight;
         }
 
         foreach (self::INTEGER_FIELDS as $field => $label) {

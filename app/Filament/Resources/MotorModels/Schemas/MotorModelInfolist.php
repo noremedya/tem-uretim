@@ -4,6 +4,7 @@ namespace App\Filament\Resources\MotorModels\Schemas;
 
 use App\Filament\Resources\Parts\PartResource;
 use App\Models\MotorModel;
+use App\Support\Gtip;
 use App\Support\Quantity;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -53,6 +54,8 @@ class MotorModelInfolist
                         TextEntry::make('mounting_type')->label('Montaj şekli')->placeholder('—'),
                         TextEntry::make('protection_class')->label('Koruma sınıfı')->placeholder('—'),
                         TextEntry::make('efficiency_class')->label('Verim sınıfı')->placeholder('—'),
+                        TextEntry::make('gtip_code')->label('GTİP')->placeholder('—')->formatStateUsing(fn (?string $state): ?string => Gtip::format($state)),
+                        TextEntry::make('net_weight_kg')->label('Net ağırlık')->placeholder('—')->formatStateUsing(fn ($state): string => Quantity::format((string) $state, 'kg')),
                     ]),
             ]);
     }

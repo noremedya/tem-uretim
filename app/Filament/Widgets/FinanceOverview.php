@@ -5,7 +5,9 @@ namespace App\Filament\Widgets;
 use App\Enums\Permission;
 use App\Filament\Pages\OverdueReceivables;
 use App\Filament\Resources\CashAccounts\CashAccountResource;
+use App\Filament\Resources\Invoices\InvoiceResource;
 use App\Models\CashAccount;
+use App\Models\Invoice;
 use App\Services\LedgerService;
 use App\Services\StatementService;
 use App\Support\Money;
@@ -13,7 +15,7 @@ use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
 use Illuminate\Support\Facades\Auth;
 
-/** Ön muhasebe özeti (yönetici, muhasebe): vadesi geçmiş alacak toplamı ve kasa/banka bakiyeleri. */
+/** Ön muhasebe özeti (yönetici, muhasebe): vadesi geçmiş alacak, beklenen gümrük beyannameleri, kasa/banka bakiyeleri. */
 class FinanceOverview extends StatsOverviewWidget
 {
     protected static ?int $sort = 5;
@@ -38,6 +40,17 @@ class FinanceOverview extends StatsOverviewWidget
                 ->color($overdue->isEmpty() ? 'success' : 'danger')
                 ->url(OverdueReceivables::getUrl()),
         ];
+
+        // İhracat/ihraç kayıtlı faturalarda beklenen gümrük beyannameleri (yalnızca varsa gösterilir).
+        $awaiting = Invoice::query()->awaitingCustomsDeclaration()->count();
+
+        if ($awaiting > 0) {
+            $late = Invoice::query()->overdueRegisteredExport()->count();
+            $stats[] = Stat::make('Beklenen gümrük beyannamesi', (string) $awaiting)
+                ->description($late > 0 ? "{$late} ihraç kayıtlı satışın süresi geçti" : 'İhracat ve ihraç kayıtlı faturalar')
+                ->color($late > 0 ? 'danger' : 'warning')
+                ->url(InvoiceResource::getUrl('index'));
+        }
 
         $ledger = app(LedgerService::class);
 

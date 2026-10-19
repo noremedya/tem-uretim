@@ -3,11 +3,17 @@
 namespace App\Models;
 
 use App\Enums\Currency;
+use App\Enums\ExportType;
+use App\Enums\Incoterm;
 use App\Enums\InvoiceDirection;
 use App\Enums\InvoiceKind;
 use App\Enums\InvoiceStatus;
 use App\Enums\InvoiceType;
+use App\Enums\PackageType;
+use App\Enums\TransportMode;
 use App\Models\Concerns\HasOptimisticLocking;
+use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -41,6 +47,15 @@ class Invoice extends Model
             'grand_total_try' => 'decimal:2',
             'issued_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'export_type' => ExportType::class,
+            'deferred_vat_total' => 'decimal:2',
+            'incoterm' => Incoterm::class,
+            'transport_mode' => TransportMode::class,
+            'package_count' => 'integer',
+            'package_type' => PackageType::class,
+            'gross_weight_kg' => 'decimal:3',
+            'net_weight_kg' => 'decimal:3',
+            'customs_declaration_date' => 'date',
         ];
     }
 
@@ -58,6 +73,36 @@ class Invoice extends Model
     public function displayNumber(): string
     {
         return $this->invoice_number ?? $this->counterparty_number ?? "Taslak #{$this->getKey()}";
+    }
+
+    /**
+     * İhraç kayıtlı satışta ihracatın yapılması gereken son gün (fatura tarihi + config accounting.registered_export_months).
+     * Bu tarihe kadar ihracatçının gümrük beyannamesi işlenmezse tecil edilen KDV tahsil edilir.
+     */
+    public function exportDeadline(): ?CarbonImmutable
+    {
+        if ($this->export_type !== ExportType::RegisteredExport || $this->invoice_date === null) {
+            return null;
+        }
+
+        return CarbonImmutable::parse($this->invoice_date)->addMonthsNoOverflow((int) config('accounting.registered_export_months'));
+    }
+
+    /** Kesilmiş, iptal edilmemiş, gümrük beyannamesi henüz işlenmemiş ihracat/ihraç kayıtlı faturalar. */
+    public function scopeAwaitingCustomsDeclaration(Builder $query, ?ExportType $type = null): void
+    {
+        $query->where('status', InvoiceStatus::Issued->value)
+            ->whereNull('customs_declaration_number')
+            ->when($type, fn (Builder $q) => $q->where('export_type', $type->value), fn (Builder $q) => $q->whereNotNull('export_type'));
+    }
+
+    /** Beyannamesi gelmemiş ve süresi geçmiş ihraç kayıtlı satışlar. */
+    public function scopeOverdueRegisteredExport(Builder $query): void
+    {
+        $months = (int) config('accounting.registered_export_months');
+
+        $query->awaitingCustomsDeclaration(ExportType::RegisteredExport)
+            ->whereRaw('invoice_date + make_interval(months => ?) < CURRENT_DATE', [$months]);
     }
 
     /** @return BelongsTo<Customer, $this> */
@@ -90,7 +135,8 @@ class Invoice extends Model
             ->logOnly([
                 'direction', 'kind', 'status', 'customer_id', 'invoice_number', 'counterparty_number', 'original_invoice_id',
                 'invoice_date', 'due_date', 'currency', 'exchange_rate', 'grand_total', 'grand_total_try', 'notes',
-                'cancellation_reason',
+                'cancellation_reason', 'export_type', 'incoterm', 'transport_mode', 'package_count', 'package_type',
+                'gross_weight_kg', 'net_weight_kg', 'customs_declaration_number', 'customs_declaration_date',
             ])
             ->logOnlyDirty()
             ->dontLogEmptyChanges();

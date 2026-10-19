@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Invoices\Pages;
 
+use App\Enums\ExportType;
 use App\Exceptions\BusinessRuleException;
 use App\Filament\Resources\Invoices\InvoiceResource;
 use App\Filament\Support\AuditTrailAction;
@@ -10,7 +11,9 @@ use App\Models\Invoice;
 use App\Services\InvoiceService;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Support\Icons\Heroicon;
@@ -52,6 +55,28 @@ class ViewInvoice extends ViewRecord
                     $this->run($action, fn () => app(InvoiceService::class)->cancel($record, Auth::user(), $data['reason']));
                     $record->refresh();
                     Notification::make()->success()->title('Fatura iptal edildi')->send();
+                }),
+            Action::make('customsDeclaration')
+                ->label('Gümrük beyannamesi')
+                ->icon(Heroicon::OutlinedDocumentCheck)
+                ->color('gray')
+                ->authorize('recordCustomsDeclaration')
+                ->modalHeading('Gümrük beyannamesi')
+                ->modalDescription(fn (Invoice $record): string => $record->export_type === ExportType::RegisteredExport
+                    ? 'İhracatçının malı ihraç ettiği gümrük beyannamesi. Son gün: '.$record->exportDeadline()->format('d.m.Y').'.'
+                    : 'Bu faturanın gümrük çıkış beyannamesi.')
+                ->fillForm(fn (Invoice $record): array => [
+                    'number' => $record->customs_declaration_number,
+                    'date' => $record->customs_declaration_date?->toDateString(),
+                ])
+                ->schema([
+                    TextInput::make('number')->label('Beyanname no')->required()->maxLength(30),
+                    DatePicker::make('date')->label('Beyanname tarihi')->required()->native(false)->displayFormat('d.m.Y')->maxDate(today()),
+                ])
+                ->action(function (Invoice $record, array $data, Action $action): void {
+                    $this->run($action, fn () => app(InvoiceService::class)->recordCustomsDeclaration($record, $data['number'], $data['date'], Auth::user()));
+                    $record->refresh();
+                    Notification::make()->success()->title('Gümrük beyannamesi kaydedildi')->send();
                 }),
             Action::make('deleteDraft')
                 ->label('Taslağı sil')

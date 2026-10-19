@@ -45,6 +45,12 @@ class InvoicePolicy
         return $actor->can(Permission::InvoicesManage) && $invoice->status === InvoiceStatus::Issued;
     }
 
+    /** Kesilmiş ihracat / ihraç kayıtlı faturaya gümrük beyannamesi işlenir. */
+    public function recordCustomsDeclaration(User $actor, Invoice $invoice): bool
+    {
+        return $actor->can(Permission::InvoicesManage) && $invoice->status === InvoiceStatus::Issued && $invoice->export_type !== null;
+    }
+
     /** Yalnızca taslak silinir. */
     public function delete(User $actor, Invoice $invoice): bool
     {

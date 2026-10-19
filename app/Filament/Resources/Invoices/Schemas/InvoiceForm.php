@@ -3,12 +3,17 @@
 namespace App\Filament\Resources\Invoices\Schemas;
 
 use App\Enums\Currency;
+use App\Enums\ExportType;
+use App\Enums\Incoterm;
 use App\Enums\InvoiceKind;
 use App\Enums\InvoiceStatus;
 use App\Enums\InvoiceType;
+use App\Enums\PackageType;
+use App\Enums\TransportMode;
 use App\Models\Customer;
 use App\Models\Invoice;
 use App\Support\Money;
+use App\Support\Quantity;
 use Closure;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
@@ -83,6 +88,29 @@ class InvoiceForm
                         ->helperText('Boş bırakılırsa fatura tarihinin kuruyla dolar.'),
                     Textarea::make('notes')->label('Notlar')->rows(2)->columnSpanFull(),
                 ]),
+            Section::make('İhracat')
+                ->columns(3)
+                ->columnSpanFull()
+                ->visible(fn (Get $get): bool => static::type($get('type')) === InvoiceType::SalesInvoice)
+                ->schema([
+                    Select::make('export_type')
+                        ->label('İhracat türü')
+                        ->options(ExportType::class)
+                        ->placeholder('Yurt içi satış')
+                        ->live()
+                        ->helperText('İhracatta (11/1-a) KDV %0 olur. İhraç kayıtlı satışta (11/1-c) KDV hesaplanır, tecil edilir; cariye KDV hariç tutar yazılır.'),
+                    Select::make('incoterm')->label('Teslim şekli')->options(Incoterm::class)->visible(fn (Get $get): bool => static::exportType($get('export_type')) === ExportType::Export),
+                    Select::make('transport_mode')->label('Gönderim şekli')->options(TransportMode::class)->visible(fn (Get $get): bool => static::exportType($get('export_type')) === ExportType::Export),
+                    TextInput::make('package_count')->label('Kap sayısı')->integer()->minValue(1)->visible(fn (Get $get): bool => static::exportType($get('export_type')) === ExportType::Export),
+                    Select::make('package_type')->label('Kap cinsi')->options(PackageType::class)->visible(fn (Get $get): bool => static::exportType($get('export_type')) === ExportType::Export),
+                    TextInput::make('gross_weight_kg')->label('Brüt ağırlık')->suffix('kg')->inputMode('decimal')
+                        ->formatStateUsing(fn ($state): ?string => Quantity::toInput($state))
+                        ->visible(fn (Get $get): bool => static::exportType($get('export_type')) === ExportType::Export),
+                    TextInput::make('net_weight_kg')->label('Net ağırlık')->suffix('kg')->inputMode('decimal')
+                        ->formatStateUsing(fn ($state): ?string => Quantity::toInput($state))
+                        ->visible(fn (Get $get): bool => static::exportType($get('export_type')) === ExportType::Export)
+                        ->helperText('Boş bırakılırsa kesimde motor modellerinin net ağırlığından hesaplanır.'),
+                ]),
         ]);
     }
 
@@ -90,6 +118,11 @@ class InvoiceForm
     public static function type(mixed $state): ?InvoiceType
     {
         return $state instanceof InvoiceType ? $state : InvoiceType::tryFrom((string) $state);
+    }
+
+    public static function exportType(mixed $state): ?ExportType
+    {
+        return $state instanceof ExportType ? $state : ExportType::tryFrom((string) $state);
     }
 
     public static function currency(mixed $state): ?Currency

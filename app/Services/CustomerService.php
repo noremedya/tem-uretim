@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\Currency;
 use App\Exceptions\BusinessRuleException;
 use App\Models\Customer;
+use App\Support\Country;
 use App\Support\TaxNumber;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Collection;
@@ -110,6 +111,14 @@ class CustomerService
             throw new BusinessRuleException('Telefon zorunludur.');
         }
 
+        if (! $customer->isDomestic() && ($customer->tax_number !== null || $customer->tax_office !== null)) {
+            throw new BusinessRuleException('Yurt dışındaki cariye Türk vergi no ve vergi dairesi girilmez; yabancı vergi numarası alanını kullanın.');
+        }
+
+        if ($customer->isDomestic() && $customer->foreign_tax_id !== null) {
+            throw new BusinessRuleException('Yabancı vergi numarası yalnızca yurt dışındaki cariye girilir.');
+        }
+
         if (($customer->tax_number === null) !== ($customer->tax_office === null)) {
             throw new BusinessRuleException('Vergi no ve vergi dairesi birlikte girilmelidir.');
         }
@@ -155,7 +164,15 @@ class CustomerService
             }
         }
 
-        foreach (['tax_office', 'phone', 'address'] as $field) {
+        if (array_key_exists('country_code', $data)) {
+            $data['country_code'] = filled($data['country_code']) ? mb_strtoupper(trim($data['country_code'])) : Country::TURKEY;
+
+            if (! Country::isValid($data['country_code'])) {
+                throw new BusinessRuleException('Geçersiz ülke.');
+            }
+        }
+
+        foreach (['tax_office', 'phone', 'address', 'foreign_tax_id'] as $field) {
             if (array_key_exists($field, $data)) {
                 $data[$field] = filled($data[$field]) ? trim($data[$field]) : null;
             }

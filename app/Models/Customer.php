@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\Currency;
 use App\Models\Concerns\HasOptimisticLocking;
+use App\Support\Country;
 use Database\Factories\CustomerFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -22,7 +23,7 @@ class Customer extends Model
 
     public const FIELDS = [
         'name', 'tax_number', 'tax_office', 'phone', 'email', 'address',
-        'is_customer', 'is_supplier', 'payment_term_days', 'default_currency',
+        'is_customer', 'is_supplier', 'payment_term_days', 'default_currency', 'country_code', 'foreign_tax_id',
     ];
 
     /** Veritabanı varsayılanlarıyla aynı (yeni kayıt kaydedilmeden önce de geçerli olsun). */
@@ -31,6 +32,7 @@ class Customer extends Model
         'is_supplier' => false,
         'payment_term_days' => 0,
         'default_currency' => 'TRY',
+        'country_code' => 'TR',
     ];
 
     /** Veritabanındaki customers_tax_number_format_check ile aynı kural: VKN (10) veya TCKN (11). */
@@ -45,6 +47,12 @@ class Customer extends Model
             'payment_term_days' => 'integer',
             'default_currency' => Currency::class,
         ];
+    }
+
+    /** Türkiye'deki cari mi (Türk VKN/TCKN ve vergi dairesi yalnızca bunlarda)? */
+    public function isDomestic(): bool
+    {
+        return $this->country_code === Country::TURKEY;
     }
 
     /** Vergi no'daki boşluklar atılır: "123 456 7890" → "1234567890". Boşsa null. */

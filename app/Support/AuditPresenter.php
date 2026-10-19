@@ -24,6 +24,9 @@ final class AuditPresenter
         'payment' => 'Tahsilat/ödeme', 'cheque' => 'Çek/senet',
     ];
 
+    /** @var array<class-string, array<int|string, Model|null>> */
+    private static array $related = [];
+
     public const EVENT_LABELS = [
         'created' => 'Oluşturuldu', 'updated' => 'Güncellendi', 'deleted' => 'Silindi',
         'login' => 'Giriş', 'logout' => 'Çıkış', 'failed' => 'Başarısız giriş',
@@ -55,6 +58,10 @@ final class AuditPresenter
         'bank_name' => 'Banka', 'branch' => 'Şube', 'iban' => 'IBAN', 'payment_date' => 'Tarih', 'method' => 'Yöntem',
         'cash_account_id' => 'Kasa/banka', 'cheque_id' => 'Çek/senet', 'amount' => 'Tutar', 'account_currency' => 'Cari para birimi',
         'account_amount' => 'Cari tutarı', 'number' => 'Numara', 'drawer' => 'Keşideci', 'production_date' => 'Üretim tarihi',
+        'country_code' => 'Ülke', 'foreign_tax_id' => 'Yabancı vergi no', 'gtip_code' => 'GTİP', 'net_weight_kg' => 'Net ağırlık (kg)',
+        'gross_weight_kg' => 'Brüt ağırlık (kg)', 'export_type' => 'İhracat türü', 'incoterm' => 'Teslim şekli',
+        'transport_mode' => 'Gönderim şekli', 'package_count' => 'Kap sayısı', 'package_type' => 'Kap cinsi',
+        'customs_declaration_number' => 'Gümrük beyannamesi no', 'customs_declaration_date' => 'Gümrük beyannamesi tarihi',
     ];
 
     /** Alan => [model sınıfı, gösterim alanı] */
@@ -79,7 +86,10 @@ final class AuditPresenter
         'motor_unit' => ['status' => Enums\MotorUnitStatus::class],
         'exchange_rate' => ['currency' => Enums\Currency::class, 'source' => Enums\ExchangeRateSource::class],
         'price' => ['currency' => Enums\Currency::class],
-        'invoice' => ['direction' => Enums\InvoiceDirection::class, 'kind' => Enums\InvoiceKind::class, 'status' => Enums\InvoiceStatus::class, 'currency' => Enums\Currency::class],
+        'invoice' => [
+            'direction' => Enums\InvoiceDirection::class, 'kind' => Enums\InvoiceKind::class, 'status' => Enums\InvoiceStatus::class, 'currency' => Enums\Currency::class,
+            'export_type' => Enums\ExportType::class, 'incoterm' => Enums\Incoterm::class, 'transport_mode' => Enums\TransportMode::class, 'package_type' => Enums\PackageType::class,
+        ],
         'cash_account' => ['kind' => Enums\CashAccountKind::class, 'currency' => Enums\Currency::class],
         'payment' => ['direction' => Enums\PaymentDirection::class, 'method' => Enums\PaymentMethod::class, 'status' => Enums\PaymentStatus::class, 'currency' => Enums\Currency::class, 'account_currency' => Enums\Currency::class],
         'cheque' => ['direction' => Enums\ChequeDirection::class, 'kind' => Enums\ChequeKind::class, 'status' => Enums\ChequeStatus::class, 'currency' => Enums\Currency::class],
@@ -137,6 +147,15 @@ final class AuditPresenter
      *
      * @return list<array{field: string, old: string, new: string}>
      */
+    /** Değişen alanların yalnızca etiketleri (liste ekranı; değerler ve bağlı kayıtlar yüklenmez). */
+    public static function changedFields(Activity $activity): string
+    {
+        $changes = $activity->attribute_changes?->toArray() ?? [];
+        $keys = array_unique([...array_keys($changes['old'] ?? []), ...array_keys($changes['attributes'] ?? [])]);
+
+        return implode(', ', array_map(self::attribute(...), $keys)) ?: '—';
+    }
+
     public static function changes(Activity $activity): array
     {
         $changes = $activity->attribute_changes?->toArray() ?? [];
@@ -174,9 +193,14 @@ final class AuditPresenter
             return $case !== null && method_exists($case, 'label') ? $case->label() : (string) $value;
         }
 
+        if ($attribute === 'country_code' && is_string($value)) {
+            return Country::name($value) ?? $value;
+        }
+
         if ([$class, $field] = self::FOREIGN_KEYS[$attribute] ?? null) {
             /** @var Model|null $model */
-            $model = $class::query()->find($value);
+            // Aynı istekte aynı kayıt bir kez okunur (detayda eski ve yeni değer çoğu zaman aynı kayda gider).
+            $model = self::$related[$class][$value] ??= $class::query()->find($value);
 
             if ($model === null) {
                 return "#{$value} (silinmiş)";

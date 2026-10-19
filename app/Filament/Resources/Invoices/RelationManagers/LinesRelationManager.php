@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Invoices\RelationManagers;
 
+use App\Enums\ExportType;
 use App\Enums\InvoiceType;
 use App\Enums\PartType;
 use App\Exceptions\BusinessRuleException;
@@ -12,6 +13,7 @@ use App\Models\MotorUnit;
 use App\Models\Part;
 use App\Models\StockMovement;
 use App\Services\InvoiceService;
+use App\Support\Gtip;
 use App\Support\Money;
 use App\Support\Quantity;
 use Closure;
@@ -99,7 +101,7 @@ class LinesRelationManager extends RelationManager
                                 ->all()),
                         $this->priceInput(required: false)->helperText('Boş bırakılırsa müşteri veya liste fiyatı kullanılır (fatura para birimindeyse).'),
                         $this->rateInput('discount_rate', 'İskonto (%)', '0')->datalist(['15', '20', '30']),
-                        $this->rateInput('vat_rate', 'KDV (%)', InvoiceService::DEFAULT_VAT_RATE),
+                        $this->vatInput(),
                     ])
                     ->action(fn (array $data, Action $action) => $this->guard($action, fn () => app(InvoiceService::class)->addMotorLine(
                         $this->invoice(), $data['motor_unit_ids'], $data['unit_price'] ?? null, $data['discount_rate'] ?? 0, $data['vat_rate'] ?? InvoiceService::DEFAULT_VAT_RATE,
@@ -115,7 +117,7 @@ class LinesRelationManager extends RelationManager
             ->recordActions([
                 EditAction::make()
                     ->schema(fn (InvoiceLine $record): array => $record->motor_model_id !== null
-                        ? [$this->priceInput(required: true), $this->rateInput('discount_rate', 'İskonto (%)', '0')->datalist(['15', '20', '30']), $this->rateInput('vat_rate', 'KDV (%)', InvoiceService::DEFAULT_VAT_RATE)]
+                        ? [$this->priceInput(required: true), $this->rateInput('discount_rate', 'İskonto (%)', '0')->datalist(['15', '20', '30']), $this->vatInput()]
                         : $this->lineFields($record))
                     ->fillForm(fn (InvoiceLine $record): array => [
                         'part_id' => $record->part_id,
@@ -125,6 +127,7 @@ class LinesRelationManager extends RelationManager
                         'unit_price' => Money::toInput((string) $record->unit_price, 4),
                         'discount_rate' => Quantity::toInput((string) $record->discount_rate),
                         'vat_rate' => Quantity::toInput((string) $record->vat_rate),
+                        'gtip_code' => Gtip::format($record->gtip_code),
                         'stock_movement_ids' => $record->stockMovements->pluck('id')->all(),
                     ])
                     ->using(fn (InvoiceLine $record, array $data, Action $action): Model => $this->guard($action, fn () => app(InvoiceService::class)->updateLine($record, $data))),
@@ -168,7 +171,7 @@ class LinesRelationManager extends RelationManager
                 $this->quantityInput(),
                 $this->priceInput(required: true),
                 $this->rateInput('discount_rate', 'İskonto (%)', '0')->datalist(['15', '20', '30']),
-                $this->rateInput('vat_rate', 'KDV (%)', InvoiceService::DEFAULT_VAT_RATE),
+                $this->vatInput(),
                 CheckboxList::make('stock_movement_ids')
                     ->label('Bağlanacak stok girişleri')
                     ->helperText('Malzeme depoya önceden girildiyse girişleri seçin (toplam satır miktarına eşit olmalı). Seçilmezse fatura kesilirken stok girişi yapılır.')
@@ -186,8 +189,28 @@ class LinesRelationManager extends RelationManager
             TextInput::make('unit')->label('Birim')->default('Adet')->required()->maxLength(50),
             $this->priceInput(required: true),
             $this->rateInput('discount_rate', 'İskonto (%)', '0')->datalist(['15', '20', '30']),
-            $this->rateInput('vat_rate', 'KDV (%)', InvoiceService::DEFAULT_VAT_RATE),
+            $this->vatInput(),
+            TextInput::make('gtip_code')
+                ->label('GTİP')
+                ->maxLength(20)
+                ->placeholder('ör. 8501.52.20.00.00')
+                ->rule(fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {
+                    if (filled($value) && ! Gtip::isValid($value)) {
+                        $fail(Gtip::INVALID_MESSAGE);
+                    }
+                })
+                ->helperText('Mal satırında (ihracat) gerekir; nakliye/hizmet satırında boş bırakılır.'),
         ];
+    }
+
+    /** İhracat (11/1-a) faturasında KDV %0'dır ve değiştirilemez. */
+    private function vatInput(): TextInput
+    {
+        $export = $this->invoice()->export_type === ExportType::Export;
+
+        return $this->rateInput('vat_rate', 'KDV (%)', $export ? '0' : InvoiceService::DEFAULT_VAT_RATE)
+            ->disabled($export)
+            ->helperText($export ? 'İhracat faturası: KDV %0 (KDV 11/1-a istisnası).' : null);
     }
 
     private function quantityInput(): TextInput
@@ -232,15 +255,15 @@ class LinesRelationManager extends RelationManager
 
     private function lineDetail(InvoiceLine $line): ?string
     {
-        if ($line->motorUnits->isNotEmpty()) {
-            return 'Seri no: '.$line->motorUnits->pluck('serial_number')->sort()->implode(', ');
-        }
+        $detail = match (true) {
+            $line->motorUnits->isNotEmpty() => 'Seri no: '.$line->motorUnits->pluck('serial_number')->sort()->implode(', '),
+            $line->stockMovements->isNotEmpty() => sprintf('%d stok girişine bağlı', $line->stockMovements->count()),
+            default => null,
+        };
 
-        if ($line->stockMovements->isNotEmpty()) {
-            return sprintf('%d stok girişine bağlı', $line->stockMovements->count());
-        }
+        $gtip = $line->gtip_code ? 'GTİP: '.Gtip::format($line->gtip_code) : null;
 
-        return null;
+        return implode(' · ', array_filter([$gtip, $detail])) ?: null;
     }
 
     /**

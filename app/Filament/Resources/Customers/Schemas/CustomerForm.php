@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Customers\Schemas;
 use App\Enums\Currency;
 use App\Models\Customer;
 use App\Services\CustomerService;
+use App\Support\Country;
 use App\Support\TaxNumber;
 use Closure;
 use Filament\Forms\Components\Checkbox;
@@ -15,6 +16,7 @@ use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Collection;
 
@@ -93,8 +95,32 @@ class CustomerForm
                     'accepted' => CustomerService::DUPLICATE_NAME_MESSAGE.'. Devam etmek için onaylayın.',
                 ])
                 ->columnSpanFull(),
+            Select::make('country_code')
+                ->label('Ülke')
+                ->options(Country::options())
+                ->default(Country::TURKEY)
+                ->required()
+                ->searchable()
+                ->live()
+                // Türk vergi alanları ile yabancı vergi numarası birbirini dışlar (servis ve veritabanında da).
+                ->afterStateUpdated(function (?string $state, Set $set): void {
+                    if ($state === Country::TURKEY) {
+                        $set('foreign_tax_id', null);
+                    } else {
+                        $set('tax_number', null);
+                        $set('tax_office', null);
+                    }
+                }),
+            TextInput::make('foreign_tax_id')
+                ->label('Yabancı vergi no')
+                ->maxLength(50)
+                ->visible(fn (Get $get): bool => static::isForeign($get('country_code')))
+                ->dehydratedWhenHidden()
+                ->helperText('İsteğe bağlı (ör. AB KDV numarası). Yurt dışındaki caride Türk vergi no girilmez.'),
             TextInput::make('tax_number')
                 ->label('Vergi no / TCKN')
+                ->visible(fn (Get $get): bool => ! static::isForeign($get('country_code')))
+                ->dehydratedWhenHidden()
                 ->maxLength(20)
                 // Boşluklar doğrulamadan ve kayıttan önce atılır ("123 456 7890" → "1234567890").
                 ->mutateStateForValidationUsing(fn (?string $state): ?string => Customer::normalizeTaxNumber($state))
@@ -117,6 +143,8 @@ class CustomerForm
                 ->helperText('İsteğe bağlı; girilirse vergi dairesi de zorunludur. Tüzel kişi için 10 haneli VKN, şahıs için 11 haneli TCKN.'),
             TextInput::make('tax_office')
                 ->label('Vergi dairesi')
+                ->visible(fn (Get $get): bool => ! static::isForeign($get('country_code')))
+                ->dehydratedWhenHidden()
                 ->maxLength(100)
                 ->requiredWith('tax_number')
                 ->validationMessages([
@@ -138,6 +166,11 @@ class CustomerForm
                 ->rows(3)
                 ->columnSpanFull(),
         ];
+    }
+
+    private static function isForeign(?string $country): bool
+    {
+        return filled($country) && $country !== Country::TURKEY;
     }
 
     /** @return Collection<int, Customer> */

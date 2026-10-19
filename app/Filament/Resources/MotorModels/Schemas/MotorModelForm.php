@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\MotorModels\Schemas;
 
 use App\Enums\MotorPhase;
+use App\Support\Gtip;
 use App\Support\Quantity;
 use Closure;
 use Filament\Forms\Components\Select;
@@ -89,6 +90,28 @@ class MotorModelForm
                             ->label('Verim sınıfı')
                             ->maxLength(20)
                             ->placeholder('ör. IE3'),
+                        TextInput::make('gtip_code')
+                            ->label('GTİP')
+                            ->maxLength(20)
+                            ->placeholder('ör. 8501.52.20.00.00')
+                            ->formatStateUsing(fn (?string $state): ?string => Gtip::format($state))
+                            ->rule(fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {
+                                if (filled($value) && ! Gtip::isValid($value)) {
+                                    $fail(Gtip::INVALID_MESSAGE);
+                                }
+                            })
+                            ->helperText('İhracat ve ihraç kayıtlı faturada zorunlu; motor satırına buradan gelir.'),
+                        TextInput::make('net_weight_kg')
+                            ->label('Net ağırlık')
+                            ->suffix('kg')
+                            ->inputMode('decimal')
+                            ->formatStateUsing(fn ($state): ?string => Quantity::toInput($state))
+                            ->rule(fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {
+                                if (filled($value) && (! Quantity::isValid($value) || Quantity::compare(Quantity::parse($value), '0') <= 0)) {
+                                    $fail('Sıfırdan büyük bir ağırlık girin.');
+                                }
+                            })
+                            ->helperText('İhracat faturasında net ağırlık buradan hesaplanır.'),
                     ]),
             ]);
     }

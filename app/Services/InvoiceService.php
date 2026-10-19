@@ -4,11 +4,15 @@ namespace App\Services;
 
 use App\Enums\AccountTransactionType;
 use App\Enums\Currency;
+use App\Enums\ExportType;
+use App\Enums\Incoterm;
 use App\Enums\InvoiceKind;
 use App\Enums\InvoiceStatus;
 use App\Enums\InvoiceType;
 use App\Enums\MotorUnitStatus;
+use App\Enums\PackageType;
 use App\Enums\StockMovementType;
+use App\Enums\TransportMode;
 use App\Exceptions\BusinessRuleException;
 use App\Exceptions\InsufficientStockException;
 use App\Models\Customer;
@@ -19,6 +23,7 @@ use App\Models\MotorUnit;
 use App\Models\Part;
 use App\Models\StockMovement;
 use App\Models\User;
+use App\Support\Gtip;
 use App\Support\Money;
 use App\Support\Quantity;
 use Carbon\CarbonImmutable;
@@ -72,6 +77,9 @@ class InvoiceService
         return DB::transaction(function () use ($invoice, $data, $expectedLockVersion): Invoice {
             $this->ensureDraft($invoice);
             $this->fillHeader($invoice, $data, creating: false);
+            // Satırlar ve toplamlar başlıkla birlikte kaydedilir (ihracatta KDV 0 kuralı veritabanında da var).
+            $this->applyExportVat($invoice);
+            $this->fillTotals($invoice);
             $invoice->saveExpectingVersion($expectedLockVersion);
 
             return $invoice;
@@ -128,8 +136,9 @@ class InvoiceService
                 'description' => "{$model->code} {$model->name}",
                 'quantity' => (string) $motors->count(),
                 'unit' => 'Adet',
+                'gtip_code' => $model->gtip_code,
             ]);
-            $this->fillAmounts($line, $unitPrice, $discountRate, $vatRate);
+            $this->fillAmounts($line, $unitPrice, $discountRate, $vatRate, $invoice);
             $line->save();
             $line->motorUnits()->attach($motors->pluck('id'));
 
@@ -169,7 +178,7 @@ class InvoiceService
             $invoice = $this->lockDraft($line->invoice);
 
             if ($line->motor_model_id !== null) {
-                $this->fillAmounts($line, $data['unit_price'] ?? $line->unit_price, $data['discount_rate'] ?? $line->discount_rate, $data['vat_rate'] ?? $line->vat_rate);
+                $this->fillAmounts($line, $data['unit_price'] ?? $line->unit_price, $data['discount_rate'] ?? $line->discount_rate, $data['vat_rate'] ?? $line->vat_rate, $invoice);
             } else {
                 $this->fillLine($invoice, $line, $data);
             }
@@ -231,6 +240,7 @@ class InvoiceService
             }
 
             $this->ensureCustomer($invoice->customer()->firstOrFail(), $type);
+            $this->ensureExportReady($invoice, $lines);
 
             if (! $type->issuedByUs() && blank($invoice->counterparty_number)) {
                 throw new BusinessRuleException("{$type->label()} karşı tarafın kestiği belgedir; belge numarasını girin.");
@@ -331,6 +341,37 @@ class InvoiceService
      *
      * @return Collection<int, MotorUnit>
      */
+    /**
+     * Gümrük beyannamesi (no, tarih): ihracatta kendi beyannamemiz, ihraç kayıtlı satışta ihracatçınınki. Fatura
+     * kesildikten sonra girilir veya düzeltilir; denetim izine yazılır.
+     */
+    public function recordCustomsDeclaration(Invoice $invoice, ?string $number, mixed $date, User $actor): Invoice
+    {
+        return DB::transaction(function () use ($invoice, $number, $date): Invoice {
+            $invoice = Invoice::query()->lockForUpdate()->findOrFail($invoice->getKey());
+
+            if ($invoice->status !== InvoiceStatus::Issued || $invoice->export_type === null) {
+                throw new BusinessRuleException('Gümrük beyannamesi yalnızca kesilmiş ihracat veya ihraç kayıtlı faturaya girilir.');
+            }
+
+            $number = filled($number) ? mb_strtoupper(preg_replace('/\s+/u', '', $number)) : null;
+
+            if ($number === null || mb_strlen($number) > 30) {
+                throw new BusinessRuleException('Beyanname numarası zorunludur (en fazla 30 karakter).');
+            }
+
+            $date = CarbonImmutable::parse(filled($date) ? $date : throw new BusinessRuleException('Beyanname tarihi zorunludur.'))->startOfDay();
+
+            if ($date->gt(today())) {
+                throw new BusinessRuleException('Beyanname tarihi ileri bir tarih olamaz.');
+            }
+
+            $invoice->forceFill(['customs_declaration_number' => $number, 'customs_declaration_date' => $date])->save();
+
+            return $invoice;
+        });
+    }
+
     public function invoiceableMotors(Invoice $invoice, ?int $motorModelId = null): Collection
     {
         return MotorUnit::query()
@@ -464,6 +505,171 @@ class InvoiceService
         if (array_key_exists('notes', $data)) {
             $invoice->notes = filled($data['notes']) ? trim($data['notes']) : null;
         }
+
+        $invoice->export_type = $this->exportTypeFor($invoice, $data, $creating);
+        $this->fillExportDetails($invoice, $data);
+
+        if ($invoice->export_type !== null) {
+            $this->ensureExportCustomer($invoice->export_type, $customer);
+        }
+    }
+
+    /**
+     * İhracat türü yalnızca satış faturasında seçilir; satış iadesi orijinal faturanınkini alır.
+     */
+    private function exportTypeFor(Invoice $invoice, array $data, bool $creating): ?ExportType
+    {
+        $type = $invoice->type();
+        $given = array_key_exists('export_type', $data) && filled($data['export_type'])
+            ? ($data['export_type'] instanceof ExportType ? $data['export_type'] : (ExportType::tryFrom((string) $data['export_type']) ?? throw new BusinessRuleException('Geçersiz ihracat türü.')))
+            : null;
+
+        if ($type === InvoiceType::SalesInvoice) {
+            return array_key_exists('export_type', $data) || $creating ? $given : $invoice->export_type;
+        }
+
+        if ($given !== null) {
+            throw new BusinessRuleException($type === InvoiceType::SalesReturn
+                ? 'Satış iadesinde ihracat türü orijinal faturadan gelir.'
+                : 'İhracat türü yalnızca satış faturasında seçilir.');
+        }
+
+        if ($type === InvoiceType::SalesReturn && $invoice->original_invoice_id !== null) {
+            return Invoice::query()->find($invoice->original_invoice_id)?->export_type;
+        }
+
+        return null;
+    }
+
+    /** Teslim, gönderim, kap ve ağırlık bilgisi yalnızca ihracat (11/1-a) faturasında tutulur. */
+    private function fillExportDetails(Invoice $invoice, array $data): void
+    {
+        if ($invoice->export_type !== ExportType::Export) {
+            $invoice->forceFill([
+                'incoterm' => null, 'transport_mode' => null, 'package_count' => null, 'package_type' => null,
+                'gross_weight_kg' => null, 'net_weight_kg' => null,
+            ]);
+
+            return;
+        }
+
+        $enums = ['incoterm' => [Incoterm::class, 'teslim şekli'], 'transport_mode' => [TransportMode::class, 'gönderim şekli'], 'package_type' => [PackageType::class, 'kap cinsi']];
+
+        foreach ($enums as $field => [$enum, $label]) {
+            if (array_key_exists($field, $data)) {
+                $value = $data[$field];
+                $invoice->{$field} = blank($value) ? null : ($value instanceof $enum ? $value : ($enum::tryFrom((string) $value) ?? throw new BusinessRuleException("Geçersiz {$label}.")));
+            }
+        }
+
+        if (array_key_exists('package_count', $data)) {
+            $count = $data['package_count'];
+
+            if (filled($count) && filter_var($count, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) === false) {
+                throw new BusinessRuleException('Kap sayısı pozitif bir tam sayı olmalıdır.');
+            }
+
+            $invoice->package_count = filled($count) ? (int) $count : null;
+        }
+
+        foreach (['gross_weight_kg' => 'Brüt ağırlık', 'net_weight_kg' => 'Net ağırlık'] as $field => $label) {
+            if (array_key_exists($field, $data)) {
+                $weight = filled($data[$field]) ? Quantity::parse($data[$field]) : null;
+
+                if ($weight !== null && Quantity::compare($weight, '0') <= 0) {
+                    throw new BusinessRuleException("{$label} sıfırdan büyük olmalıdır.");
+                }
+
+                $invoice->{$field} = $weight;
+            }
+        }
+    }
+
+    private function ensureExportCustomer(ExportType $type, Customer $customer): void
+    {
+        if ($type === ExportType::Export && $customer->isDomestic()) {
+            throw new BusinessRuleException('İhracat faturası yurt dışındaki cariye kesilir; carinin ülkesi Türkiye.');
+        }
+
+        if ($type === ExportType::RegisteredExport && (! $customer->isDomestic() || $customer->tax_number === null)) {
+            throw new BusinessRuleException('İhraç kayıtlı satış, vergi numarası olan Türkiye\'deki ihracatçı cariye yapılır.');
+        }
+    }
+
+    /** İhracata çevrilen taslağın satırlarında KDV %0 olur (başlık kaydedilmeden önce). */
+    private function applyExportVat(Invoice $invoice): void
+    {
+        if ($invoice->export_type === ExportType::Export) {
+            foreach ($invoice->lines()->get() as $line) {
+                $this->fillAmounts($line, (string) $line->unit_price, (string) $line->discount_rate, '0', $invoice);
+                $line->save();
+            }
+        }
+    }
+
+    /**
+     * Kesmeden önce ihracat kontrolleri: alıcı, motor satırlarında GTİP; ihracatta (11/1-a) teslim şekli, gönderim şekli,
+     * kap bilgisi ve ağırlıklar (net ağırlık boşsa motor modellerinden hesaplanır).
+     *
+     * @param  Collection<int, InvoiceLine>  $lines
+     */
+    private function ensureExportReady(Invoice $invoice, Collection $lines): void
+    {
+        if ($invoice->export_type === null) {
+            return;
+        }
+
+        $this->ensureExportCustomer($invoice->export_type, $invoice->customer()->firstOrFail());
+
+        $models = MotorModel::query()->whereKey($lines->pluck('motor_model_id')->filter()->unique())->get()->keyBy('id');
+
+        foreach ($lines as $line) {
+            if ($line->motor_model_id === null) {
+                continue;
+            }
+
+            // Satır eklendikten sonra modele girilen GTİP de kullanılır.
+            if ($line->gtip_code === null && $models[$line->motor_model_id]->gtip_code !== null) {
+                $line->gtip_code = $models[$line->motor_model_id]->gtip_code;
+                $line->save();
+            }
+
+            if ($line->gtip_code === null) {
+                throw new BusinessRuleException("{$line->description} satırında GTİP yok; motor modeline GTİP girin.");
+            }
+        }
+
+        if ($invoice->export_type !== ExportType::Export) {
+            return;
+        }
+
+        if ($invoice->net_weight_kg === null) {
+            $motorLines = $lines->whereNotNull('motor_model_id');
+
+            if ($motorLines->isNotEmpty() && $motorLines->every(fn (InvoiceLine $l) => $models[$l->motor_model_id]->net_weight_kg !== null)) {
+                $invoice->net_weight_kg = $motorLines->reduce(
+                    fn (string $sum, InvoiceLine $l) => Quantity::add($sum, Quantity::mul((string) $l->quantity, (string) $models[$l->motor_model_id]->net_weight_kg)),
+                    '0',
+                );
+            }
+        }
+
+        $missing = array_keys(array_filter([
+            'teslim şekli' => $invoice->incoterm === null,
+            'gönderim şekli' => $invoice->transport_mode === null,
+            'kap sayısı' => $invoice->package_count === null,
+            'kap cinsi' => $invoice->package_type === null,
+            'brüt ağırlık' => $invoice->gross_weight_kg === null,
+            'net ağırlık' => $invoice->net_weight_kg === null,
+        ]));
+
+        if ($missing !== []) {
+            throw new BusinessRuleException('İhracat faturası için eksik bilgi: '.implode(', ', $missing).'.');
+        }
+
+        if (Quantity::compare((string) $invoice->net_weight_kg, (string) $invoice->gross_weight_kg) > 0) {
+            throw new BusinessRuleException('Net ağırlık brüt ağırlıktan büyük olamaz.');
+        }
     }
 
     /** İadenin bağlandığı orijinal fatura: aynı cari, aynı yön, normal ve kesilmiş. */
@@ -505,6 +711,10 @@ class InvoiceService
         } else {
             $line->part_id = null;
             $line->description = trim((string) ($data['description'] ?? $line->description));
+
+            if (array_key_exists('gtip_code', $data)) {
+                $line->gtip_code = Gtip::normalize($data['gtip_code']);
+            }
             $line->unit = filled($data['unit'] ?? null) ? trim($data['unit']) : ($line->unit ?? 'Adet');
             $quantity = Quantity::parse($data['quantity'] ?? $line->quantity ?? '');
 
@@ -518,15 +728,16 @@ class InvoiceService
         }
 
         $line->quantity = $quantity;
-        $this->fillAmounts($line, $data['unit_price'] ?? $line->unit_price, $data['discount_rate'] ?? $line->discount_rate ?? 0, $data['vat_rate'] ?? $line->vat_rate ?? self::DEFAULT_VAT_RATE);
+        $this->fillAmounts($line, $data['unit_price'] ?? $line->unit_price, $data['discount_rate'] ?? $line->discount_rate ?? 0, $data['vat_rate'] ?? $line->vat_rate ?? self::DEFAULT_VAT_RATE, $invoice);
     }
 
     /** Satır tutarları: brüt, iskonto, net, KDV, toplam (kuruşa yarım yukarı yuvarlanır). */
-    private function fillAmounts(InvoiceLine $line, mixed $unitPrice, mixed $discountRate, mixed $vatRate): void
+    private function fillAmounts(InvoiceLine $line, mixed $unitPrice, mixed $discountRate, mixed $vatRate, ?Invoice $invoice = null): void
     {
         $price = Money::parse($unitPrice ?? '', 4);
         $discount = $this->rate($discountRate, 'İskonto');
-        $vat = $this->rate($vatRate, 'KDV');
+        // İhracat faturasında KDV %0 (11/1-a istisnası); ihraç kayıtlı satışta KDV hesaplanır, tecil edilir.
+        $vat = $invoice?->export_type === ExportType::Export ? '0.00' : $this->rate($vatRate, 'KDV');
 
         if (Money::compare($price, '0') < 0) {
             throw new BusinessRuleException('Birim fiyat negatif olamaz.');
@@ -563,16 +774,27 @@ class InvoiceService
     /** Fatura toplamları satırların toplamıdır. */
     private function recalculate(Invoice $invoice): void
     {
+        $this->fillTotals($invoice);
+        $invoice->save();
+    }
+
+    /** Toplamları satırlardan hesaplar (kaydetmez). */
+    private function fillTotals(Invoice $invoice): void
+    {
         $totals = InvoiceLine::query()->where('invoice_id', $invoice->getKey())
             ->selectRaw('COALESCE(SUM(line_gross), 0) AS gross, COALESCE(SUM(discount_amount), 0) AS discount, COALESCE(SUM(vat_amount), 0) AS vat, COALESCE(SUM(line_total), 0) AS total')
             ->first();
+
+        // İhraç kayıtlı satışta KDV faturada gösterilir ama tahsil edilmez: cariye KDV hariç tutar yazılır.
+        $deferred = $invoice->export_type === ExportType::RegisteredExport ? (string) $totals->vat : '0';
 
         $invoice->forceFill([
             'subtotal' => (string) $totals->gross,
             'discount_total' => (string) $totals->discount,
             'vat_total' => (string) $totals->vat,
-            'grand_total' => (string) $totals->total,
-        ])->save();
+            'deferred_vat_total' => $deferred,
+            'grand_total' => Money::sub((string) $totals->total, $deferred),
+        ]);
     }
 
     /**

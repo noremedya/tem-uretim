@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Invoices\Tables;
 
+use App\Enums\ExportType;
 use App\Enums\InvoiceStatus;
 use App\Models\Invoice;
 use App\Support\Money;
@@ -34,11 +35,24 @@ class InvoicesTable
                     ->label('Toplam')
                     ->alignEnd()
                     ->formatStateUsing(fn ($state, Invoice $record): string => Money::format($state, $record->currency->value)),
+                TextColumn::make('export_type')->label('İhracat')->badge()->color('info')->placeholder('—')->toggleable(),
                 TextColumn::make('status')->label('Durum')->badge(),
             ])
             ->filters([
                 SelectFilter::make('status')->label('Durum')->options(InvoiceStatus::class),
                 SelectFilter::make('customer_id')->label('Cari')->relationship('customer', 'name')->searchable(),
+                SelectFilter::make('export_type')->label('İhracat türü')->options(ExportType::class),
+                SelectFilter::make('customs')
+                    ->label('Gümrük beyannamesi')
+                    ->options([
+                        'awaiting' => 'Beyannamesi beklenen',
+                        'overdue' => 'İhraç kayıtlı: süresi geçen',
+                    ])
+                    ->query(fn (Builder $query, array $data) => match ($data['value'] ?? null) {
+                        'awaiting' => $query->awaitingCustomsDeclaration(),
+                        'overdue' => $query->overdueRegisteredExport(),
+                        default => $query,
+                    }),
             ])
             ->recordActions([
                 ViewAction::make(),

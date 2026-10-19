@@ -22,13 +22,14 @@ class MotorModel extends Model
 
     public const FIELDS = [
         'code', 'name', 'power_kw', 'speed_rpm', 'voltage', 'frequency_hz', 'pole_count', 'frame_size',
-        'phase', 'mounting_type', 'protection_class', 'efficiency_class', 'description',
+        'phase', 'mounting_type', 'protection_class', 'efficiency_class', 'description', 'gtip_code', 'net_weight_kg',
     ];
 
     protected function casts(): array
     {
         return [
             'power_kw' => 'decimal:3',
+            'net_weight_kg' => 'decimal:3',
             'speed_rpm' => 'integer',
             'frequency_hz' => 'integer',
             'pole_count' => 'integer',

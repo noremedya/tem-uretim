@@ -60,7 +60,7 @@ class AuditLogResource extends Resource
                         'created' => 'success', 'deleted', 'failed' => 'danger', 'login', 'logout' => 'gray', default => 'info',
                     }),
                 TextColumn::make('changed_fields')->label('Değişen alanlar')->wrap()
-                    ->state(fn (Activity $record): string => collect(AuditPresenter::changes($record))->pluck('field')->implode(', ') ?: '—'),
+                    ->state(fn (Activity $record): string => AuditPresenter::changedFields($record)),
             ])
             ->filters([
                 SelectFilter::make('subject_type')->label('Kayıt türü')->options(AuditPresenter::SUBJECT_LABELS),

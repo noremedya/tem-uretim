@@ -31,6 +31,18 @@ class CustomerFactory extends Factory
         return $firstNine.TaxNumber::vknCheckDigit($firstNine);
     }
 
+    /** Yurt dışındaki cari: Türk vergi no/vergi dairesi yok, yabancı vergi no var. */
+    public function foreign(string $country = 'GR'): static
+    {
+        return $this->state(fn (): array => [
+            'country_code' => $country,
+            'tax_number' => null,
+            'tax_office' => null,
+            'foreign_tax_id' => $country.fake()->numerify('#########'),
+            'default_currency' => 'EUR',
+        ]);
+    }
+
     public function inactive(): static
     {
         return $this->afterCreating(function (Customer $customer): void {

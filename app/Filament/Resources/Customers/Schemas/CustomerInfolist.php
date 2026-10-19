@@ -7,6 +7,7 @@ use App\Enums\Permission;
 use App\Models\Customer;
 use App\Services\LedgerService;
 use App\Services\StatementService;
+use App\Support\Country;
 use App\Support\Money;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\TextEntry;
@@ -70,6 +71,8 @@ class CustomerInfolist
                     ->schema([
                         TextEntry::make('name')->label('Ad / ünvan')->columnSpan(2),
                         IconEntry::make('is_active')->label('Aktif')->boolean(),
+                        TextEntry::make('country_code')->label('Ülke')->formatStateUsing(fn (?string $state): ?string => Country::name($state)),
+                        TextEntry::make('foreign_tax_id')->label('Yabancı vergi no')->placeholder('—')->visible(fn (Customer $record): bool => ! $record->isDomestic()),
                         TextEntry::make('tax_number')->label('Vergi no / TCKN')->placeholder('—'),
                         TextEntry::make('tax_office')->label('Vergi dairesi')->placeholder('—'),
                         TextEntry::make('phone')->label('Telefon')->placeholder('—'),
