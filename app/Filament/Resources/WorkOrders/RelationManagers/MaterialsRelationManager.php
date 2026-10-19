@@ -2,24 +2,51 @@
 
 namespace App\Filament\Resources\WorkOrders\RelationManagers;
 
+use App\Enums\PartType;
+use App\Enums\Permission;
+use App\Enums\WorkOrderStatus;
+use App\Exceptions\BusinessRuleException;
+use App\Filament\Resources\WorkOrders\WorkOrderResource;
+use App\Filament\Support\BusinessRuleNotification;
+use App\Models\WorkOrder;
 use App\Models\WorkOrderMaterial;
+use App\Services\StockService;
+use App\Services\WorkOrderService;
 use App\Support\Quantity;
+use Closure;
+use Filament\Actions\Action;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Radio;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
+use Livewire\Attributes\Locked;
 
 /**
- * İş emrinin malzeme listesi ve yetersiz malzeme uyarısı (salt okunur). Eksik = fire dahil ihtiyaç − mevcut stok;
+ * İş emrinin malzeme listesi ve yetersiz malzeme uyarısı. Eksik = fire dahil ihtiyaç − mevcut stok;
  * başka iş emirlerinin ihtiyacı hesaba katılmaz.
+ *
+ * Planlı/üretimdeki iş emrinde eksik satırdan ("Eksiği tamamla", kod veya ada tıklayarak) doğrudan işlem yapılır:
+ * hammadde, komponent ve sarfta stok girişi (stok yetkisi); yarı mamulde yeni iş emri (iş emri yönetimi yetkisi)
+ * veya dışarıdan (fason) gelen için stok girişi.
  */
 class MaterialsRelationManager extends RelationManager
 {
     protected static string $relationship = 'materials';
 
     protected static ?string $title = 'Malzemeler';
+
+    /** Stok girişinin çift gönderim anahtarı; pencere her açıldığında yenilenir. */
+    #[Locked]
+    public string $submissionKey = '';
 
     public static function canViewForRecord(Model $ownerRecord, string $pageClass): bool
     {
@@ -38,8 +65,8 @@ class MaterialsRelationManager extends RelationManager
             ->defaultSort('id')
             ->paginated(false)
             ->columns([
-                TextColumn::make('part.code')->label('Kod'),
-                TextColumn::make('part.name')->label('Malzeme'),
+                TextColumn::make('part.code')->label('Kod')->action($this->resolveShortageAction()),
+                TextColumn::make('part.name')->label('Malzeme')->action($this->resolveShortageAction()),
                 TextColumn::make('part.type')->label('Tür')->badge(),
                 TextColumn::make('required_quantity')
                     ->label('Net ihtiyaç')
@@ -63,12 +90,169 @@ class MaterialsRelationManager extends RelationManager
                     ->label('Eksik')
                     ->alignEnd()
                     ->state(function (WorkOrderMaterial $record): string {
-                        $missing = Quantity::sub($record->totalRequirement(), (string) ($record->part->stockBalance?->quantity ?? 0));
+                        $missing = static::missing($record);
 
                         return Quantity::compare($missing, '0') > 0 ? Quantity::format($missing, $record->part->unit->name) : '—';
                     })
                     ->color(fn (string $state): ?string => $state !== '—' ? 'danger' : null)
                     ->weight(fn (string $state): ?string => $state !== '—' ? 'bold' : null),
+            ])
+            ->recordActions([
+                $this->resolveShortageAction(),
             ]);
+    }
+
+    /** Eksik miktar (0 veya pozitif); tam sayılı birimde yukarı yuvarlanır. */
+    public static function missing(WorkOrderMaterial $material): string
+    {
+        $missing = Quantity::sub($material->totalRequirement(), (string) ($material->part->stockBalance?->quantity ?? 0));
+
+        if (Quantity::compare($missing, '0') <= 0) {
+            return '0.000';
+        }
+
+        return $material->part->unit->allows_decimal ? $missing : Quantity::ceil($missing, 0);
+    }
+
+    private function resolveShortageAction(): Action
+    {
+        return Action::make('resolveShortage')
+            ->label('Eksiği tamamla')
+            ->icon('heroicon-o-plus-circle')
+            ->color('danger')
+            ->modalSubmitActionLabel('Kaydet')
+            ->visible(fn (WorkOrderMaterial $record): bool => $this->canResolve($record))
+            ->modalHeading(fn (WorkOrderMaterial $record): string => "Eksik: {$record->part->code} {$record->part->name}")
+            ->modalDescription(fn (WorkOrderMaterial $record): string => sprintf(
+                'İhtiyaç (fire dahil) %s, stok %s, eksik %s.',
+                Quantity::format($record->totalRequirement(), $record->part->unit->name),
+                Quantity::format((string) ($record->part->stockBalance?->quantity ?? 0), $record->part->unit->name),
+                Quantity::format(static::missing($record), $record->part->unit->name),
+            ))
+            ->fillForm(function (WorkOrderMaterial $record): array {
+                // Pencere her açıldığında yeni çift gönderim anahtarı.
+                $this->submissionKey = (string) Str::uuid();
+
+                return [
+                    'mode' => array_key_first($this->modesFor($record)),
+                    'quantity' => Quantity::toInput(static::missing($record)),
+                    'planned_end' => ($this->workOrder()->planned_start ?? today())->toDateString(),
+                ];
+            })
+            ->schema(fn (WorkOrderMaterial $record): array => [
+                Radio::make('mode')
+                    ->label('İşlem')
+                    ->options($this->modesFor($record))
+                    ->required()
+                    ->live()
+                    ->visible(count($this->modesFor($record)) > 1),
+                TextInput::make('quantity')
+                    ->label(fn (Get $get): string => ($get('mode') === 'work_order' ? 'Üretilecek adet' : 'Giriş miktarı')." ({$record->part->unit->name})")
+                    ->required()
+                    ->inputMode('decimal')
+                    ->rule(fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {
+                        if (! Quantity::isValid($value) || Quantity::compare(Quantity::parse($value), '0') <= 0) {
+                            $fail('Sıfırdan büyük geçerli bir miktar girin.');
+                        }
+                    }),
+                DatePicker::make('planned_end')
+                    ->label('Planlanan bitiş')
+                    ->required()
+                    ->native(false)
+                    ->displayFormat('d.m.Y')
+                    ->visible(fn (Get $get): bool => $get('mode') === 'work_order'),
+                Textarea::make('description')
+                    ->label('Açıklama')
+                    ->rows(2)
+                    ->placeholder(fn (): string => "{$this->workOrder()->work_order_number} eksiği")
+                    ->visible(fn (Get $get): bool => $get('mode') !== 'work_order'),
+            ])
+            ->action(function (WorkOrderMaterial $record, array $data, Action $action): void {
+                $mode = $data['mode'] ?? array_key_first($this->modesFor($record));
+
+                if (! array_key_exists($mode, $this->modesFor($record))) {
+                    abort(403);
+                }
+
+                try {
+                    $mode === 'work_order' ? $this->openWorkOrder($record, $data) : $this->receive($record, $data);
+                } catch (BusinessRuleException $exception) {
+                    BusinessRuleNotification::send($exception);
+                    $action->halt();
+                }
+            });
+    }
+
+    private function receive(WorkOrderMaterial $material, array $data): void
+    {
+        $description = filled($data['description'] ?? null)
+            ? trim($data['description'])
+            : ($material->part->type === PartType::SemiFinished ? 'Dışarıdan (fason) temin — ' : '')."{$this->workOrder()->work_order_number} eksiği";
+
+        $movement = app(StockService::class)->stockIn($material->part, $data['quantity'], Auth::user(), $description, $this->submissionKey);
+
+        // Aynı anahtarla ikinci istek hareket oluşturmaz ve bildirimi tekrarlamaz.
+        if ($movement->wasRecentlyCreated) {
+            Notification::make()->success()
+                ->title("Stok girişi kaydedildi: {$material->part->code}")
+                ->body('Yeni bakiye: '.Quantity::format((string) $movement->balance_after, $material->part->unit->name))
+                ->send();
+        }
+
+        $this->submissionKey = (string) Str::uuid();
+    }
+
+    private function openWorkOrder(WorkOrderMaterial $material, array $data): void
+    {
+        $owner = $this->workOrder();
+
+        $created = app(WorkOrderService::class)->create([
+            'product_part_id' => $material->part_id,
+            'quantity' => $data['quantity'],
+            'planned_end' => $data['planned_end'],
+            'production_batch_id' => $owner->production_batch_id,
+            'notes' => "{$owner->work_order_number} için eksik yarı mamul",
+        ], Auth::user());
+
+        Notification::make()->success()
+            ->title("İş emri açıldı: {$created->work_order_number}")
+            ->body("{$material->part->code} — ".Quantity::format((string) $created->quantity, $material->part->unit->name))
+            ->actions([Action::make('open')->label('İş emrini aç')->url(WorkOrderResource::getUrl('view', ['record' => $created]))])
+            ->send();
+    }
+
+    /** @return array<string, string> kullanıcının bu malzeme için yapabileceği işlemler */
+    private function modesFor(WorkOrderMaterial $material): array
+    {
+        $user = Auth::user();
+        $canStock = $user->can(Permission::StockMove) && $material->part->is_active;
+        $modes = [];
+
+        if ($material->part->type === PartType::SemiFinished) {
+            if ($user->can('create', WorkOrder::class)) {
+                $modes['work_order'] = 'İş emri aç (fabrikada üretilecek)';
+            }
+
+            if ($canStock) {
+                $modes['stock_in'] = 'Stok girişi (dışarıdan / fason geldi)';
+            }
+
+            return $modes;
+        }
+
+        return $canStock && $material->part->type !== PartType::FinishedGood ? ['stock_in' => 'Stok girişi'] : [];
+    }
+
+    private function canResolve(WorkOrderMaterial $material): bool
+    {
+        return in_array($this->workOrder()->status, [WorkOrderStatus::Planned, WorkOrderStatus::InProgress], true)
+            && Quantity::compare(static::missing($material), '0') > 0
+            && $this->modesFor($material) !== [];
+    }
+
+    private function workOrder(): WorkOrder
+    {
+        /** @var WorkOrder */
+        return $this->getOwnerRecord();
     }
 }

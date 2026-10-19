@@ -107,6 +107,7 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - Reçetesinde pasif bileşen olan karta iş emri açılamaz (pasif parça hareket görmez).
 - Adet yönetici tarafından `planned` ve `in_progress` iken değiştirilebilir (malzeme ihtiyacı yeniden hesaplanır). **Kısmi tamamlama yoktur**: az üretildiyse önce adet düşürülür.
 - **Yetersiz malzeme uyarısı:** iş emri ekranında her malzeme için ihtiyaç (fire dahil), mevcut ve eksik gösterilir. Uyarıdır; oluşturma ve başlatmayı engellemez, başka iş emirlerinin ihtiyacını hesaba katmaz.
+- **Eksiği tamamla** (Malzemeler sekmesi; kod/ada tıklama veya satır butonu): yalnızca planlı/üretimdeki iş emrinde ve eksiği olan satırda. Hammadde, komponent, sarf → stok girişi (stok yetkisi; miktar eksik kadar dolu, tam sayılı birimde yukarı yuvarlı; açıklama boşsa "<iş emri no> eksiği"; pencere başına çift gönderim anahtarı). Yarı mamul → "iş emri aç" (iş emri yönetimi yetkisi; adet eksik kadar, parti bu iş emrinden, planlanan bitiş bu iş emrinin planlanan başlangıcı veya bugün) veya "dışarıdan (fason) stok girişi" (stok yetkisi). Depo yarı mamulde yalnızca fason girişi yapar; operatöre buton çıkmaz.
 
 **İş emri tamamlanınca (tek transaction):**
 1. Operatör her malzeme için gerçekleşen fireyi girer (varsayılan: standart fire). Net ihtiyaç (`adet × birim başına`) `production_consumption`, fire `production_scrap` hareketiyle düşülür.
