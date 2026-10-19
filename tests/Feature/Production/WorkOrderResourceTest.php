@@ -90,19 +90,21 @@ it('sipariş kalemi seçenekleri yalnızca mamulde ve açık siparişlerin aynı
         ->and(reset($options))->toContain($open->order_number)->toContain('kalan 5');
 });
 
-it('operatör yalnızca kendine atanan iş emirlerini listede ve detayda görür', function () {
+it('operatör tüm iş emirlerini görür; yalnızca kendine atananı başlatabilir', function () {
     $mine = $this->f->motorWorkOrder($this->admin, 1, ['assigned_user_id' => $this->operator->id]);
     $other = $this->f->motorWorkOrder($this->admin, 1, ['assigned_user_id' => $this->otherOperator->id]);
     $this->actingAs($this->operator);
 
     Livewire::test(ListWorkOrders::class)
-        ->assertCanSeeTableRecords([$mine])
-        ->assertCanNotSeeTableRecords([$other])
+        ->assertCanSeeTableRecords([$mine, $other])
         ->assertActionHidden('create');
 
     $this->get(WorkOrderResource::getUrl('view', ['record' => $mine]))->assertOk();
-    $this->get(WorkOrderResource::getUrl('view', ['record' => $other]))->assertNotFound();
+    $this->get(WorkOrderResource::getUrl('view', ['record' => $other]))->assertOk();
     $this->get(WorkOrderResource::getUrl('edit', ['record' => $mine]))->assertForbidden();
+
+    Livewire::test(ViewWorkOrder::class, ['record' => $other->getRouteKey()])->assertActionHidden('start');
+    Livewire::test(ViewWorkOrder::class, ['record' => $mine->getRouteKey()])->assertActionVisible('start');
 });
 
 it('operatör kendi iş emrini başlatır; yönetici aksiyonlarını görmez', function () {
@@ -227,7 +229,10 @@ it('üretim partisini yönetici oluşturur; operatör oluşturamaz', function ()
 
     expect(ProductionBatch::sole()->batch_number)->toBe('PRT-2026-01');
 
-    $this->actingAs($this->operator);
-    $this->get(ProductionBatchResource::getUrl('index'))->assertOk();
-    $this->get(ProductionBatchResource::getUrl('create'))->assertForbidden();
+    // Partiler yalnızca yöneticiye açık.
+    foreach ([$this->operator, $this->warehouse] as $user) {
+        $this->actingAs($user);
+        $this->get(ProductionBatchResource::getUrl('index'))->assertForbidden();
+        $this->get(ProductionBatchResource::getUrl('create'))->assertForbidden();
+    }
 });

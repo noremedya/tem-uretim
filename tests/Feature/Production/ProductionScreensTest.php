@@ -96,12 +96,12 @@ describe('üretilen motorlar', function () {
             ->assertActionHidden('ship');
     });
 
-    it('operatör motorları görür ama sevk edemez', function () {
+    it('operatör motorları görür ve sevk edebilir', function () {
         $this->actingAs($this->operator);
 
         Livewire::test(ListMotorUnits::class)
             ->assertCanSeeTableRecords($this->units)
-            ->assertActionHidden(TestAction::make('ship')->table($this->units->first()));
+            ->assertActionVisible(TestAction::make('ship')->table($this->units->first()));
 
         $this->get(MotorUnitResource::getUrl('view', ['record' => $this->units->first()]))->assertOk();
     });

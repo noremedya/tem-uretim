@@ -6,7 +6,6 @@ use App\Filament\Resources\MotorModels\MotorModelResource;
 use App\Filament\Resources\MotorModels\Pages\CreateMotorModel;
 use App\Filament\Resources\MotorModels\Pages\EditMotorModel;
 use App\Filament\Resources\MotorModels\Pages\ListMotorModels;
-use App\Filament\Resources\MotorModels\Pages\ViewMotorModel;
 use App\Models\MotorModel;
 use App\Models\User;
 use App\Services\MotorModelService;
@@ -128,17 +127,11 @@ it('motor modeli pasifleştirilir ve aktifleştirilir; silinemez', function () {
         ->and($this->admin->can('delete', $model))->toBeFalse();
 });
 
-it('operatör ve depo motor modellerini yalnızca görüntüler', function (string $role) {
-    $user = User::factory()->{$role}()->create();
+it('operatör ve depo motor modellerini göremez', function (string $role) {
     $model = MotorModel::factory()->create();
 
-    $this->actingAs($user);
-    $this->get(MotorModelResource::getUrl('index'))->assertOk()->assertSee($model->code);
-    $this->get(MotorModelResource::getUrl('view', ['record' => $model]))->assertOk();
+    $this->actingAs(User::factory()->{$role}()->create());
+    $this->get(MotorModelResource::getUrl('index'))->assertForbidden();
+    $this->get(MotorModelResource::getUrl('view', ['record' => $model]))->assertForbidden();
     $this->get(MotorModelResource::getUrl('create'))->assertForbidden();
-    $this->get(MotorModelResource::getUrl('edit', ['record' => $model]))->assertForbidden();
-
-    Livewire::test(ViewMotorModel::class, ['record' => $model->getRouteKey()])
-        ->assertActionHidden('edit')
-        ->assertActionHidden('deactivate');
 })->with(['operator', 'warehouse']);

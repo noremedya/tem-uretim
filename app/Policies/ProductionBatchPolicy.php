@@ -7,18 +7,18 @@ use App\Models\ProductionBatch;
 use App\Models\User;
 
 /**
- * Üretim partileri: yönetici yönetir, iş emri görebilen herkes görüntüler (CLAUDE.md bölüm 6).
+ * Üretim partileri: yalnızca yönetici (iş emri yönetimi yetkisi) görür ve yönetir (CLAUDE.md bölüm 6).
  */
 class ProductionBatchPolicy
 {
     public function viewAny(User $actor): bool
     {
-        return $actor->can(Permission::WorkOrdersView);
+        return $actor->can(Permission::WorkOrdersManage);
     }
 
     public function view(User $actor, ProductionBatch $batch): bool
     {
-        return $actor->can(Permission::WorkOrdersView);
+        return $actor->can(Permission::WorkOrdersManage);
     }
 
     public function create(User $actor): bool

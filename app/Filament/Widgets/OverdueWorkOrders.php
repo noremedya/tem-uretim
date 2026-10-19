@@ -3,6 +3,7 @@
 namespace App\Filament\Widgets;
 
 use App\Enums\Permission;
+use App\Enums\Role;
 use App\Filament\Resources\WorkOrders\WorkOrderResource;
 use App\Models\WorkOrder;
 use Filament\Tables\Columns\TextColumn;
@@ -21,7 +22,10 @@ class OverdueWorkOrders extends TableWidget
 
     public static function canView(): bool
     {
-        return Auth::user()?->can(Permission::WorkOrdersViewAll) ?? false;
+        // Yalnızca operatör rolündeki kullanıcının ana ekranı sade kalır (CLAUDE.md bölüm 6).
+        $user = Auth::user();
+
+        return $user !== null && $user->can(Permission::WorkOrdersViewAll) && ! $user->hasExactRoles([Role::Operator->value]);
     }
 
     public function table(Table $table): Table

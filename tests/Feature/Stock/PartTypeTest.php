@@ -14,7 +14,7 @@ use Livewire\Livewire;
 use Spatie\Activitylog\Models\Activity;
 
 beforeEach(function () {
-    $this->user = User::factory()->warehouse()->create();
+    $this->user = User::factory()->admin()->create();
     $this->unit = Unit::factory()->create();
 });
 

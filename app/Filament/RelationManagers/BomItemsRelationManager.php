@@ -42,9 +42,12 @@ class BomItemsRelationManager extends RelationManager
     {
         $user = auth()->user();
 
+        // Reçeteyi motor modeli görme yetkisi olan görür (operatör ve depo görmez; BomItemPolicy).
         return match (true) {
             $ownerRecord instanceof MotorModel => $user?->can(Permission::MotorModelsView) ?? false,
-            $ownerRecord instanceof Part => $ownerRecord->type === PartType::SemiFinished && ($user?->can(Permission::PartsView) ?? false),
+            $ownerRecord instanceof Part => $ownerRecord->type === PartType::SemiFinished
+                && ($user?->can(Permission::PartsView) ?? false)
+                && ($user?->can('viewAny', BomItem::class) ?? false),
             default => false,
         };
     }

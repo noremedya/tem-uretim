@@ -35,28 +35,30 @@ enum Role: string implements HasLabel
     {
         return match ($this) {
             self::Admin => Permission::cases(),
-            // Operatör ve depo cari hesapları ve müşteri adlarını görmez (CLAUDE.md bölüm 6).
+            // Operatör ve depo yalnızca stokları, iş emirlerini ve üretilen motorları görür; müdahaleleri:
+            // operatör kendine atanan iş emrini başlatır/tamamlar ve sevk eder, depo stok işlemi ve sevk yapar.
+            // Motor modeli, sipariş, parti, cari, fatura, rapor göremezler (CLAUDE.md bölüm 6).
             self::Operator => [
-                Permission::MotorModelsView,
-                Permission::OrdersView,
-                Permission::WorkOrdersView,
-                Permission::WorkOrdersChangeStatus,
-                Permission::PartsView,
-            ],
-            self::Warehouse => [
-                Permission::MotorModelsView,
-                Permission::OrdersView,
                 Permission::WorkOrdersView,
                 Permission::WorkOrdersViewAll,
+                Permission::WorkOrdersChangeStatus,
+                Permission::MotorUnitsView,
                 Permission::MotorUnitsShip,
                 Permission::PartsView,
-                Permission::PartsManage,
+                Permission::StockMovementsView,
+            ],
+            self::Warehouse => [
+                Permission::WorkOrdersView,
+                Permission::WorkOrdersViewAll,
+                Permission::MotorUnitsView,
+                Permission::MotorUnitsShip,
+                Permission::PartsView,
                 Permission::StockMove,
                 Permission::StockMovementsView,
-                Permission::ReportsStock,
             ],
             self::Accounting => [
                 Permission::MotorModelsView,
+                Permission::MotorUnitsView,
                 Permission::CustomersView,
                 Permission::CustomersManage,
                 Permission::OrdersView,

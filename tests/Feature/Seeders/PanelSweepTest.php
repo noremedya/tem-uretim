@@ -17,6 +17,7 @@ use App\Models\ProductionBatch;
 use App\Models\Unit;
 use App\Models\User;
 use App\Models\WorkOrder;
+use App\Services\WorkOrderService;
 use Database\Seeders\DemoDataSeeder;
 use Illuminate\Routing\Route as RouteDefinition;
 use Illuminate\Support\Facades\DB;
@@ -47,35 +48,37 @@ function sweepExpectations(): array
         'raporlar/is-emri-performansi' => ['yonetici'],
         'raporlar/operator-uretimi' => ['yonetici'],
         'raporlar/siparis-durumu' => ['yonetici'],
-        'raporlar/stok-bakiyeleri' => ['yonetici', 'depo'],
-        'raporlar/stok-hareketleri' => ['yonetici', 'depo'],
+        'raporlar/stok-bakiyeleri' => ['yonetici'],
+        'raporlar/stok-hareketleri' => ['yonetici'],
         'denetim-izi' => ['yonetici'],
         'denetim-izi/{record}' => ['yonetici'],
         'users' => ['yonetici'],
         'users/create' => ['yonetici'],
         'users/{record}/edit' => ['yonetici'],
         'units' => $all,
-        'units/create' => ['yonetici', 'depo'],
-        'units/{record}/edit' => ['yonetici', 'depo'],
+        // Operatör ve depo stokları görür, kart açıp düzenleyemez; hareketleri görür.
+        'units/create' => ['yonetici'],
+        'units/{record}/edit' => ['yonetici'],
         'parts' => $all,
-        'parts/create' => ['yonetici', 'depo'],
+        'parts/create' => ['yonetici'],
         'parts/{record}' => $all,
-        'parts/{record}/edit' => ['yonetici', 'depo'],
-        'stock-movements' => ['yonetici', 'depo'],
-        'motor-models' => $all,
+        'parts/{record}/edit' => ['yonetici'],
+        'stock-movements' => ['yonetici', 'operator1', 'depo'],
+        // Motor modeli, sipariş ve parti operatör ve depoya kapalı.
+        'motor-models' => ['yonetici', 'muhasebe'],
         'motor-models/create' => ['yonetici'],
-        'motor-models/{record}' => $all,
+        'motor-models/{record}' => ['yonetici', 'muhasebe'],
         'motor-models/{record}/edit' => ['yonetici'],
         // Operatör ve depo cari hesapları görmez.
         'customers' => ['yonetici', 'muhasebe'],
         'customers/create' => ['yonetici', 'muhasebe'],
         'customers/{record}' => ['yonetici', 'muhasebe'],
         'customers/{record}/edit' => ['yonetici', 'muhasebe'],
-        'orders' => $all,
+        'orders' => ['yonetici', 'muhasebe'],
         'orders/create' => ['yonetici'],
-        'orders/{record}' => $all,
+        'orders/{record}' => ['yonetici', 'muhasebe'],
         'orders/{record}/edit' => ['yonetici'],
-        'production-batches' => ['yonetici', 'operator1', 'depo'],
+        'production-batches' => ['yonetici'],
         'production-batches/create' => ['yonetici'],
         'production-batches/{record}/edit' => ['yonetici'],
         'work-orders' => ['yonetici', 'operator1', 'depo'],
@@ -192,14 +195,18 @@ it('her panel sayfası her rolde yetki tablosuna uyar, sorgu sınırını aşmaz
     expect($failures)->toBe([]);
 });
 
-it('operatör başkasına atanmış iş emrinin sayfasını açamaz', function () {
+it('operatör başkasına atanmış iş emrinin sayfasını açar ama başlatamaz', function () {
     $seeder = app(DemoDataSeeder::class);
     $seeder->weeks = 2;
     $seeder->run();
 
-    $other = WorkOrder::query()->where('assigned_user_id', User::query()->where('username', 'operator2')->value('id'))->firstOrFail();
+    $other = WorkOrder::query()
+        ->where('assigned_user_id', User::query()->where('username', 'operator2')->value('id'))
+        ->where('status', WorkOrderStatus::Planned->value)
+        ->first() ?? WorkOrder::query()->where('assigned_user_id', User::query()->where('username', 'operator2')->value('id'))->firstOrFail();
 
-    $this->actingAs(User::query()->where('username', 'operator1')->firstOrFail())
-        ->get("/work-orders/{$other->getKey()}")
-        ->assertNotFound();
+    $operator = User::query()->where('username', 'operator1')->firstOrFail();
+    $this->actingAs($operator)->get("/work-orders/{$other->getKey()}")->assertOk();
+
+    expect(app(WorkOrderService::class)->canTransition($operator, $other, WorkOrderStatus::InProgress))->toBeFalse();
 });

@@ -7,14 +7,14 @@ use App\Models\BomItem;
 use App\Models\User;
 
 /**
- * Reçete: görüntüleme motor modeli veya stok kartı görüntüleme yetkisiyle; yönetim motor modeli
+ * Reçete: görüntüleme motor modeli görüntüleme yetkisiyle (operatör ve depo görmez); yönetim motor modeli
  * yönetme yetkisiyle (CLAUDE.md bölüm 6).
  */
 class BomItemPolicy
 {
     public function viewAny(User $actor): bool
     {
-        return $actor->can(Permission::MotorModelsView) || $actor->can(Permission::PartsView);
+        return $actor->can(Permission::MotorModelsView);
     }
 
     public function view(User $actor, BomItem $item): bool

@@ -176,14 +176,12 @@ it('iş kuralı ihlali ilişki yöneticisinde bildirim olarak gösterilir', func
     expect(BomItem::count())->toBe(0);
 });
 
-it('operatör ve depo reçeteyi görür ama değiştiremez', function (string $role) {
+it('operatör ve depo reçeteyi göremez (motor modeli ve yarı mamul kartı)', function (string $role) {
     $this->actingAs(User::factory()->{$role}()->create());
     $model = MotorModel::factory()->create();
 
-    expect(BomItemsRelationManager::canViewForRecord($model, ViewMotorModel::class))->toBeTrue();
-
-    Livewire::test(BomItemsRelationManager::class, ['ownerRecord' => $model, 'pageClass' => ViewMotorModel::class])
-        ->assertActionHidden(TestAction::make('create')->table());
+    expect(BomItemsRelationManager::canViewForRecord($model, ViewMotorModel::class))->toBeFalse()
+        ->and(BomItemsRelationManager::canViewForRecord(part(PartType::SemiFinished), ViewPart::class))->toBeFalse();
 })->with(['operator', 'warehouse']);
 
 it('reçete sekmesi yalnızca yarı mamul kartında görünür', function () {

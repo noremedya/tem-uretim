@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\MotorUnitStatus;
+use App\Enums\Permission;
 use App\Enums\Role;
 use App\Enums\WorkOrderStatus;
 use App\Filament\Pages\QuickScan;
@@ -36,14 +37,20 @@ it('kod çözümü: barkod, parça kodu, seri no, iş emri no; büyük/küçük 
         ->and($service->resolve('YOK-123', $this->admin))->type->toBe('not_found')->message->toBe('Kod bulunamadı.');
 });
 
-it('operatöre başkasının iş emri gösterilmez', function () {
+it('operatör tüm iş emirlerini görür; tüm iş emirlerini görmeyen role başkasınınki gösterilmez', function () {
     $other = $this->f->motorWorkOrder($this->admin, 1, ['assigned_user_id' => User::factory()->operator()->create()->id]);
     $mine = $this->f->motorWorkOrder($this->admin, 1, ['assigned_user_id' => $this->operator->id]);
     $service = app(QuickScanService::class);
 
-    expect($service->resolve($other->work_order_number, $this->operator))->type->toBe('not_assigned')->record->toBeNull()->message->toBe('Bu iş emri size atanmamış.')
+    expect($service->resolve($other->work_order_number, $this->operator)['type'])->toBe('work_order')
         ->and($service->resolve($mine->work_order_number, $this->operator)['type'])->toBe('work_order')
         ->and($service->resolve($other->work_order_number, $this->warehouse)['type'])->toBe('work_order');
+
+    // Yalnızca kendine atananları görebilen (work_orders.view, view_all yok) kullanıcı.
+    $limited = User::factory()->create();
+    $limited->givePermissionTo(Permission::WorkOrdersView->value);
+
+    expect($service->resolve($other->work_order_number, $limited))->type->toBe('not_assigned')->record->toBeNull()->message->toBe('Bu iş emri size atanmamış.');
 });
 
 it('depo parça okutur, hızlı giriş yapar; aynı gönderim anahtarıyla ikinci hareket oluşmaz', function () {
@@ -103,15 +110,15 @@ it('operatör kendi iş emrini okutup başlatır ve tamamlar', function () {
     expect($wo->fresh()->status)->toBe(WorkOrderStatus::Completed)->and(MotorUnit::count())->toBe(2);
 });
 
-it('başkasının iş emri okutulunca mesaj gösterilir, bilgi gösterilmez', function () {
-    $other = $this->f->motorWorkOrder($this->admin, 1, ['assigned_user_id' => User::factory()->operator()->create()->id, 'notes' => 'GİZLİ NOT']);
+it('operatör başkasına atanmış iş emrini okutunca bilgiyi görür ama başlatamaz', function () {
+    $other = $this->f->motorWorkOrder($this->admin, 1, ['assigned_user_id' => User::factory()->operator()->create()->id]);
     $this->actingAs($this->operator);
 
     Livewire::test(QuickScan::class)->set('code', $other->work_order_number)->call('scan')
-        ->assertDispatched('quick-scan-done', status: 'error')
-        ->assertSee('Bu iş emri size atanmamış.')
-        ->assertDontSee($other->product->name)
-        ->assertActionHidden('start');
+        ->assertDispatched('quick-scan-done', status: 'success')
+        ->assertSee($other->work_order_number)
+        ->assertActionHidden('start')
+        ->assertActionHidden('complete');
 });
 
 it('depo stoktaki motoru okutup sevk eder', function () {

@@ -290,16 +290,18 @@ describe('sipariş kalemi', function () {
     });
 });
 
-it('görünürlük: operatör yalnızca kendine atananları görür; yönetici ve depo tümünü', function () {
+it('görünürlük: operatör, depo ve yönetici tüm iş emirlerini görür; operatör yalnızca kendine atananı değiştirir', function () {
     $mine = $this->f->motorWorkOrder($this->admin, 1, ['assigned_user_id' => $this->operator->id]);
     $other = $this->f->motorWorkOrder($this->admin, 1, ['assigned_user_id' => $this->otherOperator->id]);
     $this->f->motorWorkOrder($this->admin, 1);
 
-    expect(WorkOrder::visibleTo($this->operator)->pluck('id')->all())->toBe([$mine->id])
+    expect(WorkOrder::visibleTo($this->operator)->count())->toBe(3)
         ->and(WorkOrder::visibleTo($this->warehouse)->count())->toBe(3)
         ->and(WorkOrder::visibleTo($this->admin)->count())->toBe(3)
-        ->and($this->operator->can('view', $other))->toBeFalse()
+        ->and($this->operator->can('view', $other))->toBeTrue()
         ->and($this->operator->can('view', $mine))->toBeTrue()
+        ->and(app(WorkOrderService::class)->canTransition($this->operator, $other, WorkOrderStatus::InProgress))->toBeFalse()
+        ->and(app(WorkOrderService::class)->canTransition($this->operator, $mine, WorkOrderStatus::InProgress))->toBeTrue()
         ->and($this->warehouse->can('view', $other))->toBeTrue()
         ->and($this->warehouse->can('create', WorkOrder::class))->toBeFalse()
         ->and($this->warehouse->can('update', $other))->toBeFalse();

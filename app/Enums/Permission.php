@@ -20,14 +20,16 @@ enum Permission: string
 
     // Görüntüleme; operatör için "yalnızca kendine atananlar" kısıtı policy'de uygulanır.
     case WorkOrdersView = 'work_orders.view';
-    // Tüm iş emirlerini görme (yönetici, depo). Yoksa yalnızca kendine atananlar görünür.
+    // Tüm iş emirlerini görme (tüm roller iş emri görürse). Yoksa yalnızca kendine atananlar görünür.
     case WorkOrdersViewAll = 'work_orders.view_all';
     case WorkOrdersManage = 'work_orders.manage';
     // Durum değiştirme; "yalnızca kendine atananlar" kısıtı policy'de uygulanır.
     case WorkOrdersChangeStatus = 'work_orders.change_status';
     case WorkOrdersChangeStatusAny = 'work_orders.change_status_any';
 
-    // Üretilen motorların sevki (yönetici, depo).
+    // Üretilen motorları görüntüleme (motor modeli görmeden de: operatör, depo).
+    case MotorUnitsView = 'motor_units.view';
+    // Üretilen motorların sevki (yönetici, operatör, depo).
     case MotorUnitsShip = 'motor_units.ship';
 
     case PartsView = 'parts.view';
@@ -64,6 +66,7 @@ enum Permission: string
             self::WorkOrdersManage => 'İş emri oluşturma/atama',
             self::WorkOrdersChangeStatus => 'İş emri durum değiştirme (kendine atananlar)',
             self::WorkOrdersChangeStatusAny => 'İş emri durum değiştirme (tümü)',
+            self::MotorUnitsView => 'Üretilen motorları görüntüleme',
             self::MotorUnitsShip => 'Motor sevki',
             self::PartsView => 'Stok kartı görüntüleme',
             self::PartsManage => 'Stok kartı yönetimi',

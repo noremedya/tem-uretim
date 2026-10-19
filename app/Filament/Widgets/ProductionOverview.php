@@ -4,6 +4,7 @@ namespace App\Filament\Widgets;
 
 use App\Enums\MotorUnitStatus;
 use App\Enums\Permission;
+use App\Enums\Role;
 use App\Enums\WorkOrderStatus;
 use App\Filament\Resources\WorkOrders\WorkOrderResource;
 use App\Models\MotorUnit;
@@ -22,7 +23,10 @@ class ProductionOverview extends StatsOverviewWidget
 
     public static function canView(): bool
     {
-        return Auth::user()?->can(Permission::WorkOrdersViewAll) ?? false;
+        // Yalnızca operatör rolündeki kullanıcının ana ekranı sade kalır (CLAUDE.md bölüm 6).
+        $user = Auth::user();
+
+        return $user !== null && $user->can(Permission::WorkOrdersViewAll) && ! $user->hasExactRoles([Role::Operator->value]);
     }
 
     /** @return array{today: int, week: int, in_progress: int, overdue: int} */

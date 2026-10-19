@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\Role;
 use App\Filament\Resources\MotorUnits\Pages\ListMotorUnits;
 use App\Filament\Resources\MotorUnits\Pages\ViewMotorUnit;
 use App\Filament\Resources\WorkOrders\Pages\ViewWorkOrder;
@@ -77,9 +78,12 @@ it('iş emri etiketi istenen kopya sayısıyla yazdırılır', function () {
         ->and(QrCode::read(QrCode::png($this->workOrder->work_order_number)))->toBe($this->workOrder->work_order_number);
 });
 
-it('operatör başkasına atanmış iş emrinin etiketini alamaz', function () {
-    $this->actingAs($this->otherOperator)->get(route('labels.work-order', $this->workOrder))->assertNotFound();
-    $this->actingAs($this->otherOperator)->get(route('labels.motors', ['work_order' => $this->workOrder->id]))->assertNotFound();
+it('operatör tüm iş emirlerinin etiketini alır; iş emri göremeyen (muhasebe) alamaz', function () {
+    $this->actingAs($this->otherOperator)->get(route('labels.work-order', $this->workOrder))->assertOk();
+    $this->actingAs($this->otherOperator)->get(route('labels.motors', ['work_order' => $this->workOrder->id]))->assertOk();
+
+    $accountant = User::factory()->withRoles(Role::Accounting)->create();
+    $this->actingAs($accountant)->get(route('labels.work-order', $this->workOrder))->assertNotFound();
 });
 
 it('oturum açmamış kullanıcı giriş sayfasına yönlendirilir (rapor indirme dahil)', function () {

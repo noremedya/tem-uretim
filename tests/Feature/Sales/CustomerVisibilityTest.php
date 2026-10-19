@@ -30,17 +30,20 @@ beforeEach(function () {
     $this->motor = MotorUnit::query()->where('work_order_id', $this->wo->id)->firstOrFail();
 });
 
-it('operatör ve depo sipariş listesinde ve detayında müşteri adını görmez; yönetici görür', function (Role $role, bool $sees) {
+it('sipariş ekranlarında müşteri adı yalnızca cari görebilene (yönetici, muhasebe); operatör ve depo siparişleri hiç görmez', function (Role $role, bool $sees) {
     $user = $role === Role::Operator ? $this->operator : User::factory()->withRoles($role)->create();
     $this->actingAs($user);
 
-    $page = $this->get(OrderResource::getUrl('view', ['record' => $this->order]))->assertOk()->assertSee($this->order->order_number);
-    $sees ? $page->assertSee($this->customer->name) : $page->assertDontSee($this->customer->name);
+    if (! $sees) {
+        $this->get(OrderResource::getUrl('view', ['record' => $this->order]))->assertForbidden();
+        expect(in_array('customer.name', OrderResource::getGloballySearchableAttributes(), true))->toBeFalse();
 
-    $list = Livewire::test(ListOrders::class)->assertCanSeeTableRecords([$this->order]);
-    $sees ? $list->assertTableColumnVisible('customer.name') : $list->assertTableColumnHidden('customer.name');
+        return;
+    }
 
-    expect(in_array('customer.name', OrderResource::getGloballySearchableAttributes(), true))->toBe($sees);
+    $this->get(OrderResource::getUrl('view', ['record' => $this->order]))->assertOk()->assertSee($this->customer->name);
+    Livewire::test(ListOrders::class)->assertCanSeeTableRecords([$this->order])->assertTableColumnVisible('customer.name');
+    expect(in_array('customer.name', OrderResource::getGloballySearchableAttributes(), true))->toBeTrue();
 })->with([
     'operatör' => [Role::Operator, false],
     'depo' => [Role::Warehouse, false],

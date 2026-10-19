@@ -2,6 +2,7 @@
 
 use App\Enums\MotorUnitStatus;
 use App\Enums\OrderStatus;
+use App\Enums\Role;
 use App\Enums\StockMovementType;
 use App\Enums\WorkOrderStatus;
 use App\Exceptions\BusinessRuleException;
@@ -219,8 +220,9 @@ describe('sevk', function () {
             ->and(StockMovement::where('type', StockMovementType::Shipment)->where('reference_type', 'motor_unit')->count())->toBe(2);
     });
 
-    it('operatör sevk edemez; sevk edilmiş motor tekrar sevk edilemez (hiçbiri sevk edilmez)', function () {
-        expect(fn () => $this->production->ship($this->units, $this->operator))->toThrow(BusinessRuleException::class, 'yetkiniz yok');
+    it('sevk yetkisi olmayan (muhasebe) sevk edemez; sevk edilmiş motor tekrar sevk edilemez (hiçbiri sevk edilmez)', function () {
+        $accountant = User::factory()->withRoles(Role::Accounting)->create();
+        expect(fn () => $this->production->ship($this->units, $accountant))->toThrow(BusinessRuleException::class, 'yetkiniz yok');
 
         $this->production->ship([$this->units->first()], $this->admin);
 

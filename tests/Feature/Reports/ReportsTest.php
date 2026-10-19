@@ -144,19 +144,11 @@ it('sipariş durumu: üretilen, sevk edilen, kalan ve gecikme', function () {
         ->and(app(OrderStatusReport::class)->summary(filters(), $rows)['Gecikmedeki kalem'])->toBe('1');
 });
 
-it('yetkiler: depo yalnızca stok raporlarını görür; operatör ve muhasebe hiçbirini', function () {
+it('yetkiler: raporları yalnızca yönetici görür; depo, operatör ve muhasebe hiçbirini', function () {
     $production = [ProductionCountPage::class, WorkOrderPerformancePage::class, OperatorProductionPage::class, OrderStatusPage::class];
     $stock = [StockBalancePage::class, StockMovementListPage::class];
 
-    $this->actingAs(User::factory()->warehouse()->create());
-    foreach ($stock as $page) {
-        $this->get($page::getUrl())->assertOk();
-    }
-    foreach ($production as $page) {
-        $this->get($page::getUrl())->assertForbidden();
-    }
-
-    foreach ([User::factory()->operator()->create(), User::factory()->withRoles(Role::Accounting)->create()] as $user) {
+    foreach ([User::factory()->warehouse()->create(), User::factory()->operator()->create(), User::factory()->withRoles(Role::Accounting)->create()] as $user) {
         $this->actingAs($user);
         foreach ([...$production, ...$stock] as $page) {
             $this->get($page::getUrl())->assertForbidden();

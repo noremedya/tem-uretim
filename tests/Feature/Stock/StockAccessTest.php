@@ -11,11 +11,10 @@ use App\Models\StockMovement;
 use App\Models\User;
 use Livewire\Livewire;
 
-it('yönetici ve depo tüm stok ekranlarına erişir', function (string $role) {
-    $user = User::factory()->{$role}()->create();
+it('yönetici tüm stok ekranlarına erişir', function () {
     $part = Part::factory()->withStock(3)->create();
 
-    $this->actingAs($user);
+    $this->actingAs(User::factory()->admin()->create());
     $this->get(PartResource::getUrl('index'))->assertOk()->assertSee($part->code);
     $this->get(PartResource::getUrl('create'))->assertOk();
     $this->get(PartResource::getUrl('view', ['record' => $part]))->assertOk();
@@ -26,22 +25,40 @@ it('yönetici ve depo tüm stok ekranlarına erişir', function (string $role) {
     $this->get(StockOperation::getUrl())->assertOk();
 
     expect(StockMovementsRelationManager::canViewForRecord($part, ViewPart::class))->toBeTrue();
-})->with(['admin', 'warehouse']);
+});
 
-it('operatör parçaları yalnızca görüntüler; stok işlemi ve hareket listesi yok', function () {
+it('depo stokları ve hareketleri görür, stok işlemi yapar; kart ve birim açıp düzenleyemez', function () {
+    $part = Part::factory()->withStock(3)->create();
+
+    $this->actingAs(User::factory()->warehouse()->create());
+    $this->get(PartResource::getUrl('index'))->assertOk()->assertSee($part->code);
+    $this->get(PartResource::getUrl('view', ['record' => $part]))->assertOk();
+    $this->get(StockMovementResource::getUrl('index'))->assertOk();
+    $this->get(StockOperation::getUrl())->assertOk();
+    $this->get(PartResource::getUrl('create'))->assertForbidden();
+    $this->get(PartResource::getUrl('edit', ['record' => $part]))->assertForbidden();
+    $this->get(UnitResource::getUrl('create'))->assertForbidden();
+
+    Livewire::test(ViewPart::class, ['record' => $part->getRouteKey()])
+        ->assertActionVisible('stockOperation')
+        ->assertActionHidden('edit')
+        ->assertActionHidden('deactivate');
+});
+
+it('operatör stokları ve hareketleri yalnızca görüntüler; stok işlemi yapamaz', function () {
     $operator = User::factory()->operator()->create();
     $part = Part::factory()->withStock(3)->create();
 
     $this->actingAs($operator);
     $this->get(PartResource::getUrl('index'))->assertOk()->assertSee($part->code);
     $this->get(PartResource::getUrl('view', ['record' => $part]))->assertOk();
+    $this->get(StockMovementResource::getUrl('index'))->assertOk();
     $this->get(PartResource::getUrl('create'))->assertForbidden();
     $this->get(PartResource::getUrl('edit', ['record' => $part]))->assertForbidden();
     $this->get(UnitResource::getUrl('create'))->assertForbidden();
-    $this->get(StockMovementResource::getUrl('index'))->assertForbidden();
     $this->get(StockOperation::getUrl())->assertForbidden();
 
-    expect(StockMovementsRelationManager::canViewForRecord($part, ViewPart::class))->toBeFalse();
+    expect(StockMovementsRelationManager::canViewForRecord($part, ViewPart::class))->toBeTrue();
 
     Livewire::test(ViewPart::class, ['record' => $part->getRouteKey()])
         ->assertActionHidden('stockOperation')

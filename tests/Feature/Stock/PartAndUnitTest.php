@@ -20,7 +20,7 @@ use Livewire\Livewire;
 use Spatie\Activitylog\Models\Activity;
 
 beforeEach(function () {
-    $this->user = User::factory()->warehouse()->create();
+    $this->user = User::factory()->admin()->create();
 });
 
 it('parça oluşturulurken 0 bakiyeli satır açılır', function () {
@@ -95,7 +95,7 @@ it('hareketi olmayan parçanın birimi değiştirilebilir', function () {
 
 it('parça düzenlemesi iki ayrı oturumda çakışırsa ikincisi reddedilir', function () {
     $part = Part::factory()->create(['name' => 'Eski']);
-    $a = User::factory()->warehouse()->create();
+    $a = User::factory()->admin()->create();
     $b = User::factory()->admin()->create();
 
     $this->actingAs($a);
@@ -218,7 +218,7 @@ it('"+" birim ekleme UnitService üzerinden yapılır', function () {
 it('"+" birim ekleme yalnızca birim yönetme yetkisi olanlara görünür', function () {
     $part = Part::factory()->create();
 
-    // Depo ve yönetici görür.
+    // Yönetici görür (depo artık stok kartı yönetmez).
     foreach ([$this->user, User::factory()->admin()->create()] as $user) {
         $this->actingAs($user);
         Livewire::test(CreatePart::class)

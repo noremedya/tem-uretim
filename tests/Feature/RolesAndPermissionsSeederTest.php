@@ -29,11 +29,27 @@ it('tekrar çalıştırılabilir (idempotent) ve bozulan eşleşmeyi düzeltir',
 });
 
 it('yetki tablosunu (CLAUDE.md bölüm 6) uygular', function () {
+    // Operatör ve depo için görmeleri yasak olan her şey.
+    $hidden = [
+        Permission::MotorModelsView, Permission::OrdersView, Permission::CustomersView, Permission::InvoicesViewPurchase,
+        Permission::InvoicesManage, Permission::FinanceManage, Permission::ReportsProduction, Permission::ReportsStock,
+        Permission::PartsManage, Permission::WorkOrdersManage, Permission::WorkOrdersChangeStatusAny, Permission::UsersManage,
+        Permission::AuditLogView,
+    ];
+
     expect(Role::Admin->permissions())->toBe(Permission::cases())
-        ->and(Role::Operator->permissions())->not->toContain(Permission::StockMove, Permission::WorkOrdersManage, Permission::PartsManage, Permission::UsersManage)
-        ->and(Role::Operator->permissions())->toContain(Permission::WorkOrdersView, Permission::WorkOrdersChangeStatus)
-        ->and(Role::Operator->permissions())->not->toContain(Permission::WorkOrdersChangeStatusAny)
-        // Depo iş emirlerini salt okunur görür.
-        ->and(Role::Warehouse->permissions())->toContain(Permission::WorkOrdersView, Permission::StockMove, Permission::PartsManage, Permission::ReportsStock)
-        ->and(Role::Warehouse->permissions())->not->toContain(Permission::WorkOrdersManage, Permission::WorkOrdersChangeStatus, Permission::WorkOrdersChangeStatusAny, Permission::ReportsProduction, Permission::UsersManage);
+        // Operatör: stokları, hareketleri, tüm iş emirlerini ve motorları görür; kendi iş emrini başlatıp tamamlar, sevk eder.
+        ->and(Role::Operator->permissions())->toEqualCanonicalizing([
+            Permission::WorkOrdersView, Permission::WorkOrdersViewAll, Permission::WorkOrdersChangeStatus,
+            Permission::MotorUnitsView, Permission::MotorUnitsShip, Permission::PartsView, Permission::StockMovementsView,
+        ])
+        // Depo: aynı görünürlük; stok işlemi ve sevk yapar, iş emri durumu değiştirmez.
+        ->and(Role::Warehouse->permissions())->toEqualCanonicalizing([
+            Permission::WorkOrdersView, Permission::WorkOrdersViewAll, Permission::MotorUnitsView, Permission::MotorUnitsShip,
+            Permission::PartsView, Permission::StockMove, Permission::StockMovementsView,
+        ]);
+
+    foreach ([Role::Operator, Role::Warehouse] as $role) {
+        expect(array_intersect(array_map(fn ($p) => $p->value, $role->permissions()), array_map(fn ($p) => $p->value, $hidden)))->toBe([]);
+    }
 });

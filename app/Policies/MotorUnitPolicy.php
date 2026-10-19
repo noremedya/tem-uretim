@@ -8,19 +8,19 @@ use App\Models\MotorUnit;
 use App\Models\User;
 
 /**
- * Üretilen motorlar: herkes görüntüler, yönetici ve depo sevk eder (CLAUDE.md bölüm 6).
+ * Üretilen motorlar: tüm roller görüntüler; yönetici, operatör ve depo sevk eder (CLAUDE.md bölüm 6).
  * Motor kayıtları elle oluşturulmaz, değiştirilmez, silinmez.
  */
 class MotorUnitPolicy
 {
     public function viewAny(User $actor): bool
     {
-        return $actor->can(Permission::MotorModelsView);
+        return $actor->can(Permission::MotorUnitsView);
     }
 
     public function view(User $actor, MotorUnit $unit): bool
     {
-        return $actor->can(Permission::MotorModelsView);
+        return $actor->can(Permission::MotorUnitsView);
     }
 
     public function ship(User $actor, MotorUnit $unit): bool

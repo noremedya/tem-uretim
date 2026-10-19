@@ -141,7 +141,7 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - **Ters kayıt (`correction`):** miktar orijinal hareketin tam tersidir; bir hareket yalnızca bir kez ters kaydedilebilir (`corrected_movement_id` unique); ters kaydın kendisi ters kaydedilemez; stoğu eksiye düşürecekse reddedilir. Bu kurallar servis + veritabanı (unique, insert trigger'ı) seviyesinde zorlanır.
 - **Üretim hareketleri (`production_consumption`, `production_scrap`, `production_output`) ve `shipment` elle ters kaydedilemez.** Motor kayıtlarıyla tutarlılık için yalnızca iş emri geri alma akışı bunları ters kaydeder.
 - **Çift gönderim:** stok işlemi formu işlem sırasında butonu pasifleştirir ve formun ikinci kez gönderilmesini tarayıcıda engeller (Alpine `submitGuard`, bkz. bölüm 7); sunucu tarafında her form gönderimi bir `idempotency_key` taşır, aynı anahtarla ikinci hareket oluşmaz. Koruma yalnızca bu anahtara dayanır: aynı anahtarlı ikinci istek hareket oluşturmaz, ilk işlemin sonucunu gösterir ve bildirimi tekrarlamaz. Başarılı işlemden sonra form sıfırlanır (miktar ve açıklama temizlenir, tür ve parça kalır) ve yeni anahtar üretilir; aynı parça ve miktarla bilinçli ikinci işlem (ör. iki ayrı teslimat) yeni hareket oluşturur. İşlem sonrası kullanıcıya yeni bakiye gösterilir.
-- Stok hareketleri listesini yönetici ve depo görür; operatör görmez.
+- Stok hareketleri listesini yönetici, depo ve operatör görür (muhasebe görmez).
 - **Kart türü** değiştirilebilir (yanlış sınıflanan kartı düzeltmek için) ve denetim izine yazılır; mamul türü bu kuralın dışındadır (bkz. bölüm 4).
 - **Hareketsiz stok uyarısı:** aktif, bakiyesi > 0 olan ve son 90 gündür (`config/stock.php`, yapılandırılabilir) hiç hareket görmeyen parçalar haftalık **özet** bildirimiyle yönetici ve depoya bildirilir (zamanlanmış komut `stock:idle-report`, scheduler'da haftada bir). Hareketsiz parça yoksa bildirim gönderilmez. Parça listesinde "Hareketsiz" filtresi bulunur.
 - **Yetersiz malzeme uyarısı** (Aşama 4): iş emrinin reçete ihtiyacı (fire dahil) mevcut stoğu aşıyorsa iş emri ekranında hangi malzemeden ne kadar eksik olduğu gösterilir; tamamlama zaten bölüm 5'teki kuralla engellenir.
@@ -232,24 +232,26 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 | | Yönetici | Saha operatörü | Depo | Muhasebe |
 |---|---|---|---|---|
 | Kullanıcı yönetimi | ✓ | | | |
-| Motor modeli, reçete | ✓ | görüntüleme | görüntüleme | görüntüleme |
+| Motor modeli, reçete | ✓ | | | görüntüleme |
 | Cari hesaplar (müşteri, tedarikçi) | ✓ | | | ✓ |
-| Sipariş | ✓ | görüntüleme | görüntüleme | görüntüleme |
-| İş emri görüntüleme | ✓ | kendine atananlar | ✓ (salt okunur) | |
+| Sipariş | ✓ | | | görüntüleme |
+| İş emri görüntüleme | ✓ | ✓ (tümü) | ✓ (tümü) | |
 | İş emri oluşturma/atama | ✓ | | | |
 | İş emri geri alma | ✓ | | | |
 | İş emri durum değiştirme | ✓ | yalnızca kendine atananlar | | |
-| Stok kartları | ✓ | görüntüleme | ✓ | görüntüleme |
+| Stok kartları (ve birimler) | ✓ | görüntüleme | görüntüleme | görüntüleme |
 | Stok giriş/çıkış/sayım | ✓ | | ✓ | |
-| Reçete | ✓ (motor modeli yetkisiyle) | görüntüleme | görüntüleme | |
-| Üretim partileri | ✓ | görüntüleme | görüntüleme | |
+| Stok hareketleri listesi | ✓ | ✓ | ✓ | |
+| Reçete | ✓ (motor modeli yetkisiyle) | | | görüntüleme |
+| Üretim partileri | ✓ | | | |
 | Üretilen motorlar | ✓ | görüntüleme | görüntüleme | görüntüleme |
-| Sevk | ✓ | | ✓ | |
+| Sevk | ✓ | ✓ | ✓ | |
 | Fiyatlar, döviz kurları | ✓ | | | ✓ |
 | Faturalar, tahsilat/ödeme, kasa/banka, Luca aktarımı (Aşama 5b–5d) | ✓ | | | ✓ |
-| Raporlar ve Excel | ✓ | | stok raporları | |
+| Raporlar ve Excel | ✓ | | | |
 | Denetim izi | ✓ | | | |
 
+- **Operatör ve depo** yalnızca stokları (kart, bakiye, hareket), iş emirlerini (tümü) ve üretilen motorları görür; Hızlı İşlem ve etiket yazdırmayı kullanır. Müdahaleleri: sevk (ikisi), kendine atanan iş emrini başlatma/tamamlama (operatör), stok giriş/çıkış/sayım ve "eksiği tamamla"da stok girişi (depo). Motor modeli, reçete, sipariş, parti, cari, fatura, rapor göremezler. Üretilen motorlar ayrı yetkiyle (`motor_units.view`) açılır.
 - **Operatör ve depo müşteri bilgisi görmez:** cari hesap ekranları kapalı; sipariş listesi/detayı, genel arama, Hızlı İşlem motor kartı ve iş emri etiketinde müşteri adı gösterilmez (yalnızca sipariş no ve müşteri sipariş no). Kontrol `User::canSeeCustomers()` (`customers.view`). Depo faturalara da erişmez (`invoices.view_purchase` atanmaz).
 - Bir kullanıcının **birden fazla rolü** olabilir (yetkiler birleşir); **en az bir rol zorunludur.** Kullanıcı formunda roller çoklu seçimle atanır.
 - Giriş **kullanıcı adı (username) + şifre** ile yapılır; e-posta isteğe bağlıdır. Şifre sıfırlamayı yönetici yapar (e-posta ile sıfırlama yok).
@@ -259,7 +261,7 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - "En az bir rol" ve yönetici güvenliği kuralları **servis seviyesinde** (UserService, kilitli) zorlanır; bunlar için veritabanı trigger'ı eklenmez (bölüm 3 kural 5'in bilinçli istisnası).
 - Filament paneli kök adreste (`/`) çalışır.
 
-Yetkiler Laravel Policy'leriyle uygulanır; Filament menüsü de yetkiye göre gizlenir. Saha operatörü arayüzü sade olmalı: ana ekranı "Bana atanan iş emirleri" + büyük "Hızlı işlem" butonu (Aşama 7).
+Yetkiler Laravel Policy'leriyle uygulanır; Filament menüsü de yetkiye göre gizlenir. Saha operatörü arayüzü sade olmalı: ana ekranı "Bana atanan iş emirleri" + büyük "Hızlı işlem" butonu (Aşama 7). Operatör tüm iş emirlerini görür ama yalnızca kendine atananı başlatır/tamamlar; "Bu iş emri size atanmamış" mesajı yalnızca iş emirlerini göremeyen rollere çıkar.
 
 ## 7. Ekranlar
 
@@ -273,7 +275,7 @@ Yetkiler Laravel Policy'leriyle uygulanır; Filament menüsü de yetkiye göre g
   - "Kamera ile okut" butonu (telefon/tablet)
   - Okunan değer parça barkoduysa → parça kartı (bakiye) ve hızlı stok giriş/çıkış formu (stok hareketi yetkisi olanlara; sayım tam stok işlemi sayfasındadır)
   - Seri no ise → motor detay kartı; stoktaki motor için yönetici ve depoya "Sevk et"
-  - İş emri numarası ise → yetkiye göre "Başlat" ve "Tamamla" (fire giriş penceresiyle, standart fireyle dolu); diğer işlemler için iş emri sayfasına bağlantı. Saha operatörü yalnızca kendine atanan iş emirlerini görür (listede, detayda ve burada); başkasına atanmış bir iş emri okutulursa iş emri bilgisi gösterilmez, "Bu iş emri size atanmamış." mesajı çıkar
+  - İş emri numarası ise → yetkiye göre "Başlat" ve "Tamamla" (fire giriş penceresiyle, standart fireyle dolu); diğer işlemler için iş emri sayfasına bağlantı. Operatör tüm iş emirlerini görür; "Başlat"/"Tamamla" yalnızca kendine atananda çıkar. Tüm iş emirlerini görme yetkisi olmayan bir rol başkasına atanmış iş emri okutursa bilgi gösterilmez, "Bu iş emri size atanmamış." mesajı çıkar
   - Aynı kodun 2 saniye içinde tekrar okunması yok sayılır
   - Okuma sonrası odak otomatik olarak okuma alanına döner
 - **Etiket yazdırma** (Aşama 12): seri no ve iş emri için QR etiketli, tarayıcıdan yazdırılabilir sayfa

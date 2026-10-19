@@ -229,19 +229,14 @@ it('sipariş formundan "+" ile yeni müşteri eklenir ve seçilir', function () 
         ->assertSchemaStateSet(['customer_id' => Customer::where('name', 'Yeni Müşteri Ltd.')->sole()->id]);
 });
 
-it('operatör ve depo siparişleri görüntüler; oluşturamaz, düzenleyemez, iptal edemez', function (string $role) {
+it('operatör ve depo siparişleri göremez; sipariş silinemez', function (string $role) {
     $user = User::factory()->{$role}()->create();
     $order = Order::factory()->withItem(2)->create();
 
     $this->actingAs($user);
-    $this->get(OrderResource::getUrl('index'))->assertOk()->assertSee($order->order_number);
-    $this->get(OrderResource::getUrl('view', ['record' => $order]))->assertOk();
+    $this->get(OrderResource::getUrl('index'))->assertForbidden();
+    $this->get(OrderResource::getUrl('view', ['record' => $order]))->assertForbidden();
     $this->get(OrderResource::getUrl('create'))->assertForbidden();
-    $this->get(OrderResource::getUrl('edit', ['record' => $order]))->assertForbidden();
-
-    Livewire::test(ViewOrder::class, ['record' => $order->getRouteKey()])
-        ->assertActionHidden('edit')
-        ->assertActionHidden('cancel');
 
     expect($user->can('delete', $order))->toBeFalse()
         ->and($this->admin->can('delete', $order))->toBeFalse();
