@@ -50,10 +50,10 @@ it('Excel dosyası Türkçe başlıklar, sayı hücreleri ve özet sayfası içe
     $sheets = readXlsx($path);
 
     expect(array_keys($sheets))->toBe(['Rapor', 'Özet'])
-        ->and($sheets['Rapor'][0])->toContain('Tarih', 'Kod', 'Hareket', 'Miktar')
+        ->and($sheets['Rapor'][0])->toContain('Tarih', 'Kod', 'Depo', 'Hareket', 'Miktar')
         ->and($sheets['Rapor'][1][1])->toBe('HM-TEL')
-        ->and($sheets['Rapor'][1][4])->toBe(12.5)
-        ->and($sheets['Rapor'][2][4])->toEqual(-2)
+        ->and($sheets['Rapor'][1][5])->toBe(12.5)
+        ->and($sheets['Rapor'][2][5])->toEqual(-2)
         ->and($sheets['Rapor'][1][0])->toBeInstanceOf(DateTimeInterface::class)
         ->and($sheets['Özet'][0][0])->toBe('Stok hareket listesi')
         ->and($sheets['Özet'][1][1])->toBe($this->filters->rangeLabel());

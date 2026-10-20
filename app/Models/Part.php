@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\PartType;
 use App\Models\Concerns\HasOptimisticLocking;
+use App\Services\WarehouseService;
 use App\Support\Quantity;
 use Database\Factories\PartFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -18,9 +19,10 @@ use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 
 /**
- * Stok kartı. Bakiye stock_balances'ta tutulur ve yalnızca StockService tarafından değiştirilir.
+ * Stok kartı. Bakiye ve kritik seviye depo bazlıdır (stock_balances) ve yalnızca StockService tarafından değiştirilir.
+ * Bakiyeyle ilgili yardımcılar yüklü stockBalances ilişkisini kullanır (with('stockBalances')).
  */
-#[Fillable(['code', 'name', 'unit_id', 'type', 'barcode', 'critical_level', 'image_path', 'brand_id', 'description'])]
+#[Fillable(['code', 'name', 'unit_id', 'type', 'barcode', 'image_path', 'brand_id', 'description', 'default_warehouse_id'])]
 class Part extends Model
 {
     /** @use HasFactory<PartFactory> */
@@ -30,7 +32,6 @@ class Part extends Model
     {
         return [
             'type' => PartType::class,
-            'critical_level' => 'decimal:3',
             'is_active' => 'boolean',
         ];
     }
@@ -63,10 +64,72 @@ class Part extends Model
         return $this->belongsTo(Unit::class);
     }
 
-    /** @return HasOne<StockBalance, $this> */
-    public function stockBalance(): HasOne
+    /** @return HasMany<StockBalance, $this> */
+    public function stockBalances(): HasMany
     {
-        return $this->hasOne(StockBalance::class);
+        return $this->hasMany(StockBalance::class);
+    }
+
+    /**
+     * Ürüne özel varsayılan depo (boşsa türün varsayılan deposu kullanılır).
+     *
+     * @return BelongsTo<Warehouse, $this>
+     */
+    public function defaultWarehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class, 'default_warehouse_id');
+    }
+
+    /** Etkin varsayılan depo id'si (ürünün kendi deposu, yoksa türünün deposu). */
+    public function defaultWarehouseId(): ?int
+    {
+        return app(WarehouseService::class)->defaultIdFor($this);
+    }
+
+    /** Tüm depolardaki toplam bakiye. */
+    public function totalStock(): string
+    {
+        return $this->stockBalances->reduce(fn (string $sum, StockBalance $b) => Quantity::add($sum, (string) $b->quantity), '0');
+    }
+
+    /** Bir depodaki bakiye satırı (yoksa null; hiç hareket görmemiş depo). */
+    public function balanceIn(?int $warehouseId): ?StockBalance
+    {
+        return $this->stockBalances->firstWhere('warehouse_id', $warehouseId);
+    }
+
+    /** Bir depodaki bakiye (satır yoksa 0). */
+    public function quantityIn(?int $warehouseId): string
+    {
+        return (string) ($this->balanceIn($warehouseId)?->quantity ?? '0');
+    }
+
+    /**
+     * Varsayılan depodaki bakiye satırı ilişkisi (tek kayıt üzerinde sorgu için; listelerde with('stockBalances')).
+     *
+     * @return HasOne<StockBalance, $this>
+     */
+    public function defaultStockBalance(): HasOne
+    {
+        return $this->hasOne(StockBalance::class)->where('warehouse_id', $this->defaultWarehouseId());
+    }
+
+    /** Varsayılan depodaki bakiye (üretim sarfı ve hızlı işlem bu depoda yapılır). */
+    public function defaultQuantity(): string
+    {
+        return $this->quantityIn($this->defaultWarehouseId());
+    }
+
+    /** Varsayılan depodaki bakiye satırı. */
+    public function defaultBalance(): ?StockBalance
+    {
+        return $this->balanceIn($this->defaultWarehouseId());
+    }
+
+    /** Varsayılan depodaki kritik seviye (ürün formunda düzenlenen). */
+    public function criticalLevel(): string
+    {
+        return (string) ($this->defaultBalance()?->critical_level ?? '0');
     }
 
     /** @return HasMany<StockMovement, $this> */
@@ -116,40 +179,39 @@ class Part extends Model
         return in_array($this->type, [PartType::SemiFinished, PartType::FinishedGood], true);
     }
 
-    /** Kritik seviye takibi var mı? critical_level = 0 takip yok demektir. */
-    public function tracksCriticalLevel(): bool
+    /** Herhangi bir depoda kritik mi? Kural (depo bazlı): bakiye <= kritik seviye (takip varsa). */
+    public function isCritical(): bool
     {
-        return Quantity::compare((string) $this->critical_level, '0') > 0;
+        return $this->stockBalances->contains(fn (StockBalance $b) => $b->isCriticalAt());
     }
 
-    /** Verilen bakiyede parça kritik mi? Kural: bakiye <= kritik seviye (takip varsa). */
-    public function isCriticalAt(string $quantity): bool
-    {
-        return $this->tracksCriticalLevel() && Quantity::compare($quantity, (string) $this->critical_level) <= 0;
-    }
-
-    /** Kritik seviyedeki parçalar (bakiye <= kritik seviye, kritik seviye > 0). */
+    /** Kritik seviyedeki ürünler: en az bir depoda bakiye <= kritik seviye ve kritik seviye > 0. */
     public function scopeCritical(Builder $query): void
     {
-        $query->where('critical_level', '>', 0)
-            ->whereHas('stockBalance', fn (Builder $balance) => $balance->whereColumn('stock_balances.quantity', '<=', 'parts.critical_level'));
+        $query->whereHas('stockBalances', fn (Builder $balance) => $balance->criticalOnly());
+    }
+
+    /** Toplam bakiyesi > 0 olan ürünler. */
+    public function scopeInStock(Builder $query): void
+    {
+        $query->whereRaw('(SELECT COALESCE(SUM(b.quantity), 0) FROM stock_balances b WHERE b.part_id = parts.id) > 0');
     }
 
     /**
-     * Hareketsiz parçalar: bakiyesi > 0 olan ve son $days gündür hiç hareket görmeyen parçalar.
+     * Hareketsiz ürünler: toplam bakiyesi > 0 olan ve son $days gündür hiç hareket görmeyen ürünler.
      */
     public function scopeIdle(Builder $query, ?int $days = null): void
     {
         $since = now()->subDays($days ?? (int) config('stock.idle_days'));
 
-        $query->whereHas('stockBalance', fn (Builder $balance) => $balance->where('quantity', '>', 0))
+        $query->inStock()
             ->whereDoesntHave('stockMovements', fn (Builder $movement) => $movement->where('created_at', '>=', $since));
     }
 
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['code', 'name', 'unit_id', 'type', 'barcode', 'critical_level', 'is_active', 'image_path', 'brand_id', 'description'])
+            ->logOnly(['code', 'name', 'unit_id', 'type', 'barcode', 'is_active', 'image_path', 'brand_id', 'description', 'default_warehouse_id'])
             ->logOnlyDirty()
             ->dontLogEmptyChanges();
     }

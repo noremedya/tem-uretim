@@ -27,7 +27,7 @@ beforeEach(function () {
 
 function stockOf(Part $part): string
 {
-    return (string) $part->stockBalance()->value('quantity');
+    return (string) $part->defaultStockBalance()->value('quantity');
 }
 
 it('tamamlanmış iş emrini geri alır: ters kayıtlar, motorlar iptal, iş emri üretimde', function () {

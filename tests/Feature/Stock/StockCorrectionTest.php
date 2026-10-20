@@ -31,7 +31,7 @@ it('ters kayıt orijinalin tam tersi miktarla yapılır ve bakiyeyi geri alır',
         ->balance_after->toBe('0.000')
         ->description->toBe('Yanlış ürüne girilmiş')
         ->and($in->fresh()->correction->id)->toBe($correction->id)
-        ->and((string) $this->part->stockBalance()->value('quantity'))->toBe('0.000');
+        ->and((string) $this->part->defaultStockBalance()->value('quantity'))->toBe('0.000');
 });
 
 it('çıkışın ters kaydı stoğu geri artırır', function () {
@@ -53,7 +53,7 @@ it('bir hareket yalnızca bir kez ters kaydedilebilir (servis)', function () {
         ->toThrow(BusinessRuleException::class, 'zaten ters kaydedilmiş');
 
     expect(StockMovement::where('corrected_movement_id', $in->id)->count())->toBe(1)
-        ->and((string) $this->part->stockBalance()->value('quantity'))->toBe('5.000');
+        ->and((string) $this->part->defaultStockBalance()->value('quantity'))->toBe('5.000');
 });
 
 it('bir hareket yalnızca bir kez ters kaydedilebilir (veritabanı unique)', function () {
@@ -62,7 +62,7 @@ it('bir hareket yalnızca bir kez ters kaydedilebilir (veritabanı unique)', fun
     $this->stock->correct($in, $this->user, 'İlk düzeltme');
 
     expect(fn () => DB::transaction(fn () => DB::table('stock_movements')->insert([
-        'part_id' => $this->part->id, 'type' => 'correction', 'quantity' => '-5',
+        'part_id' => $this->part->id, 'warehouse_id' => $in->warehouse_id, 'type' => 'correction', 'quantity' => '-5',
         'balance_before' => '5', 'balance_after' => '0', 'corrected_movement_id' => $in->id,
         'description' => 'elle', 'user_id' => $this->user->id,
     ])))->toThrow(QueryException::class, 'stock_movements_corrected_movement_id_unique');
@@ -87,7 +87,7 @@ it('veritabanı ters kaydın tam ters miktarda ve aynı üründe olmasını zorl
     $other = Part::factory()->withStock(10)->create();
 
     $insert = fn (array $row) => fn () => DB::transaction(fn () => DB::table('stock_movements')->insert(array_merge([
-        'part_id' => $this->part->id, 'type' => 'correction', 'quantity' => '-5',
+        'part_id' => $this->part->id, 'warehouse_id' => $in->warehouse_id, 'type' => 'correction', 'quantity' => '-5',
         'balance_before' => '5', 'balance_after' => '0', 'corrected_movement_id' => $in->id,
         'description' => 'elle', 'user_id' => $this->user->id,
     ], $row)));
@@ -105,7 +105,7 @@ it('stoğu eksiye düşürecek ters kayıt reddedilir; hiçbir şey değişmez',
     expect(fn () => $this->stock->correct($in, $this->user, 'Girişi geri al'))
         ->toThrow(InsufficientStockException::class);
 
-    expect((string) $this->part->stockBalance()->value('quantity'))->toBe('2.000')
+    expect((string) $this->part->defaultStockBalance()->value('quantity'))->toBe('2.000')
         ->and($in->correction()->exists())->toBeFalse();
 });
 

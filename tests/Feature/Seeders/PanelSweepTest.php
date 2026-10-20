@@ -17,6 +17,7 @@ use App\Models\Price;
 use App\Models\ProductionBatch;
 use App\Models\Unit;
 use App\Models\User;
+use App\Models\Warehouse;
 use App\Models\WorkOrder;
 use App\Services\WorkOrderService;
 use Database\Seeders\DemoDataSeeder;
@@ -60,6 +61,9 @@ function sweepExpectations(): array
         'brands' => $all,
         'brands/create' => ['yonetici'],
         'brands/{record}/edit' => ['yonetici'],
+        'warehouses' => $all,
+        'warehouses/create' => ['yonetici'],
+        'warehouses/{record}/edit' => ['yonetici'],
         'units' => $all,
         // Operatör ve depo stokları görür, kart açıp düzenleyemez; hareketleri görür.
         'units/create' => ['yonetici'],
@@ -123,6 +127,7 @@ function sweepRecords(): array
         'denetim-izi' => Activity::query()->value('id'),
         'users' => User::query()->where('username', 'operator2')->value('id'),
         'brands' => Brand::query()->value('id'),
+        'warehouses' => Warehouse::query()->value('id'),
         'units' => Unit::query()->value('id'),
         'parts' => Part::query()->where('code', DemoDataSeeder::MARKER_PART)->value('id'),
         'motor-models' => MotorModel::query()->where('is_active', true)->value('id'),

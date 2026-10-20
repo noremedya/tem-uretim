@@ -35,7 +35,7 @@ beforeEach(function () {
 
 function balance(Part $part): string
 {
-    return (string) $part->stockBalance()->value('quantity');
+    return (string) $part->defaultStockBalance()->value('quantity');
 }
 
 it('mamul iş emri tamamlanınca sarf, fire, mamul girişi ve seri numaralı motorlar oluşur', function () {

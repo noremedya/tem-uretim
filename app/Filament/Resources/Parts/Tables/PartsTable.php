@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Parts\Tables;
 use App\Enums\PartType;
 use App\Filament\Resources\Parts\Actions\PartStatusActions;
 use App\Models\Part;
+use App\Models\Warehouse;
 use App\Support\Quantity;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
@@ -47,19 +48,26 @@ class PartsTable
                 TextColumn::make('type')
                     ->label('Tür')
                     ->badge(),
-                TextColumn::make('stockBalance.quantity')
-                    ->label('Bakiye')
+                // Depo filtresi seçiliyse o depodaki bakiye, değilse tüm depoların toplamı.
+                TextColumn::make('balance')
+                    ->label(fn ($livewire): string => static::warehouseFilter($livewire) !== null ? 'Bakiye (depo)' : 'Bakiye')
                     ->alignEnd()
+                    ->state(fn (Part $record, $livewire): string => ($warehouseId = static::warehouseFilter($livewire)) !== null
+                        ? $record->quantityIn($warehouseId)
+                        : $record->totalStock())
                     ->formatStateUsing(fn ($state, Part $record): string => Quantity::format($state, $record->unit->name))
-                    ->color(fn (Part $record): ?string => $record->isCriticalAt((string) $record->stockBalance?->quantity) ? 'danger' : null)
-                    ->weight(fn (Part $record): ?string => $record->isCriticalAt((string) $record->stockBalance?->quantity) ? 'bold' : null)
-                    ->icon(fn (Part $record) => $record->isCriticalAt((string) $record->stockBalance?->quantity) ? 'heroicon-m-exclamation-triangle' : null),
+                    ->color(fn (Part $record): ?string => $record->isCritical() ? 'danger' : null)
+                    ->weight(fn (Part $record): ?string => $record->isCritical() ? 'bold' : null)
+                    ->icon(fn (Part $record) => $record->isCritical() ? 'heroicon-m-exclamation-triangle' : null)
+                    ->tooltip(fn (Part $record): ?string => $record->isCritical() ? 'En az bir depoda kritik seviyede' : null),
                 TextColumn::make('critical_level')
                     ->label('Kritik seviye')
                     ->alignEnd()
-                    ->formatStateUsing(fn ($state, Part $record): string => $record->tracksCriticalLevel()
+                    ->state(fn (Part $record): string => $record->criticalLevel())
+                    ->formatStateUsing(fn ($state, Part $record): string => Quantity::compare((string) $state, '0') > 0
                         ? Quantity::format($state, $record->unit->name)
                         : '—')
+                    ->tooltip('Varsayılan depodaki kritik seviye')
                     ->toggleable(),
                 TextColumn::make('barcode')
                     ->label('Barkod')
@@ -84,6 +92,13 @@ class PartsTable
                     ->relationship('brand', 'name')
                     ->searchable()
                     ->preload(),
+                SelectFilter::make('warehouse')
+                    ->label('Depo')
+                    ->options(fn () => Warehouse::query()->orderBy('code')->pluck('name', 'id'))
+                    ->query(fn (Builder $query, array $data) => $query->when(
+                        filled($data['value'] ?? null),
+                        fn (Builder $q) => $q->whereHas('stockBalances', fn (Builder $b) => $b->where('warehouse_id', $data['value'])->where('quantity', '<>', 0)),
+                    )),
                 SelectFilter::make('unit_id')
                     ->label('Birim')
                     ->relationship('unit', 'name'),
@@ -102,5 +117,13 @@ class PartsTable
                 PartStatusActions::deactivate(),
                 PartStatusActions::activate(),
             ]);
+    }
+
+    /** Seçili depo filtresi (yoksa null). */
+    private static function warehouseFilter($livewire): ?int
+    {
+        $value = $livewire?->tableFilters['warehouse']['value'] ?? null;
+
+        return filled($value) ? (int) $value : null;
     }
 }

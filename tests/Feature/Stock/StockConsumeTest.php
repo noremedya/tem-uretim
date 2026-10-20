@@ -28,8 +28,8 @@ it('birden fazla malzemeyi tek işlemde düşer; aynı ürün satırları toplan
     expect($movements)->toHaveCount(2)
         ->and($movements->every(fn (StockMovement $m) => $m->type === StockMovementType::ProductionConsumption))->toBeTrue()
         ->and($movements->every(fn (StockMovement $m) => $m->reference_type === 'user' && $m->reference_id === $this->reference->id))->toBeTrue()
-        ->and((string) $copper->stockBalance()->value('quantity'))->toBe('6.000')
-        ->and((string) $bearing->stockBalance()->value('quantity'))->toBe('2.000');
+        ->and((string) $copper->defaultStockBalance()->value('quantity'))->toBe('6.000')
+        ->and((string) $bearing->defaultStockBalance()->value('quantity'))->toBe('2.000');
 });
 
 it('herhangi bir malzeme yetersizse hiçbir şey değişmez ve tüm eksikler listelenir', function () {
@@ -52,7 +52,7 @@ it('herhangi bir malzeme yetersizse hiçbir şey değişmez ve tüm eksikler lis
     }
 
     expect(StockMovement::count())->toBe($count)
-        ->and((string) $enough->stockBalance()->value('quantity'))->toBe('10.000');
+        ->and((string) $enough->defaultStockBalance()->value('quantity'))->toBe('10.000');
 });
 
 it('pasif üründen üretim sarfı yapılamaz', function () {

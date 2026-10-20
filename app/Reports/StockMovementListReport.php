@@ -28,7 +28,7 @@ class StockMovementListReport extends Report
 
     public function filters(): array
     {
-        return ['part_type', 'part_id'];
+        return ['part_type', 'part_id', 'warehouse_id'];
     }
 
     public function columns(): array
@@ -37,6 +37,7 @@ class StockMovementListReport extends Report
             ReportColumn::datetime('created_at', 'Tarih'),
             ReportColumn::text('code', 'Kod'),
             ReportColumn::text('name', 'Ad'),
+            ReportColumn::text('warehouse', 'Depo'),
             ReportColumn::text('type', 'Hareket'),
             ReportColumn::decimal('quantity', 'Miktar'),
             ReportColumn::text('unit', 'Birim'),
@@ -53,6 +54,7 @@ class StockMovementListReport extends Report
         return DB::table('stock_movements as m')
             ->join('parts as p', 'p.id', '=', 'm.part_id')
             ->join('units as un', 'un.id', '=', 'p.unit_id')
+            ->join('warehouses as w', 'w.id', '=', 'm.warehouse_id')
             ->join('users as u', 'u.id', '=', 'm.user_id')
             ->leftJoin('work_orders as wo', fn ($j) => $j->on('wo.id', '=', 'm.reference_id')->where('m.reference_type', 'work_order'))
             ->leftJoin('invoices as i', fn ($j) => $j->on('i.id', '=', 'm.reference_id')->where('m.reference_type', 'invoice'))
@@ -61,9 +63,10 @@ class StockMovementListReport extends Report
             ->where('m.created_at', '<', $filters->toExclusive())
             ->when($filters->partType, fn ($q, $type) => $q->where('p.type', $type))
             ->when($filters->partId, fn ($q, $id) => $q->where('p.id', $id))
+            ->when($filters->warehouseId, fn ($q, $id) => $q->where('m.warehouse_id', $id))
             ->orderBy('m.created_at')->orderBy('m.id')
             ->select([
-                'm.created_at', 'p.code', 'p.name', 'm.type', 'm.quantity', 'un.name as unit', 'm.balance_before', 'm.balance_after',
+                'm.created_at', 'p.code', 'p.name', 'w.name as warehouse', 'm.type', 'm.quantity', 'un.name as unit', 'm.balance_before', 'm.balance_after',
                 'u.name as user', 'm.description',
                 DB::raw('COALESCE(wo.work_order_number, i.invoice_number, i.counterparty_number, mu.serial_number) AS reference'),
             ])
@@ -72,6 +75,7 @@ class StockMovementListReport extends Report
                 'created_at' => $row->created_at,
                 'code' => $row->code,
                 'name' => $row->name,
+                'warehouse' => $row->warehouse,
                 'type' => StockMovementType::from($row->type)->label(),
                 'quantity' => (string) $row->quantity,
                 'unit' => $row->unit,

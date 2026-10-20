@@ -45,7 +45,7 @@ it('demo veri servislerle, kurallara uygun ve tutarlı yüklenir', function () {
 
     // Gecikmiş iş emri, kritik ve hareketsiz stok, vadesi geçmiş alacak: dashboard dolu görünsün.
     expect(WorkOrder::query()->where('status', WorkOrderStatus::InProgress->value)->whereDate('planned_end', '<', today())->exists())->toBeTrue()
-        ->and(Part::query()->where('critical_level', '>', 0)->whereHas('stockBalance', fn ($q) => $q->whereColumn('quantity', '<=', 'parts.critical_level'))->exists())->toBeTrue()
+        ->and(Part::query()->critical()->exists())->toBeTrue()
         ->and(app(StatementService::class)->overdueReceivables())->not->toBeEmpty();
     $this->artisan('stock:idle-report')->assertSuccessful();
 

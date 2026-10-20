@@ -19,7 +19,7 @@ beforeEach(function () {
 
 function balanceOf(Part $part): string
 {
-    return (string) $part->stockBalance()->value('quantity');
+    return (string) $part->defaultStockBalance()->value('quantity');
 }
 
 it('giriş bakiyeyi artırır ve hareket kaydını doğru oluşturur', function () {
@@ -74,7 +74,7 @@ it('veritabanı negatif bakiyeye izin vermez', function () {
     $part = Part::factory()->create();
 
     expect(fn () => DB::transaction(fn () => DB::table('stock_balances')->where('part_id', $part->id)->update(['quantity' => -1])))
-        ->toThrow(QueryException::class, 'stock_balances_quantity_check');
+        ->toThrow(QueryException::class, 'Bu depoda stok eksiye düşemez');
 });
 
 it('sıfır ve negatif miktarı reddeder', function (string $quantity) {
@@ -138,7 +138,7 @@ it('küsuratsız birimde küsuratlı miktar reddedilir (servis ve veritabanı)',
 
     // Veritabanı trigger'ı da reddeder.
     expect(fn () => DB::transaction(fn () => DB::table('stock_movements')->insert([
-        'part_id' => $part->id, 'type' => 'stock_in', 'quantity' => '0.5',
+        'part_id' => $part->id, 'warehouse_id' => $part->defaultWarehouseId(), 'type' => 'stock_in', 'quantity' => '0.5',
         'balance_before' => '5', 'balance_after' => '5.5', 'user_id' => $this->user->id,
     ])))->toThrow(QueryException::class, 'küsuratlı miktar kabul etmez');
 

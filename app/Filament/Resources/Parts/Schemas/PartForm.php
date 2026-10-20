@@ -90,18 +90,26 @@ class PartForm
                             ->createOptionAction(fn (Action $action) => $action->modalHeading('Yeni marka')
                                 ->visible(fn (): bool => Auth::user()?->can('create', Brand::class) ?? false))
                             ->helperText('İsteğe bağlı. Yeni marka "+" ile veya Markalar ekranından eklenir.'),
+                        Select::make('default_warehouse_id')
+                            ->label('Varsayılan depo')
+                            ->relationship('defaultWarehouse', 'name', modifyQueryUsing: fn ($query, ?Part $record) => $query
+                                ->where(fn ($q) => $q->where('is_active', true)->orWhere('id', $record?->default_warehouse_id)))
+                            ->preload()
+                            ->hidden(fn (?Part $record): bool => $record?->isFinishedGood() ?? false)
+                            ->placeholder('Türün varsayılan deposu')
+                            ->helperText('Boşsa türün varsayılan deposu (Depolar ekranı). Stok işleminde depo seçilmezse bu depo kullanılır.'),
                         TextInput::make('critical_level')
-                            ->label('Kritik seviye')
+                            ->label('Kritik seviye (varsayılan depo)')
                             ->required()
                             ->default('0')
                             ->inputMode('decimal')
-                            ->formatStateUsing(fn ($state): ?string => Quantity::toInput($state))
+                            ->formatStateUsing(fn ($state, ?Part $record): ?string => Quantity::toInput($record?->exists ? $record->criticalLevel() : $state))
                             ->rule(fn (): Closure => function (string $attribute, mixed $value, Closure $fail): void {
                                 if (! Quantity::isValid($value) || Quantity::compare(Quantity::parse($value), '0') < 0) {
                                     $fail('Geçerli bir miktar girin (ör. 10 veya 12,5; en fazla 3 ondalık).');
                                 }
                             })
-                            ->helperText('Bakiye bu değere eşit veya altındaysa kritik sayılır. 0 = takip yok.'),
+                            ->helperText('Varsayılan depodaki bakiye bu değere eşit veya altındaysa kritik sayılır. 0 = takip yok. Diğer depolarınki ürün sayfasındaki "Depo bakiyeleri"nden.'),
                         Textarea::make('description')
                             ->label('Açıklama')
                             ->rows(3)

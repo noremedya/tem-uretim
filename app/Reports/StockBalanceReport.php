@@ -9,7 +9,7 @@ use App\Support\Quantity;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Stok hareketleri ve dönem sonu bakiyeleri: parça başına açılış, hareket tiplerine göre giriş/çıkış ve dönem
+ * Stok hareketleri ve dönem sonu bakiyeleri: ürün başına (depo seçiliyse o depoda, değilse tüm depolarda) açılış, hareket tiplerine göre giriş/çıkış ve dönem
  * sonu; muhasebe koduna göre sıralı. Dönem içinde hareketi veya açılış bakiyesi olan parçalar listelenir.
  * Çıkış sütunları pozitif gösterilir; sayım ve ters kayıt işaretlidir.
  */
@@ -26,6 +26,8 @@ class StockBalanceReport extends Report
         'shipment' => ['Sevk', true],
         'count_adjustment' => ['Sayım farkı', false],
         'correction' => ['Ters kayıt', false],
+        // Depolar arası: depo seçilmediğinde toplamı 0'dır.
+        'transfer' => ['Transfer', false],
     ];
 
     public static function key(): string
@@ -45,7 +47,7 @@ class StockBalanceReport extends Report
 
     public function filters(): array
     {
-        return ['part_type', 'part_id'];
+        return ['part_type', 'part_id', 'warehouse_id'];
     }
 
     public function columns(): array
@@ -77,6 +79,11 @@ class StockBalanceReport extends Report
         }
 
         $where = '';
+        $movementWhere = '';
+        if ($filters->warehouseId !== null) {
+            $movementWhere = ' AND m.warehouse_id = :warehouse_id';
+            $bindings['warehouse_id'] = $filters->warehouseId;
+        }
         if ($filters->partType !== null) {
             $where .= ' AND p.type = :part_type';
             $bindings['part_type'] = $filters->partType;
@@ -94,7 +101,7 @@ class StockBalanceReport extends Report
                 count(m.id) FILTER (WHERE m.created_at >= :any_from) AS movement_count
             FROM parts p
             JOIN units u ON u.id = p.unit_id
-            LEFT JOIN stock_movements m ON m.part_id = p.id AND m.created_at < :to
+            LEFT JOIN stock_movements m ON m.part_id = p.id AND m.created_at < :to{$movementWhere}
             WHERE TRUE {$where}
             GROUP BY p.id, p.code, p.name, p.type, u.name
             HAVING count(m.id) > 0

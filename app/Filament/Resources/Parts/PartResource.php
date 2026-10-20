@@ -7,6 +7,7 @@ use App\Filament\Resources\Parts\Pages\CreatePart;
 use App\Filament\Resources\Parts\Pages\EditPart;
 use App\Filament\Resources\Parts\Pages\ListParts;
 use App\Filament\Resources\Parts\Pages\ViewPart;
+use App\Filament\Resources\Parts\RelationManagers\StockBalancesRelationManager;
 use App\Filament\Resources\Parts\RelationManagers\StockMovementsRelationManager;
 use App\Filament\Resources\Parts\Schemas\PartForm;
 use App\Filament\Resources\Parts\Schemas\PartInfolist;
@@ -40,7 +41,7 @@ class PartResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['unit', 'stockBalance', 'brand']);
+        return parent::getEloquentQuery()->with(['unit', 'stockBalances', 'brand']);
     }
 
     public static function form(Schema $schema): Schema
@@ -61,6 +62,7 @@ class PartResource extends Resource
     public static function getRelations(): array
     {
         return [
+            StockBalancesRelationManager::class,
             BomItemsRelationManager::class,
             StockMovementsRelationManager::class,
         ];

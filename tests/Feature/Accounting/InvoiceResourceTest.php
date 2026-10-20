@@ -101,7 +101,7 @@ it('alış faturası: malzeme satırı önceden yapılmış stok girişine bağl
 
     Livewire::test(ViewInvoice::class, ['record' => $invoice->getRouteKey()])->callAction('issue')->assertNotified();
 
-    expect((string) $part->stockBalance()->value('quantity'))->toBe('25.000')
+    expect((string) $part->defaultStockBalance()->value('quantity'))->toBe('25.000')
         ->and($invoice->lines()->sole()->stockMovements()->sole()->id)->toBe($receipt->id);
 });
 

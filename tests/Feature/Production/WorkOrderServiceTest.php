@@ -222,7 +222,7 @@ it('reçeteyi yenile: güncel reçete kopyalanır, yalnızca planlandıda', func
 
 it('malzeme durumu eksikleri gösterir (fire dahil)', function () {
     $wo = $this->f->motorWorkOrder($this->admin, 10);
-    $this->f->varnish->stockBalance->forceFill(['quantity' => '1.500'])->save();
+    $this->f->varnish->defaultStockBalance->forceFill(['quantity' => '1.500'])->save();
 
     $status = collect($this->service->materialStatus($wo))->keyBy(fn ($row) => $row['material']->part_id);
 

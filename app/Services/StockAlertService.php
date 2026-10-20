@@ -6,6 +6,7 @@ use App\Enums\Role;
 use App\Filament\Resources\Parts\PartResource;
 use App\Models\Part;
 use App\Models\User;
+use App\Models\Warehouse;
 use App\Support\Quantity;
 use Carbon\Carbon;
 use Filament\Actions\Action;
@@ -17,8 +18,8 @@ use Illuminate\Database\Eloquent\Collection;
  */
 class StockAlertService
 {
-    /** Parça kritik seviyeye indi: aktif yönetici ve depo kullanıcılarına. */
-    public function criticalStock(Part $part, string $quantity): void
+    /** Ürün bir depoda kritik seviyeye indi: aktif yönetici ve depo kullanıcılarına. */
+    public function criticalStock(Part $part, Warehouse $warehouse, string $quantity, string $criticalLevel): void
     {
         $part->loadMissing('unit');
 
@@ -26,9 +27,10 @@ class StockAlertService
             ->warning()
             ->title("Kritik stok: {$part->code} {$part->name}")
             ->body(sprintf(
-                'Bakiye %s, kritik seviye %s.',
+                '%s: bakiye %s, kritik seviye %s.',
+                $warehouse->name,
                 Quantity::format($quantity, $part->unit->name),
-                Quantity::format((string) $part->critical_level, $part->unit->name),
+                Quantity::format($criticalLevel, $part->unit->name),
             ))
             ->actions([
                 Action::make('view')
@@ -41,15 +43,16 @@ class StockAlertService
     /**
      * stock:reconcile tutarsızlık buldu: aktif yöneticilere.
      *
-     * @param  list<array{code: string, name: string, balance: ?string, movements_total: string}>  $mismatches
+     * @param  list<array{code: string, name: string, warehouse: string, balance: ?string, movements_total: string}>  $mismatches
      */
     public function reconcileMismatches(array $mismatches): void
     {
         $lines = array_map(
             fn (array $m): string => sprintf(
-                '%s %s: bakiye %s, hareket toplamı %s',
+                '%s %s (%s): bakiye %s, hareket toplamı %s',
                 $m['code'],
                 $m['name'],
+                $m['warehouse'],
                 $m['balance'] === null ? 'yok' : Quantity::format($m['balance']),
                 Quantity::format($m['movements_total']),
             ),
@@ -93,7 +96,7 @@ class StockAlertService
     /**
      * Haftalık hareketsiz stok özeti: aktif yönetici ve depo kullanıcılarına.
      *
-     * @param  Collection<int, Part>  $parts  unit, stockBalance ve last_movement_at yüklü olmalı.
+     * @param  Collection<int, Part>  $parts  unit, stockBalances ve last_movement_at yüklü olmalı.
      */
     public function idleStock(Collection $parts, int $days): void
     {
@@ -101,7 +104,7 @@ class StockAlertService
             '%s %s: bakiye %s, son hareket %s',
             $part->code,
             $part->name,
-            Quantity::format((string) $part->stockBalance->quantity, $part->unit->name),
+            Quantity::format($part->totalStock(), $part->unit->name),
             Carbon::parse($part->last_movement_at)->format('d.m.Y'),
         ))->all();
 

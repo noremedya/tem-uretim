@@ -39,5 +39,5 @@ it('aynı anda tamamlanan iş emirlerinin seri numaraları çakışmaz', functio
     expect($serials)->toHaveCount(8)
         ->and($serials->unique())->toHaveCount(8)
         ->and($serials->all())->toBe(array_map(fn (int $i) => sprintf('%s-%05d', $prefix, $i), range(1, 8)))
-        ->and((string) $f->model->finishedPart->stockBalance()->value('quantity'))->toBe('8.000');
+        ->and((string) $f->model->finishedPart->defaultStockBalance()->value('quantity'))->toBe('8.000');
 });

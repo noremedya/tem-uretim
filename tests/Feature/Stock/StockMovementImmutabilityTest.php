@@ -38,7 +38,7 @@ it('veritabanında UPDATE, DELETE ve TRUNCATE trigger ile engellenir', function 
 
 it('veritabanı hareket tutarlılığını check constraint ile zorlar', function (array $row, string $constraint) {
     $base = [
-        'part_id' => $this->part->id, 'type' => 'stock_in', 'quantity' => '1',
+        'part_id' => $this->part->id, 'warehouse_id' => $this->movement->warehouse_id, 'type' => 'stock_in', 'quantity' => '1',
         'balance_before' => '10', 'balance_after' => '11', 'user_id' => $this->user->id,
         'description' => 'x',
     ];
@@ -48,7 +48,9 @@ it('veritabanı hareket tutarlılığını check constraint ile zorlar', functio
 })->with([
     'sıfır miktar' => [['quantity' => '0', 'balance_after' => '10'], 'stock_movements_quantity_check'],
     'bakiye hesabı' => [['balance_after' => '12'], 'stock_movements_balance_check'],
-    'negatif bakiye' => [['type' => 'stock_out', 'quantity' => '-11', 'balance_after' => '-1'], 'stock_movements_balance_check'],
+    // Eksi bakiye depo ayarına bağlı (trigger); varsayılan depolarda kapalı.
+    'negatif bakiye' => [['type' => 'stock_out', 'quantity' => '-11', 'balance_after' => '-1'], 'Bu depoda stok eksiye düşemez'],
+    'transfer bağlantısız' => [['type' => 'transfer'], 'stock_movements_transfer_check'],
     'girişte eksi' => [['quantity' => '-1', 'balance_after' => '9'], 'stock_movements_type_sign_check'],
     'çıkışta artı' => [['type' => 'stock_out'], 'stock_movements_type_sign_check'],
     'ters kayıt bağlantısız' => [['type' => 'correction'], 'stock_movements_correction_check'],

@@ -31,7 +31,7 @@ class QuickScanService
 
         $lower = mb_strtolower($code);
 
-        $part = Part::query()->with(['unit', 'stockBalance'])
+        $part = Part::query()->with(['unit', 'stockBalances.warehouse'])
             ->where(fn ($q) => $q->whereRaw('lower(barcode) = ?', [$lower])->orWhereRaw('lower(code) = ?', [$lower]))
             // Barkod eşleşmesi kod eşleşmesinden önce gelir.
             ->orderByRaw('lower(barcode) = ? DESC', [$lower])

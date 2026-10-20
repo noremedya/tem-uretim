@@ -34,7 +34,7 @@ it('her türün muhasebe kodu CLAUDE.md bölüm 4 ile aynıdır', function () {
 it('veritabanı yalnızca 6 türü kabul eder; eski "consumable" değeri reddedilir', function () {
     $insert = fn (string $type) => DB::transaction(fn () => DB::table('parts')->insert([
         'code' => 'T-'.$type, 'name' => 'x', 'unit_id' => $this->unit->id, 'type' => $type,
-        'critical_level' => 0, 'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
     ]));
 
     foreach (PartType::cases() as $type) {
@@ -50,7 +50,7 @@ it('migration mevcut sarf kartlarını direkt sarfa geçirir', function () {
     $migration->down();
     $id = DB::table('parts')->insertGetId([
         'code' => 'ESKI-SARF', 'name' => 'Vernik', 'unit_id' => $this->unit->id, 'type' => 'consumable',
-        'critical_level' => 0, 'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
+        'is_active' => true, 'created_at' => now(), 'updated_at' => now(),
     ]);
     $migration->up();
 

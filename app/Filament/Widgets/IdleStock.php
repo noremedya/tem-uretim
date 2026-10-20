@@ -32,15 +32,15 @@ class IdleStock extends TableWidget
     public function table(Table $table): Table
     {
         return $table
-            ->query(fn () => Part::query()->with(['unit', 'stockBalance'])->where('is_active', true)->idle()
+            ->query(fn () => Part::query()->with(['unit', 'stockBalances'])->where('is_active', true)->idle()
                 ->withMax('stockMovements as last_movement_at', 'created_at')->orderBy('last_movement_at'))
             ->defaultPaginationPageOption(5)
             ->recordUrl(fn (Part $record): string => PartResource::getUrl('view', ['record' => $record]))
             ->columns([
                 TextColumn::make('code')->label('Kod')->weight('bold'),
                 TextColumn::make('name')->label('Ad'),
-                TextColumn::make('stockBalance.quantity')->label('Bakiye')->alignEnd()
-                    ->formatStateUsing(fn ($state, Part $record): string => Quantity::format($state, $record->unit->name)),
+                TextColumn::make('balance')->label('Bakiye')->alignEnd()
+                    ->state(fn (Part $record): string => Quantity::format($record->totalStock(), $record->unit->name)),
                 TextColumn::make('last_movement_at')->label('Son hareket')
                     ->formatStateUsing(fn ($state): string => CarbonImmutable::parse($state)->format('d.m.Y')),
             ])

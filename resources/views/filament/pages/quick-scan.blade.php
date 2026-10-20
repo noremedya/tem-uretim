@@ -64,10 +64,19 @@
                     <p>Tür: {{ $part->type->getLabel() }}</p>
                     <p class="text-2xl">
                         Bakiye:
-                        <span @class(['font-bold', 'text-danger-600' => $part->isCriticalAt((string) $part->stockBalance?->quantity)])>
-                            {{ \App\Support\Quantity::format((string) ($part->stockBalance?->quantity ?? 0), $part->unit->name) }}
+                        <span @class(['font-bold', 'text-danger-600' => $part->isCritical()])>
+                            {{ \App\Support\Quantity::format($part->totalStock(), $part->unit->name) }}
                         </span>
                     </p>
+                    @if ($part->stockBalances->count() > 1)
+                        <ul class="text-base">
+                            @foreach ($part->stockBalances->sortBy('warehouse.code') as $balance)
+                                <li @class(['text-danger-600' => $balance->isCriticalAt()])>
+                                    {{ $balance->warehouse->name }}: {{ \App\Support\Quantity::format((string) $balance->quantity, $part->unit->name) }}
+                                </li>
+                            @endforeach
+                        </ul>
+                    @endif
                     @unless ($part->is_active)
                         <p class="font-semibold text-warning-600">Pasif ürün: yalnızca sayım yapılabilir (Stok İşlemi sayfası).</p>
                     @endunless

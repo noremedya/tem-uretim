@@ -25,7 +25,7 @@ class IdleStockReport extends Command
         $parts = Part::query()
             ->where('is_active', true)
             ->idle($days)
-            ->with(['unit', 'stockBalance'])
+            ->with(['unit', 'stockBalances'])
             ->withMax('stockMovements as last_movement_at', 'created_at')
             ->orderBy('code')
             ->get();
@@ -42,7 +42,7 @@ class IdleStockReport extends Command
             $parts->map(fn (Part $part): array => [
                 $part->code,
                 $part->name,
-                Quantity::format((string) $part->stockBalance->quantity, $part->unit->name),
+                Quantity::format($part->totalStock(), $part->unit->name),
                 Carbon::parse($part->last_movement_at)->format('d.m.Y'),
             ])->all(),
         );

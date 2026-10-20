@@ -83,7 +83,7 @@ describe('üretilen motorlar', function () {
             ->assertNotified('2 motor sevk edildi');
 
         expect(MotorUnit::where('status', MotorUnitStatus::Shipped)->count())->toBe(2)
-            ->and((string) $this->f->model->finishedPart->stockBalance()->value('quantity'))->toBe('1.000');
+            ->and((string) $this->f->model->finishedPart->defaultStockBalance()->value('quantity'))->toBe('1.000');
     });
 
     it('depo detay sayfasından tek motor sevk eder; sevk edilmişte aksiyon gizlenir', function () {

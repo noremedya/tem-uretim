@@ -43,15 +43,18 @@ it('değişiklik detayı Türkçe alan adları, enum etiketleri ve bağlı kayı
     $newUnit = Unit::factory()->create(['name' => 'litre']);
     app(PartService::class)->update($part, ['type' => 'indirect_consumable', 'unit_id' => $newUnit->id, 'critical_level' => '5'], $part->lock_version);
 
-    $activity = Activity::where('subject_type', 'part')->where('event', 'updated')->sole();
+    // Ürün alanları ve (depo bazlı bakiye satırında tutulan) kritik seviye ayrı kayıtlara yazılır.
+    [$activity, $criticalActivity] = Activity::with('subject')->where('subject_type', 'part')->where('event', 'updated')->orderBy('id')->get()->all();
     $changes = collect(AuditPresenter::changes($activity))->keyBy('field');
+    $criticalChanges = collect(AuditPresenter::changes($criticalActivity))->keyBy('field');
 
     expect(AuditPresenter::subjectType('part'))->toBe('Ürün')
         ->and(AuditPresenter::subject($activity))->toBe('HM-1')
         ->and(AuditPresenter::event($activity))->toBe('Güncellendi')
         ->and($changes['Tür'])->toMatchArray(['old' => 'Direkt sarf', 'new' => 'Endirekt sarf'])
         ->and($changes['Birim']['new'])->toBe('litre')
-        ->and($changes['Kritik seviye']['new'])->toBe('5.000');
+        ->and($criticalChanges['Kritik seviye'])->toMatchArray(['old' => '0.000', 'new' => '5.000'])
+        ->and($criticalChanges['Depo']['new'])->toBe('Hammadde deposu');
 
     Livewire::test(ViewAuditLog::class, ['record' => $activity->getRouteKey()])
         ->assertSee('Endirekt sarf')->assertSee('litre')->assertSee('Yönetici');

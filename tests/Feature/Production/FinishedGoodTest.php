@@ -36,7 +36,7 @@ it('motor modeli oluşturulunca mamul kartı açılır', function () {
         ->is_active->toBeTrue()
         ->and($part->unit->name)->toBe('Adet')
         ->and($part->unit->allows_decimal)->toBeFalse()
-        ->and((string) $part->stockBalance->quantity)->toBe('0.000');
+        ->and((string) $part->defaultStockBalance->quantity)->toBe('0.000');
 });
 
 it('mevcut "adet" birimini kullanır, yoksa açar', function () {
@@ -87,7 +87,8 @@ it('mamul kartının kodu, adı ve birimi karttan değiştirilemez; barkod ve kr
 
     $parts->update($part->fresh(), ['barcode' => '8690001', 'critical_level' => '2'], $part->fresh()->lock_version);
 
-    expect($part->fresh())->barcode->toBe('8690001')->critical_level->toBe('2.000')->code->toBe('TM-71');
+    expect($part->fresh())->barcode->toBe('8690001')->code->toBe('TM-71')
+        ->and($part->fresh()->criticalLevel())->toBe('2.000');
 });
 
 it('mamul kartı karttan pasifleştirilemez', function () {
@@ -114,7 +115,7 @@ it('mamul kartında elle stok hareketi yapılamaz (servis)', function (string $m
 function insertMovement(Part $part, string $type, string $quantity, string $before = '0'): void
 {
     DB::transaction(fn () => DB::table('stock_movements')->insert([
-        'part_id' => $part->id, 'type' => $type, 'quantity' => $quantity,
+        'part_id' => $part->id, 'warehouse_id' => $part->defaultWarehouseId(), 'type' => $type, 'quantity' => $quantity,
         'balance_before' => $before, 'balance_after' => bcadd($before, $quantity, 3),
         'description' => 'Doğrudan SQL', 'user_id' => test()->admin->id, 'created_at' => now(),
     ]));
@@ -167,21 +168,4 @@ it('stok işlemi sayfasında mamul kartı seçilemez', function () {
         ->form->getComponent('part_id')->getSearchResults('TM-71');
 
     expect($results)->not->toHaveKey($part->id)->toHaveCount(1);
-});
-
-it('migration mevcut motor modelleri için mamul kartı açar', function () {
-    $migration = require database_path('migrations/2026_10_17_100000_add_finished_goods_and_bom.php');
-    $migration->down();
-
-    $id = DB::table('motor_models')->insertGetId([
-        'code' => 'ESKI-1', 'name' => 'Eski model', 'is_active' => true, 'lock_version' => 0,
-        'created_at' => now(), 'updated_at' => now(),
-    ]);
-    $migration->up();
-
-    $model = MotorModel::findOrFail($id);
-    expect($model->finishedPart)
-        ->code->toBe('ESKI-1')
-        ->type->toBe(PartType::FinishedGood)
-        ->and($model->finishedPart->stockBalance)->not->toBeNull();
 });

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Parts\Schemas;
 
 use App\Models\Part;
+use App\Models\Warehouse;
 use App\Support\Quantity;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\ImageEntry;
@@ -32,16 +33,19 @@ class PartInfolist
                         TextEntry::make('name')->label('Ad'),
                         TextEntry::make('type')->label('Tür')->badge(),
                         TextEntry::make('unit.name')->label('Birim'),
-                        TextEntry::make('stockBalance.quantity')
-                            ->label('Bakiye')
-                            ->formatStateUsing(fn ($state, Part $record): string => Quantity::format($state, $record->unit->name))
+                        TextEntry::make('total_stock')
+                            ->label('Bakiye (tüm depolar)')
+                            ->state(fn (Part $record): string => Quantity::format($record->totalStock(), $record->unit->name))
                             ->badge()
-                            ->color(fn (Part $record): string => $record->isCriticalAt((string) $record->stockBalance?->quantity) ? 'danger' : 'success'),
+                            ->color(fn (Part $record): string => $record->isCritical() ? 'danger' : 'success'),
                         TextEntry::make('critical_level')
-                            ->label('Kritik seviye')
-                            ->formatStateUsing(fn ($state, Part $record): string => $record->tracksCriticalLevel()
-                                ? Quantity::format($state, $record->unit->name)
+                            ->label('Kritik seviye (varsayılan depo)')
+                            ->state(fn (Part $record): string => Quantity::compare($record->criticalLevel(), '0') > 0
+                                ? Quantity::format($record->criticalLevel(), $record->unit->name)
                                 : 'Takip yok'),
+                        TextEntry::make('default_warehouse')
+                            ->label('Varsayılan depo')
+                            ->state(fn (Part $record): string => Warehouse::query()->find($record->defaultWarehouseId())?->name ?? '—'),
                         TextEntry::make('barcode')->label('Barkod')->placeholder('—'),
                         TextEntry::make('brand.name')->label('Marka')->placeholder('—'),
                         IconEntry::make('is_active')->label('Aktif')->boolean(),

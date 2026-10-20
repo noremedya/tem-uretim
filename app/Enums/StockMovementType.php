@@ -24,6 +24,8 @@ enum StockMovementType: string implements HasColor, HasLabel
     case Return = 'return';
     // Bir hareketin ters kaydı (hata düzeltme).
     case Correction = 'correction';
+    // Depolar arası aktarım: kaynakta − ve hedefte + iki hareket, aynı transfer_id ile. Elle ters kaydedilmez.
+    case Transfer = 'transfer';
 
     public function label(): string
     {
@@ -37,6 +39,7 @@ enum StockMovementType: string implements HasColor, HasLabel
             self::CountAdjustment => 'Sayım düzeltme',
             self::Return => 'İade',
             self::Correction => 'Ters kayıt',
+            self::Transfer => 'Transfer',
         };
     }
 
@@ -52,6 +55,7 @@ enum StockMovementType: string implements HasColor, HasLabel
             self::StockOut, self::ProductionConsumption, self::ProductionScrap, self::Shipment => 'danger',
             self::CountAdjustment => 'warning',
             self::Correction => 'gray',
+            self::Transfer => 'info',
         };
     }
 
@@ -61,7 +65,7 @@ enum StockMovementType: string implements HasColor, HasLabel
         return match ($this) {
             self::StockIn, self::Return, self::ProductionOutput => 1,
             self::StockOut, self::ProductionConsumption, self::ProductionScrap, self::Shipment => -1,
-            self::CountAdjustment, self::Correction => 0,
+            self::CountAdjustment, self::Correction, self::Transfer => 0,
         };
     }
 
@@ -96,6 +100,6 @@ enum StockMovementType: string implements HasColor, HasLabel
     /** Stok işlemi sayfasında elle yapılabilen tipler. */
     public static function manualCases(): array
     {
-        return [self::StockIn, self::StockOut, self::CountAdjustment, self::Return];
+        return [self::StockIn, self::StockOut, self::CountAdjustment, self::Return, self::Transfer];
     }
 }

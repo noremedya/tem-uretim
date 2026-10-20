@@ -40,7 +40,7 @@ it('aynı anda iki çıkış bakiyeyi eksiye düşüremez', function () {
 
     expect(collect($results)->where('ok', true))->toHaveCount(1)
         ->and(collect($results)->where('error', 'InsufficientStockException'))->toHaveCount(1)
-        ->and((string) $part->stockBalance()->value('quantity'))->toBe('3.000')
+        ->and((string) $part->defaultStockBalance()->value('quantity'))->toBe('3.000')
         ->and(StockMovement::where('part_id', $part->id)->count())->toBe(2);
 
     $this->artisan('stock:reconcile')->assertSuccessful();
@@ -58,7 +58,7 @@ it('aynı anda aynı gönderim anahtarıyla iki giriş tek hareket oluşturur', 
     expect(collect($results)->every(fn ($r) => $r['ok']))->toBeTrue()
         ->and(collect($results)->pluck('id')->unique())->toHaveCount(1)
         ->and(collect($results)->where('created', true))->toHaveCount(1)
-        ->and((string) $part->stockBalance()->value('quantity'))->toBe('5.000')
+        ->and((string) $part->defaultStockBalance()->value('quantity'))->toBe('5.000')
         ->and(StockMovement::where('idempotency_key', $key)->count())->toBe(1);
 });
 
@@ -75,5 +75,5 @@ it('aynı hareket aynı anda iki kez ters kaydedilemez', function () {
     expect(collect($results)->where('ok', true))->toHaveCount(1)
         ->and(collect($results)->firstWhere('ok', false)['message'])->toBe('Bu hareket zaten ters kaydedilmiş.')
         ->and(StockMovement::where('corrected_movement_id', $movement->id)->count())->toBe(1)
-        ->and((string) $part->stockBalance()->value('quantity'))->toBe('5.000');
+        ->and((string) $part->defaultStockBalance()->value('quantity'))->toBe('5.000');
 });

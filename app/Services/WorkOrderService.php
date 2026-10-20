@@ -182,17 +182,18 @@ class WorkOrderService
     }
 
     /**
-     * Malzeme durumu (yetersiz malzeme uyarısı): her satır için fire dahil ihtiyaç, mevcut ve eksik.
+     * Malzeme durumu (yetersiz malzeme uyarısı): her satır için fire dahil ihtiyaç, mevcut (malzemenin sarf edildiği
+     * varsayılan deposunda) ve eksik.
      * Uyarıdır; başka iş emirlerinin ihtiyacını hesaba katmaz.
      *
      * @return list<array{material: WorkOrderMaterial, required: string, available: string, missing: string}>
      */
     public function materialStatus(WorkOrder $workOrder): array
     {
-        return $workOrder->materials()->with(['part.unit', 'part.stockBalance'])->orderBy('id')->get()
+        return $workOrder->materials()->with(['part.unit', 'part.stockBalances'])->orderBy('id')->get()
             ->map(function (WorkOrderMaterial $material): array {
                 $required = $material->totalRequirement();
-                $available = (string) ($material->part->stockBalance?->quantity ?? '0');
+                $available = $material->part->defaultQuantity();
                 $missing = Quantity::sub($required, $available);
 
                 return [

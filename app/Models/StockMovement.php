@@ -41,6 +41,12 @@ class StockMovement extends Model
         return $this->belongsTo(Part::class);
     }
 
+    /** @return BelongsTo<Warehouse, $this> */
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class);
+    }
+
     /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
@@ -79,6 +85,6 @@ class StockMovement extends Model
      */
     public function isCorrectableType(): bool
     {
-        return $this->type !== StockMovementType::Correction && ! $this->type->isProductionFlow();
+        return ! in_array($this->type, [StockMovementType::Correction, StockMovementType::Transfer], true) && ! $this->type->isProductionFlow();
     }
 }

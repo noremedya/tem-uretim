@@ -7,6 +7,7 @@ use App\Models\StockMovement;
 use App\Models\Unit;
 use App\Models\User;
 use App\Services\StockService;
+use App\Services\WarehouseService;
 use Livewire\Features\SupportLockedProperties\CannotUpdateLockedPropertyException;
 use Livewire\Livewire;
 
@@ -27,12 +28,12 @@ it('giriş yapar ve yeni bakiyeyi gösterir', function () {
         ->call('save')
         ->assertHasNoFormErrors()
         ->assertNotified('Giriş kaydedildi')
-        ->assertSet('lastResult.body', "{$this->part->code} {$this->part->name}: +2,5 kg. Yeni bakiye: 12,5 kg")
+        ->assertSet('lastResult.body', "{$this->part->code} {$this->part->name} (".app(WarehouseService::class)->defaultFor($this->part)->name.'): +2,5 kg. Yeni bakiye: 12,5 kg')
         ->assertSee('Yeni bakiye: 12,5 kg')
-        // Tür ve parça korunur, miktar temizlenir.
-        ->assertSchemaStateSet(['type' => 'stock_in', 'part_id' => $this->part->id, 'quantity' => null]);
+        // Tür, ürün ve depo korunur, miktar temizlenir.
+        ->assertSchemaStateSet(['type' => 'stock_in', 'part_id' => $this->part->id, 'warehouse_id' => $this->part->defaultWarehouseId(), 'quantity' => null]);
 
-    expect((string) $this->part->stockBalance()->value('quantity'))->toBe('12.500');
+    expect((string) $this->part->defaultStockBalance()->value('quantity'))->toBe('12.500');
 });
 
 it('çıkışta açıklama zorunludur; yetersiz stokta anlaşılır hata verir', function () {
@@ -92,7 +93,7 @@ it('aynı ürün ve miktarla formu yeniden doldurarak yapılan iki bilinçli iş
     $inbound = StockMovement::where('part_id', $this->part->id)->where('type', StockMovementType::StockIn)->where('quantity', 5)->get();
     expect($inbound)->toHaveCount(2)
         ->and($inbound->pluck('idempotency_key')->unique())->toHaveCount(2)
-        ->and((string) $this->part->stockBalance()->value('quantity'))->toBe('20.000');
+        ->and((string) $this->part->defaultStockBalance()->value('quantity'))->toBe('20.000');
 });
 
 it('ilk yanıttan sonra kuyruktan gelen değişmemiş istek hareket oluşturmaz', function () {
@@ -104,7 +105,7 @@ it('ilk yanıttan sonra kuyruktan gelen değişmemiş istek hareket oluşturmaz'
         ->assertHasFormErrors(['quantity' => 'required']);
 
     expect(movementsOf($this->part))->toBe(2)
-        ->and((string) $this->part->stockBalance()->value('quantity'))->toBe('15.000');
+        ->and((string) $this->part->defaultStockBalance()->value('quantity'))->toBe('15.000');
 });
 
 it('aynı anahtarla gelen iki istek tek hareket oluşturur; ikincisi bildirimi tekrarlamaz', function () {
@@ -123,7 +124,7 @@ it('aynı anahtarla gelen iki istek tek hareket oluşturur; ikincisi bildirimi t
         ->assertSee('Yeni bakiye: 15 kg');
 
     expect(movementsOf($this->part))->toBe(2)
-        ->and((string) $this->part->stockBalance()->value('quantity'))->toBe('15.000');
+        ->and((string) $this->part->defaultStockBalance()->value('quantity'))->toBe('15.000');
 });
 
 it('kaydet butonu istek sürerken pasifleşir', function () {

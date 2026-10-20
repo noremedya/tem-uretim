@@ -67,7 +67,7 @@ it('depo ürün okutur, hızlı giriş yapar; aynı gönderim anahtarıyla ikinc
     $page->callAction('stockIn', data: ['quantity' => '25', 'description' => 'Hızlı giriş'])
         ->assertNotified('Giriş kaydedildi');
 
-    expect((string) $this->f->bearing->stockBalance()->value('quantity'))->toBe('1025.000')
+    expect((string) $this->f->bearing->defaultStockBalance()->value('quantity'))->toBe('1025.000')
         ->and($page->get('submissionKey'))->not->toBe($key);
 
     // Aynı anahtarla tekrar: hareket oluşmaz.

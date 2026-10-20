@@ -8,6 +8,7 @@ use App\Models\Brand;
 use App\Models\Part;
 use App\Models\StockBalance;
 use App\Models\Unit;
+use App\Models\Warehouse;
 use App\Support\Quantity;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
@@ -18,7 +19,7 @@ use Illuminate\Support\Facades\Storage;
  */
 class PartService
 {
-    private const FIELDS = ['code', 'name', 'unit_id', 'type', 'barcode', 'critical_level', 'image_path', 'brand_id', 'description'];
+    private const FIELDS = ['code', 'name', 'unit_id', 'type', 'barcode', 'image_path', 'brand_id', 'description', 'default_warehouse_id'];
 
     /** Stok kartı görsellerinin diski ve klasörü (yerel; gece yedeğine dahil). */
     public const IMAGE_DISK = 'local';
@@ -34,6 +35,8 @@ class PartService
     ) {}
 
     /**
+     * critical_level: varsayılan depodaki kritik seviye (diğer depolarınki ürün sayfasındaki depo bakiyelerinden).
+     *
      * @param  array{code: string, name: string, unit_id: int, type: mixed, barcode?: ?string, critical_level?: string|int|float|null}  $data
      */
     public function create(array $data): Part
@@ -49,9 +52,10 @@ class PartService
 
             $part->is_active = true;
             $this->ensureActiveBrand($part);
+            $this->ensureActiveWarehouse($part);
             $part->save();
 
-            $this->stock->openBalance($part);
+            $this->stock->openBalance($part, $data['critical_level'] ?? '0');
 
             return $part;
         });
@@ -68,7 +72,6 @@ class PartService
                 'name' => $name,
                 'unit_id' => $this->pieceUnit()->getKey(),
                 'type' => PartType::FinishedGood,
-                'critical_level' => '0',
             ]);
             $part->is_active = $isActive;
             $part->save();
@@ -120,7 +123,7 @@ class PartService
             if ($part->isDirty('unit_id')) {
                 // Bakiye satırı kilitlenir: StockService hareket yazarken aynı satırı kilitlediği için
                 // kontrol ile birim değişikliği arasında yeni hareket oluşamaz.
-                StockBalance::query()->where('part_id', $part->getKey())->lockForUpdate()->first();
+                StockBalance::query()->where('part_id', $part->getKey())->orderBy('warehouse_id')->lockForUpdate()->get();
 
                 if ($part->stockMovements()->exists()) {
                     throw new BusinessRuleException('Hareketi olan ürünün birimi değiştirilemez.');
@@ -128,10 +131,15 @@ class PartService
             }
 
             $this->ensureActiveBrand($part);
+            $this->ensureActiveWarehouse($part);
 
             $replacedImage = $part->isDirty('image_path') ? $part->getRawOriginal('image_path') : null;
 
             $part->saveExpectingVersion($expectedLockVersion);
+
+            if (array_key_exists('critical_level', $data)) {
+                $this->stock->setCriticalLevel($part, $data['critical_level']);
+            }
 
             // Değiştirilen veya kaldırılan görselin dosyası, kayıt kesinleşince silinir.
             if ($replacedImage !== null) {
@@ -205,8 +213,21 @@ class PartService
         }
     }
 
+    /** Pasif depo ürünün varsayılan deposu olarak yeni seçilemez. */
+    private function ensureActiveWarehouse(Part $part): void
+    {
+        if ($part->default_warehouse_id !== null && $part->isDirty('default_warehouse_id')
+            && ! Warehouse::query()->whereKey($part->default_warehouse_id)->where('is_active', true)->exists()) {
+            throw new BusinessRuleException('Seçilen depo pasif veya bulunamadı.');
+        }
+    }
+
     private function normalize(array $data): array
     {
+        if (array_key_exists('default_warehouse_id', $data)) {
+            $data['default_warehouse_id'] = filled($data['default_warehouse_id']) ? (int) $data['default_warehouse_id'] : null;
+        }
+
         if (array_key_exists('description', $data)) {
             $data['description'] = filled($data['description']) ? trim((string) $data['description']) : null;
         }

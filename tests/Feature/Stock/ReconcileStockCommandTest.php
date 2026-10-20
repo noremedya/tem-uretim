@@ -43,7 +43,7 @@ it('tutarsızlığı yakalar, loglar ve yöneticiye bildirir; düzeltme yapmaz',
         ->and($notification->data['body'])->toContain('BOZUK-1')
         ->and($warehouse->notifications()->count())->toBe(0)
         // Otomatik düzeltme yok.
-        ->and((string) $broken->stockBalance()->value('quantity'))->toBe('7.000');
+        ->and((string) $broken->defaultStockBalance()->value('quantity'))->toBe('7.000');
 });
 
 it('bakiye satırı olmayan ürünü da yakalar', function () {

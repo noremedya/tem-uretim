@@ -25,7 +25,7 @@ class StockMovementsTable
 
         return $table
             ->modifyQueryUsing(fn (Builder $query) => $query
-                ->with(['part.unit', 'user', 'correctedMovement'])
+                ->with(['part.unit', 'user', 'correctedMovement', 'warehouse'])
                 ->withExists('correction'))
             ->defaultSort(fn (Builder $query) => $query->orderByDesc('created_at')->orderByDesc('id'))
             ->columns([
@@ -38,11 +38,15 @@ class StockMovementsTable
                     ->description(fn (StockMovement $record): string => $record->part->name)
                     ->searchable(['code', 'name'])
                     ->visible($showPart),
+                TextColumn::make('warehouse.name')
+                    ->label('Depo')
+                    ->toggleable(),
                 TextColumn::make('type')
                     ->label('Tür')
                     ->badge()
                     ->description(fn (StockMovement $record): ?string => match (true) {
                         $record->type === StockMovementType::Correction => "#{$record->corrected_movement_id} hareketinin ters kaydı",
+                        $record->type === StockMovementType::Transfer => Quantity::compare((string) $record->quantity, '0') < 0 ? 'Depodan çıkış' : 'Depoya giriş',
                         (bool) $record->correction_exists => 'Ters kaydedildi',
                         default => null,
                     }),
@@ -79,6 +83,9 @@ class StockMovementsTable
                     ->getOptionLabelFromRecordUsing(fn ($record): string => "{$record->code} — {$record->name}")
                     ->searchable(['code', 'name'])
                     ->visible($showPart),
+                SelectFilter::make('warehouse_id')
+                    ->label('Depo')
+                    ->relationship('warehouse', 'name'),
                 SelectFilter::make('type')
                     ->label('Tür')
                     ->options(StockMovementType::class)

@@ -10,15 +10,16 @@ use App\Support\Quantity;
 class InsufficientStockException extends BusinessRuleException
 {
     /**
-     * @param  list<array{part_id: int, code: string, name: string, unit: string, required: string, available: string, missing: string}>  $shortages
+     * @param  list<array{part_id: int, code: string, name: string, unit: string, required: string, available: string, missing: string, warehouse?: ?string}>  $shortages
      */
     public function __construct(public readonly array $shortages)
     {
         $lines = array_map(
             fn (array $s): string => sprintf(
-                '%s %s: gereken %s, mevcut %s, eksik %s',
+                '%s %s%s: gereken %s, mevcut %s, eksik %s',
                 $s['code'],
                 $s['name'],
+                filled($s['warehouse'] ?? null) ? " ({$s['warehouse']})" : '',
                 Quantity::format($s['required'], $s['unit']),
                 Quantity::format($s['available'], $s['unit']),
                 Quantity::format($s['missing'], $s['unit']),

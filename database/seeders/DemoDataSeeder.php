@@ -276,7 +276,7 @@ class DemoDataSeeder extends Seeder
 
             $semi = fn (string $prefix, string $label) => $this->parts["{$prefix}-{$frame}"] = $parts->create([
                 'code' => "{$prefix}-{$frame}", 'name' => "{$label} {$frame} tip ({$kw} kW)", 'type' => PartType::SemiFinished,
-                'unit_id' => $piece, 'critical_level' => '0',
+                'unit_id' => $piece,
             ]);
 
             $shaft = $semi('YM-MIL', 'İşlenmiş mil');
@@ -502,8 +502,8 @@ class DemoDataSeeder extends Seeder
             // Ara olaylar: sayım, ters kayıt, iade, tedarikçiye iade.
             if ($index === 2) {
                 $this->schedule($monday->addDays(4)->setTime(17, 0), fn () => $this->as('depo', function (): void {
-                    $part = $this->parts['DS-VERNIK']->fresh('stockBalance');
-                    $counted = Quantity::sub((string) $part->stockBalance->quantity, '0.4');
+                    $part = $this->parts['DS-VERNIK']->fresh('stockBalances');
+                    $counted = Quantity::sub($part->defaultQuantity(), '0.4');
                     app(StockService::class)->adjustCount($part, $counted, $this->users['depo'], 'Haftalık sayım: kapakta kuruma kaybı');
                 }));
             }
@@ -665,7 +665,7 @@ class DemoDataSeeder extends Seeder
 
     private function complete(WorkOrder $workOrder, string $operator): void
     {
-        $workOrder = $workOrder->fresh(['materials.part.unit', 'materials.part.stockBalance']);
+        $workOrder = $workOrder->fresh(['materials.part.unit', 'materials.part.stockBalances']);
 
         if ($workOrder->status !== WorkOrderStatus::InProgress) {
             return;
@@ -689,7 +689,7 @@ class DemoDataSeeder extends Seeder
         foreach ($workOrder->materials as $material) {
             $part = $material->part;
             $need = Quantity::add((string) $material->required_quantity, $scraps[$part->getKey()] ?? (string) $material->planned_scrap);
-            $balance = (string) ($part->stockBalance?->quantity ?? '0');
+            $balance = $part->defaultQuantity();
 
             if (Quantity::compare($balance, $need) >= 0) {
                 continue;
@@ -708,7 +708,7 @@ class DemoDataSeeder extends Seeder
 
             $movement = $this->as('depo', fn () => app(StockService::class)->stockIn($part, $quantity, $this->users['depo'], 'Tedarikçi teslimatı'));
             $this->pendingReceipts[$this->partSupplier[$part->code]][$part->code][] = $movement->getKey();
-            $part->setRelation('stockBalance', $part->stockBalance()->first());
+            $part->load('stockBalances');
         }
     }
 

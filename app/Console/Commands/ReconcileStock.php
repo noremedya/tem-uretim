@@ -9,8 +9,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Tutarlılık kontrolü: her parça için hareket toplamı ile stock_balances karşılaştırılır; ayrıca her mamul
- * kartının bakiyesi o modelin stoktaki motor sayısıyla karşılaştırılır. Fark varsa loglanır ve yöneticilere
+ * Tutarlılık kontrolü: her ürün ve depo için hareket toplamı ile stock_balances karşılaştırılır; ayrıca her mamul
+ * kartının (tüm depolardaki) bakiyesi o modelin stoktaki motor sayısıyla karşılaştırılır. Fark varsa loglanır ve yöneticilere
  * bildirim gider. Otomatik düzeltme yapılmaz.
  */
 class ReconcileStock extends Command
@@ -37,13 +37,14 @@ class ReconcileStock extends Command
     private function checkFinishedGoods(StockAlertService $alerts): bool
     {
         $rows = DB::select(<<<'SQL'
-            SELECT p.code, p.name, b.quantity AS balance, count(u.id) FILTER (WHERE u.status = 'in_stock') AS in_stock
+            SELECT p.code, p.name, b.total AS balance, COALESCE(u.in_stock, 0) AS in_stock
             FROM motor_models m
             JOIN parts p ON p.id = m.finished_part_id
-            JOIN stock_balances b ON b.part_id = p.id
-            LEFT JOIN motor_units u ON u.motor_model_id = m.id
-            GROUP BY p.id, p.code, p.name, b.quantity
-            HAVING b.quantity <> count(u.id) FILTER (WHERE u.status = 'in_stock')
+            JOIN (SELECT part_id, SUM(quantity) AS total FROM stock_balances GROUP BY part_id) b ON b.part_id = p.id
+            LEFT JOIN (
+                SELECT motor_model_id, count(*) AS in_stock FROM motor_units WHERE status = 'in_stock' GROUP BY motor_model_id
+            ) u ON u.motor_model_id = m.id
+            WHERE b.total <> COALESCE(u.in_stock, 0)
             ORDER BY p.code
         SQL);
 
@@ -74,14 +75,22 @@ class ReconcileStock extends Command
     private function checkBalances(StockAlertService $alerts): bool
     {
         $rows = DB::select(<<<'SQL'
-            SELECT p.id, p.code, p.name, b.quantity AS balance, COALESCE(m.total, 0) AS movements_total
-            FROM parts p
-            LEFT JOIN stock_balances b ON b.part_id = p.id
+            WITH keys AS (
+                SELECT part_id, warehouse_id FROM stock_balances
+                UNION SELECT part_id, warehouse_id FROM stock_movements
+                -- Hiç bakiye satırı ve hareketi olmayan ürün (bakiye satırı eksik).
+                UNION SELECT p.id, NULL FROM parts p WHERE NOT EXISTS (SELECT 1 FROM stock_balances b WHERE b.part_id = p.id)
+            )
+            SELECT p.id, p.code, p.name, w.name AS warehouse, b.quantity AS balance, COALESCE(m.total, 0) AS movements_total
+            FROM keys k
+            JOIN parts p ON p.id = k.part_id
+            LEFT JOIN warehouses w ON w.id = k.warehouse_id
+            LEFT JOIN stock_balances b ON b.part_id = k.part_id AND b.warehouse_id = k.warehouse_id
             LEFT JOIN (
-                SELECT part_id, SUM(quantity) AS total FROM stock_movements GROUP BY part_id
-            ) m ON m.part_id = p.id
+                SELECT part_id, warehouse_id, SUM(quantity) AS total FROM stock_movements GROUP BY part_id, warehouse_id
+            ) m ON m.part_id = k.part_id AND m.warehouse_id = k.warehouse_id
             WHERE b.quantity IS DISTINCT FROM COALESCE(m.total, 0)
-            ORDER BY p.code
+            ORDER BY p.code, w.code
         SQL);
 
         if ($rows === []) {
@@ -92,6 +101,7 @@ class ReconcileStock extends Command
             'part_id' => $row->id,
             'code' => $row->code,
             'name' => $row->name,
+            'warehouse' => $row->warehouse ?? '—',
             'balance' => $row->balance === null ? null : Quantity::parse($row->balance),
             'movements_total' => Quantity::parse($row->movements_total),
         ], $rows);
@@ -100,10 +110,11 @@ class ReconcileStock extends Command
 
         $this->error(sprintf('%d üründe fark bulundu:', count($mismatches)));
         $this->table(
-            ['Kod', 'Ad', 'Bakiye', 'Hareket toplamı'],
+            ['Kod', 'Ad', 'Depo', 'Bakiye', 'Hareket toplamı'],
             array_map(fn (array $m): array => [
                 $m['code'],
                 $m['name'],
+                $m['warehouse'],
                 $m['balance'] === null ? 'yok' : Quantity::format($m['balance']),
                 Quantity::format($m['movements_total']),
             ], $mismatches),

@@ -23,8 +23,10 @@ use App\Models\ProductionBatch;
 use App\Models\StockMovement;
 use App\Models\Unit;
 use App\Models\User;
+use App\Models\Warehouse;
 use App\Models\WorkOrder;
 use App\Policies\ActivityPolicy;
+use App\Services\WarehouseService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -40,7 +42,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Varsayılan depo eşlemesini istek (ve kuyruk işi) boyunca önbellekte tutar.
+        $this->app->scoped(WarehouseService::class);
     }
 
     /**
@@ -59,6 +62,7 @@ class AppServiceProvider extends ServiceProvider
             'user' => User::class,
             'unit' => Unit::class,
             'brand' => Brand::class,
+            'warehouse' => Warehouse::class,
             'part' => Part::class,
             'stock_movement' => StockMovement::class,
             'motor_model' => MotorModel::class,

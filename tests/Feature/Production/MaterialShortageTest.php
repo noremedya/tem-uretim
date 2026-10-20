@@ -68,7 +68,7 @@ it('küsuratlı birimde eksik fire dahil hesaplanır ve girilen miktar kullanıl
         ->callMountedAction()
         ->assertHasNoActionErrors();
 
-    expect($this->f->varnish->stockBalance()->value('quantity'))->toBe('5.000')
+    expect($this->f->varnish->defaultStockBalance()->value('quantity'))->toBe('5.000')
         ->and(StockMovement::query()->where('part_id', $this->f->varnish->id)->value('description'))->toBe('Acil alım');
 });
 

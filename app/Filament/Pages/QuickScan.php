@@ -10,6 +10,7 @@ use App\Filament\Resources\WorkOrders\Actions\WorkOrderStatusActions;
 use App\Filament\Support\BusinessRuleNotification;
 use App\Models\MotorUnit;
 use App\Models\Part;
+use App\Models\Warehouse;
 use App\Models\WorkOrder;
 use App\Services\QuickScanService;
 use App\Services\StockService;
@@ -84,7 +85,7 @@ class QuickScan extends Page
 
     public function part(): ?Part
     {
-        return $this->resultType === 'part' ? Part::query()->with(['unit', 'stockBalance'])->find($this->resultId) : null;
+        return $this->resultType === 'part' ? Part::query()->with(['unit', 'stockBalances.warehouse'])->find($this->resultId) : null;
     }
 
     public function motor(): ?MotorUnit
@@ -135,6 +136,10 @@ class QuickScan extends Page
                 && $part->is_active
                 && $part->type !== PartType::FinishedGood)
             ->modalHeading(fn (): string => "{$label}: {$this->part()?->code} {$this->part()?->name}")
+            // Hızlı işlem ürünün varsayılan deposunda yapılır; başka depo için Stok İşlemi sayfası.
+            ->modalDescription(fn (): ?string => ($part = $this->part()) !== null
+                ? 'Depo: '.(Warehouse::query()->find($part->defaultWarehouseId())?->name ?? '—').' (başka depo için Stok İşlemi sayfası)'
+                : null)
             ->schema([
                 TextInput::make('quantity')
                     ->label(fn (): string => 'Miktar ('.$this->part()?->unit->name.')')

@@ -10,6 +10,7 @@ use App\Filament\Support\BusinessRuleNotification;
 use App\Models\Part;
 use App\Models\StockBalance;
 use App\Models\StockMovement;
+use App\Models\Warehouse;
 use App\Services\StockService;
 use App\Support\Quantity;
 use BackedEnum;
@@ -27,16 +28,19 @@ use Filament\Schemas\Components\EmbeddedSchema;
 use Filament\Schemas\Components\Form;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Locked;
 use UnitEnum;
 
 /**
- * Stok giriş / çıkış / sayım / iade formu.
+ * Stok giriş / çıkış / sayım / iade / depolar arası transfer formu. Depo seçilir (ürün seçilince varsayılan
+ * deposu gelir); transferde ayrıca hedef depo.
  *
  * Çift gönderim koruması yalnızca gönderim anahtarına dayanır:
  * - İstek sürerken kaydet butonu pasiftir (Filament, wire:loading) ve form ikinci kez gönderilemez
@@ -79,11 +83,13 @@ class StockOperation extends Page
     {
         $this->submissionKey = (string) Str::uuid();
 
-        $part = request()->integer('part') ?: null;
+        $partId = request()->integer('part') ?: null;
+        $part = $partId !== null ? Part::query()->whereKey($partId)->where('type', '!=', PartType::FinishedGood->value)->first() : null;
 
         $this->form->fill([
             'type' => StockMovementType::StockIn->value,
-            'part_id' => $part !== null && Part::query()->whereKey($part)->where('type', '!=', PartType::FinishedGood->value)->exists() ? $part : null,
+            'part_id' => $part?->getKey(),
+            'warehouse_id' => $part?->defaultWarehouseId(),
         ]);
     }
 
@@ -104,6 +110,7 @@ class StockOperation extends Page
                                 StockMovementType::StockOut->value => Heroicon::OutlinedArrowUpTray,
                                 StockMovementType::CountAdjustment->value => Heroicon::OutlinedClipboardDocumentCheck,
                                 StockMovementType::Return->value => Heroicon::OutlinedArrowUturnLeft,
+                                StockMovementType::Transfer->value => Heroicon::OutlinedArrowsRightLeft,
                             ])
                             ->inline()
                             ->required()
@@ -117,8 +124,24 @@ class StockOperation extends Page
                             ->live()
                             ->getSearchResultsUsing(fn (string $search, Get $get): array => $this->searchParts($search, $get('type')))
                             ->getOptionLabelUsing(fn ($value): ?string => ($part = Part::query()->find($value)) ? $this->partLabel($part) : null)
-                            ->helperText(fn (Get $get): ?string => $this->balanceText($get('part_id')))
+                            // Ürün seçilince varsayılan deposu gelir.
+                            ->afterStateUpdated(fn ($state, Set $set) => $set('warehouse_id', filled($state) ? Part::query()->find($state)?->defaultWarehouseId() : null))
                             ->columnSpanFull(),
+                        Select::make('warehouse_id')
+                            ->label(fn (Get $get): string => $get('type') === StockMovementType::Transfer->value ? 'Kaynak depo' : 'Depo')
+                            ->options(fn (Get $get): array => $this->warehouseOptions($get('type'), source: true))
+                            ->required()
+                            ->live()
+                            ->helperText(fn (Get $get): ?string => $this->balanceText($get('part_id'), $get('warehouse_id'))),
+                        Select::make('target_warehouse_id')
+                            ->label('Hedef depo')
+                            ->options(fn (Get $get): array => collect($this->warehouseOptions(StockMovementType::Transfer->value, source: false))
+                                ->except([(int) $get('warehouse_id')])->all())
+                            ->required(fn (Get $get): bool => $get('type') === StockMovementType::Transfer->value)
+                            ->visible(fn (Get $get): bool => $get('type') === StockMovementType::Transfer->value)
+                            ->different('warehouse_id')
+                            ->live()
+                            ->helperText(fn (Get $get): ?string => $this->balanceText($get('part_id'), $get('target_warehouse_id'), withTotal: false)),
                         TextInput::make('quantity')
                             ->label(fn (Get $get): string => $get('type') === StockMovementType::CountAdjustment->value ? 'Sayılan miktar' : 'Miktar')
                             ->required()
@@ -180,38 +203,77 @@ class StockOperation extends Page
 
         $type = StockMovementType::from($data['type']);
         $part = Part::query()->with('unit')->findOrFail($data['part_id']);
+        $warehouse = Warehouse::query()->findOrFail($data['warehouse_id']);
         $user = Auth::user();
         $description = $data['description'] ?? null;
         $service = app(StockService::class);
 
         try {
-            $movement = match ($type) {
-                StockMovementType::StockIn => $service->stockIn($part, $data['quantity'], $user, $description, $this->submissionKey),
-                StockMovementType::StockOut => $service->stockOut($part, $data['quantity'], $user, $description, $this->submissionKey),
-                StockMovementType::Return => $service->returnToStock($part, $data['quantity'], $user, $description, $this->submissionKey),
-                StockMovementType::CountAdjustment => $service->adjustCount($part, $data['quantity'], $user, $description, $this->submissionKey),
-            };
+            if ($type === StockMovementType::Transfer) {
+                $target = Warehouse::query()->findOrFail($data['target_warehouse_id']);
+                $movements = $service->transfer($part, $warehouse, $target, $data['quantity'], $user, $description, $this->submissionKey);
+                $this->showTransferResult($part, $movements);
+            } else {
+                $movement = match ($type) {
+                    StockMovementType::StockIn => $service->stockIn($part, $data['quantity'], $user, $description, $this->submissionKey, $warehouse),
+                    StockMovementType::StockOut => $service->stockOut($part, $data['quantity'], $user, $description, $this->submissionKey, $warehouse),
+                    StockMovementType::Return => $service->returnToStock($part, $data['quantity'], $user, $description, $this->submissionKey, $warehouse),
+                    StockMovementType::CountAdjustment => $service->adjustCount($part, $data['quantity'], $user, $description, $this->submissionKey, $warehouse),
+                };
+                $this->showResult($type, $part, $warehouse, $movement);
+            }
         } catch (BusinessRuleException $exception) {
             BusinessRuleNotification::send($exception);
 
             return;
         }
 
-        $this->showResult($type, $part, $movement);
-
-        // Form sıfırlanır: yeni anahtar; tür ve parça korunur, miktar ve açıklama temizlenir.
+        // Form sıfırlanır: yeni anahtar; tür, ürün ve depolar korunur, miktar ve açıklama temizlenir.
         $this->submissionKey = (string) Str::uuid();
-        $this->form->fill(['type' => $type->value, 'part_id' => $part->getKey()]);
+        $this->form->fill([
+            'type' => $type->value,
+            'part_id' => $part->getKey(),
+            'warehouse_id' => $warehouse->getKey(),
+            'target_warehouse_id' => $data['target_warehouse_id'] ?? null,
+        ]);
     }
 
-    private function showResult(StockMovementType $type, Part $part, ?StockMovement $movement): void
+    /** @param  EloquentCollection<int, StockMovement>  $movements  [çıkış, giriş] */
+    private function showTransferResult(Part $part, EloquentCollection $movements): void
     {
         $unit = $part->unit->name;
-        $partLabel = "{$part->code} {$part->name}";
+        $movements->load('warehouse');
+        [$out, $in] = [$movements->first(fn (StockMovement $m) => Quantity::compare((string) $m->quantity, '0') < 0), $movements->first(fn (StockMovement $m) => Quantity::compare((string) $m->quantity, '0') > 0)];
+
+        $title = 'Transfer kaydedildi';
+        $body = sprintf(
+            '%s %s: %s, %s → %s. Yeni bakiyeler: %s %s, %s %s',
+            $part->code,
+            $part->name,
+            Quantity::format($in->quantity, $unit),
+            $out->warehouse->name,
+            $in->warehouse->name,
+            $out->warehouse->name,
+            Quantity::format($out->balance_after, $unit),
+            $in->warehouse->name,
+            Quantity::format($in->balance_after, $unit),
+        );
+
+        $this->lastResult = ['title' => $title, 'body' => $body, 'status' => 'success'];
+
+        if ($out->wasRecentlyCreated) {
+            Notification::make()->success()->title($title)->body($body)->send();
+        }
+    }
+
+    private function showResult(StockMovementType $type, Part $part, Warehouse $warehouse, ?StockMovement $movement): void
+    {
+        $unit = $part->unit->name;
+        $partLabel = "{$part->code} {$part->name} ({$warehouse->name})";
 
         if ($movement === null) {
             // Sayımda fark yok.
-            $balance = (string) StockBalance::query()->where('part_id', $part->getKey())->value('quantity');
+            $balance = (string) (StockBalance::query()->where('part_id', $part->getKey())->where('warehouse_id', $warehouse->getKey())->value('quantity') ?? '0');
             $title = 'Bakiye zaten doğru, hareket oluşturulmadı';
             $body = "{$partLabel}. Bakiye: ".Quantity::format($balance, $unit);
             $status = 'info';
@@ -241,9 +303,9 @@ class StockOperation extends Page
         $search = trim($search);
 
         return Part::query()
-            // Mamul stoğu elle değiştirilemez (yalnızca üretim ve sevk).
+            // Mamul stoğu elle değiştirilemez (yalnızca üretim ve sevk; mamul transferi motor seçimiyle).
             ->where('type', '!=', PartType::FinishedGood->value)
-            // Pasif parçaya yalnızca sayım yapılabilir.
+            // Pasif ürüne yalnızca sayım yapılabilir.
             ->when($type !== StockMovementType::CountAdjustment->value, fn (Builder $query) => $query->where('is_active', true))
             ->where(fn (Builder $query) => $query
                 ->where('code', 'ilike', "%{$search}%")
@@ -261,16 +323,39 @@ class StockOperation extends Page
         return "{$part->code} — {$part->name}".($part->is_active ? '' : ' (pasif)');
     }
 
-    private function balanceText(mixed $partId): ?string
+    /**
+     * Seçilebilir depolar. Pasif depoda yalnızca sayım ve (kaynak olarak) transfer yapılır.
+     *
+     * @return array<int, string>
+     */
+    private function warehouseOptions(?string $type, bool $source): array
     {
-        if (blank($partId) || ! ($part = Part::query()->with(['unit', 'stockBalance'])->find($partId))) {
+        $inactiveAllowed = $type === StockMovementType::CountAdjustment->value
+            || ($source && $type === StockMovementType::Transfer->value);
+
+        return Warehouse::query()
+            ->when(! $inactiveAllowed, fn (Builder $query) => $query->where('is_active', true))
+            ->orderBy('code')
+            ->get()
+            ->mapWithKeys(fn (Warehouse $w): array => [$w->getKey() => $w->name.($w->is_active ? '' : ' (pasif)')])
+            ->all();
+    }
+
+    private function balanceText(mixed $partId, mixed $warehouseId, bool $withTotal = true): ?string
+    {
+        if (blank($partId) || blank($warehouseId) || ! ($part = Part::query()->with(['unit', 'stockBalances'])->find($partId))) {
             return null;
         }
 
-        $text = 'Güncel bakiye: '.Quantity::format($part->stockBalance?->quantity, $part->unit->name);
+        $balance = $part->balanceIn((int) $warehouseId);
+        $text = 'Bu depodaki bakiye: '.Quantity::format($part->quantityIn((int) $warehouseId), $part->unit->name);
 
-        if ($part->isCriticalAt((string) $part->stockBalance?->quantity)) {
+        if ($balance?->isCriticalAt()) {
             $text .= ' (kritik seviyede)';
+        }
+
+        if ($withTotal && $part->stockBalances->count() > 1) {
+            $text .= ' · Tüm depolar: '.Quantity::format($part->totalStock(), $part->unit->name);
         }
 
         return $text;

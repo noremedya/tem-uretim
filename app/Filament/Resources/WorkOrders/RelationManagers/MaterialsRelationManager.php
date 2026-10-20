@@ -61,7 +61,7 @@ class MaterialsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->with(['part.unit', 'part.stockBalance']))
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['part.unit', 'part.stockBalances']))
             ->defaultSort('id')
             ->paginated(false)
             ->columns([
@@ -85,7 +85,7 @@ class MaterialsRelationManager extends RelationManager
                 TextColumn::make('available')
                     ->label('Stok')
                     ->alignEnd()
-                    ->state(fn (WorkOrderMaterial $record): string => Quantity::format((string) ($record->part->stockBalance?->quantity ?? 0), $record->part->unit->name)),
+                    ->state(fn (WorkOrderMaterial $record): string => Quantity::format($record->part->defaultQuantity(), $record->part->unit->name)),
                 TextColumn::make('missing')
                     ->label('Eksik')
                     ->alignEnd()
@@ -105,7 +105,7 @@ class MaterialsRelationManager extends RelationManager
     /** Eksik miktar (0 veya pozitif); tam sayılı birimde yukarı yuvarlanır. */
     public static function missing(WorkOrderMaterial $material): string
     {
-        $missing = Quantity::sub($material->totalRequirement(), (string) ($material->part->stockBalance?->quantity ?? 0));
+        $missing = Quantity::sub($material->totalRequirement(), $material->part->defaultQuantity());
 
         if (Quantity::compare($missing, '0') <= 0) {
             return '0.000';
@@ -126,7 +126,7 @@ class MaterialsRelationManager extends RelationManager
             ->modalDescription(fn (WorkOrderMaterial $record): string => sprintf(
                 'İhtiyaç (fire dahil) %s, stok %s, eksik %s.',
                 Quantity::format($record->totalRequirement(), $record->part->unit->name),
-                Quantity::format((string) ($record->part->stockBalance?->quantity ?? 0), $record->part->unit->name),
+                Quantity::format($record->part->defaultQuantity(), $record->part->unit->name),
                 Quantity::format(static::missing($record), $record->part->unit->name),
             ))
             ->fillForm(function (WorkOrderMaterial $record): array {

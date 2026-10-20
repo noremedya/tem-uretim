@@ -8,9 +8,11 @@ use App\Models\Unit;
 use App\Models\User;
 use App\Services\StockService;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use WeakMap;
 
 /**
- * Bakiye satırı StockService::openBalance ile açılır; başlangıç stoğu StockService üzerinden girilir.
+ * Bakiye satırı StockService::openBalance ile (varsayılan depoda) açılır; başlangıç stoğu StockService üzerinden
+ * girilir. critical_level parts kolonu değildir: varsayılan deponun bakiye satırına yazılır.
  *
  * @extends Factory<Part>
  */
@@ -25,14 +27,22 @@ class PartFactory extends Factory
             // Mamul kartı elle açılmaz (motor modelinden oluşur); varsayılan olarak üretilmez.
             'type' => fake()->randomElement(array_filter(PartType::cases(), fn (PartType $type) => $type->isManuallyAssignable())),
             'barcode' => null,
-            'critical_level' => '0',
         ];
     }
 
     public function configure(): static
     {
-        return $this->afterCreating(fn (Part $part) => app(StockService::class)->openBalance($part));
+        return $this
+            ->afterMaking(function (Part $part): void {
+                self::$criticalLevels ??= new WeakMap;
+                self::$criticalLevels[$part] = $part->getAttributes()['critical_level'] ?? '0';
+                unset($part['critical_level']);
+            })
+            ->afterCreating(fn (Part $part) => app(StockService::class)->openBalance($part, self::$criticalLevels[$part] ?? '0'));
     }
+
+    /** @var WeakMap<Part, string>|null Yapılan kartın kritik seviyesi (oluşturulunca bakiye satırına yazılır). */
+    private static ?WeakMap $criticalLevels = null;
 
     public function inactive(): static
     {

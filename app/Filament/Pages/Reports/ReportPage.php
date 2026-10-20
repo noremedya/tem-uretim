@@ -10,6 +10,7 @@ use App\Models\MotorModel;
 use App\Models\Part;
 use App\Models\ProductionBatch;
 use App\Models\User;
+use App\Models\Warehouse;
 use App\Reports\Report;
 use App\Reports\ReportColumn;
 use App\Reports\ReportFilters;
@@ -134,6 +135,8 @@ abstract class ReportPage extends Page implements HasTable
                     ->where(fn (Builder $q) => $q->where('code', 'ilike', "%{$search}%")->orWhere('name', 'ilike', "%{$search}%"))
                     ->orderBy('code')->limit(50)->get()->mapWithKeys(fn ($p) => [$p->id => "{$p->code} — {$p->name}"])->all())
                 ->getOptionLabelUsing(fn ($value) => ($p = Part::query()->find($value)) ? "{$p->code} — {$p->name}" : null),
+            'warehouse_id' => fn () => Select::make('warehouse_id')->label('Depo')->placeholder('Tüm depolar')
+                ->options(fn () => Warehouse::query()->orderBy('code')->pluck('name', 'id')->all()),
             'customer_id' => fn () => Select::make('customer_id')->label('Müşteri')->searchable()->placeholder('Tümü')
                 ->options(fn () => Customer::query()->where('is_customer', true)->orderBy('name')->pluck('name', 'id')->all()),
             'order_status' => fn () => Select::make('order_status')->label('Sipariş durumu')->placeholder('Tümü')->options(OrderStatus::class),

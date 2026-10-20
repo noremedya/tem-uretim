@@ -34,9 +34,9 @@ it('ürün oluşturulurken 0 bakiyeli satır açılır', function () {
     expect($part->fresh())
         ->code->toBe('P-100')
         ->barcode->toBeNull()
-        ->critical_level->toBe('12.500')
         ->is_active->toBeTrue()
-        ->and((string) $part->stockBalance->quantity)->toBe('0.000');
+        ->and($part->fresh('stockBalances')->criticalLevel())->toBe('12.500')
+        ->and((string) $part->defaultStockBalance->quantity)->toBe('0.000');
 });
 
 it('formdan ürün oluşturulur ve denetim izine yazılır', function () {
@@ -52,8 +52,8 @@ it('formdan ürün oluşturulur ve denetim izine yazılır', function () {
         ->assertHasNoFormErrors();
 
     $part = Part::where('code', 'HM-001')->sole();
-    expect($part->critical_level)->toBe('100.500')
-        ->and($part->stockBalance)->not->toBeNull()
+    expect($part->criticalLevel())->toBe('100.500')
+        ->and($part->defaultStockBalance)->not->toBeNull()
         ->and(Activity::where('subject_type', 'part')->where('subject_id', $part->id)->exists())->toBeTrue();
 });
 

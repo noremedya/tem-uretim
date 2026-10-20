@@ -180,11 +180,11 @@ describe('alış faturası', function () {
 
         $movement = StockMovement::where('reference_type', 'invoice')->where('reference_id', $invoice->id)->sole();
         expect($movement)->type->toBe(StockMovementType::StockIn)->quantity->toBe('120.500')
-            ->and((string) $this->copper->stockBalance()->value('quantity'))->toBe('120.500')
+            ->and((string) $this->copper->defaultStockBalance()->value('quantity'))->toBe('120.500')
             ->and($invoice->fresh()->invoice_number)->toBeNull();
 
         $this->service->cancel($invoice->fresh(), $this->admin, 'Hatalı giriş');
-        expect((string) $this->copper->stockBalance()->value('quantity'))->toBe('0.000')
+        expect((string) $this->copper->defaultStockBalance()->value('quantity'))->toBe('0.000')
             ->and($movement->correction()->exists())->toBeTrue();
     });
 
@@ -200,12 +200,12 @@ describe('alış faturası', function () {
         $this->service->updateLine($line, ['quantity' => '80']);
         $this->service->issue($invoice, $this->admin);
 
-        expect((string) $this->copper->stockBalance()->value('quantity'))->toBe('80.000')
+        expect((string) $this->copper->defaultStockBalance()->value('quantity'))->toBe('80.000')
             ->and($this->service->linkableReceipts($this->copper->id))->toHaveCount(0);
 
         // İptal önceden var olan girişleri ters kaydetmez, yalnızca bağı serbest bırakır.
         $this->service->cancel($invoice->fresh(), $this->admin, 'Yanlış tedarikçi');
-        expect((string) $this->copper->stockBalance()->value('quantity'))->toBe('80.000')
+        expect((string) $this->copper->defaultStockBalance()->value('quantity'))->toBe('80.000')
             ->and($this->service->linkableReceipts($this->copper->id))->toHaveCount(2);
     });
 

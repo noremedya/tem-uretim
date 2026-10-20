@@ -40,17 +40,12 @@ class UnitService
     /** Küsurat kapatılırken bu birimdeki parçaların bakiyesi ve kritik seviyesi tam sayı olmalı. */
     private function ensureNoFractionalQuantities(Unit $unit): void
     {
-        $fractionalBalances = StockBalance::query()
+        $fractional = StockBalance::query()
             ->whereIn('part_id', Part::query()->select('id')->where('unit_id', $unit->getKey()))
-            ->whereRaw('quantity <> trunc(quantity)')
+            ->where(fn ($q) => $q->whereRaw('quantity <> trunc(quantity)')->orWhereRaw('critical_level <> trunc(critical_level)'))
             ->exists();
 
-        $fractionalLevels = Part::query()
-            ->where('unit_id', $unit->getKey())
-            ->whereRaw('critical_level <> trunc(critical_level)')
-            ->exists();
-
-        if ($fractionalBalances || $fractionalLevels) {
+        if ($fractional) {
             throw new BusinessRuleException('Bu birimde küsuratlı bakiyesi veya kritik seviyesi olan ürünler var; küsurat kapatılamaz.');
         }
     }
