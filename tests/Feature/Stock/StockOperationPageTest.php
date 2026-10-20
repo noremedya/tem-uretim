@@ -76,7 +76,7 @@ it('başarılı işlemden sonra form sıfırlanır ve yeni gönderim anahtarı �
         ->and(StockMovement::where('idempotency_key', $firstKey)->count())->toBe(1);
 });
 
-it('aynı parça ve miktarla formu yeniden doldurarak yapılan iki bilinçli işlem iki hareket oluşturur', function () {
+it('aynı ürün ve miktarla formu yeniden doldurarak yapılan iki bilinçli işlem iki hareket oluşturur', function () {
     // Ör. iki ayrı teslimat: depocu aynı parçayı ve miktarı iki kez girer.
     $page = Livewire::test(StockOperation::class);
 
@@ -136,7 +136,7 @@ it('gönderim anahtarı istemciden değiştirilemez', function () {
     Livewire::test(StockOperation::class)->set('submissionKey', 'x');
 })->throws(CannotUpdateLockedPropertyException::class);
 
-it('pasif parça aramada yalnızca sayım için listelenir; pasif parçaya giriş reddedilir', function () {
+it('pasif ürün aramada yalnızca sayım için listelenir; pasif ürüne giriş reddedilir', function () {
     $inactive = Part::factory()->inactive()->create(['code' => 'PASIF-1']);
 
     $page = Livewire::test(StockOperation::class)->instance();
@@ -151,7 +151,7 @@ it('pasif parça aramada yalnızca sayım için listelenir; pasif parçaya giri�
     expect(movementsOf($inactive))->toBe(0);
 });
 
-it('parça sayfasından gelen parça önceden seçilir', function () {
+it('ürün sayfasından gelen ürün önceden seçilir', function () {
     $this->get(StockOperation::getUrl(['part' => $this->part->id]))->assertOk();
 
     Livewire::withQueryParams(['part' => $this->part->id])

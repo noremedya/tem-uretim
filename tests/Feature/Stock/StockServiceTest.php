@@ -112,7 +112,7 @@ it('sayım farkı hesaplar; fark yoksa hareket oluşturmaz', function () {
         ->toThrow(BusinessRuleException::class, 'negatif olamaz');
 });
 
-it('pasif parçaya yalnızca sayım yapılabilir', function () {
+it('pasif ürüne yalnızca sayım yapılabilir', function () {
     $part = Part::factory()->withStock(10)->inactive()->create();
 
     expect(fn () => $this->stock->stockIn($part, 1, $this->user))
@@ -122,7 +122,7 @@ it('pasif parçaya yalnızca sayım yapılabilir', function () {
         ->and(fn () => $this->stock->returnToStock($part, 1, $this->user))
         ->toThrow(BusinessRuleException::class, 'yalnızca sayım');
 
-    $movement = $this->stock->adjustCount($part, 8, $this->user, 'Pasif parça sayımı');
+    $movement = $this->stock->adjustCount($part, 8, $this->user, 'Pasif ürün sayımı');
     expect($movement->quantity)->toBe('-2.000')->and(balanceOf($part))->toBe('8.000');
 });
 

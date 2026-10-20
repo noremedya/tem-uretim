@@ -55,7 +55,7 @@
 
         @if ($part = $this->part())
             <x-filament::section>
-                <x-slot name="heading">Parça: {{ $part->code }}</x-slot>
+                <x-slot name="heading">Ürün: {{ $part->code }}</x-slot>
                 @if ($part->imageUrl())
                     <img src="{{ $part->imageUrl() }}" alt="{{ $part->name }}" class="mb-4 h-40 rounded-lg object-contain">
                 @endif
@@ -69,7 +69,7 @@
                         </span>
                     </p>
                     @unless ($part->is_active)
-                        <p class="font-semibold text-warning-600">Pasif parça: yalnızca sayım yapılabilir (Stok İşlemi sayfası).</p>
+                        <p class="font-semibold text-warning-600">Pasif ürün: yalnızca sayım yapılabilir (Stok İşlemi sayfası).</p>
                     @endunless
                 </div>
                 <div class="mt-6 flex flex-wrap gap-4">

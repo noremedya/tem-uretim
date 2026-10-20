@@ -20,7 +20,7 @@ use Spatie\Activitylog\Support\LogOptions;
 /**
  * Stok kartı. Bakiye stock_balances'ta tutulur ve yalnızca StockService tarafından değiştirilir.
  */
-#[Fillable(['code', 'name', 'unit_id', 'type', 'barcode', 'critical_level', 'image_path'])]
+#[Fillable(['code', 'name', 'unit_id', 'type', 'barcode', 'critical_level', 'image_path', 'brand_id', 'description'])]
 class Part extends Model
 {
     /** @use HasFactory<PartFactory> */
@@ -49,6 +49,12 @@ class Part extends Model
     public function imageUrl(): ?string
     {
         return $this->image_path === null ? null : route('parts.image', ['part' => $this, 'v' => substr(md5($this->image_path), 0, 8)]);
+    }
+
+    /** @return BelongsTo<Brand, $this> */
+    public function brand(): BelongsTo
+    {
+        return $this->belongsTo(Brand::class);
     }
 
     /** @return BelongsTo<Unit, $this> */
@@ -143,7 +149,7 @@ class Part extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['code', 'name', 'unit_id', 'type', 'barcode', 'critical_level', 'is_active', 'image_path'])
+            ->logOnly(['code', 'name', 'unit_id', 'type', 'barcode', 'critical_level', 'is_active', 'image_path', 'brand_id', 'description'])
             ->logOnlyDirty()
             ->dontLogEmptyChanges();
     }

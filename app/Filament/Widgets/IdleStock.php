@@ -44,6 +44,6 @@ class IdleStock extends TableWidget
                 TextColumn::make('last_movement_at')->label('Son hareket')
                     ->formatStateUsing(fn ($state): string => CarbonImmutable::parse($state)->format('d.m.Y')),
             ])
-            ->emptyStateHeading('Hareketsiz parça yok');
+            ->emptyStateHeading('Hareketsiz ürün yok');
     }
 }

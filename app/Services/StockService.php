@@ -465,7 +465,7 @@ class StockService
             ->keyBy('part_id');
 
         if ($balances->count() !== count($partIds)) {
-            throw new BusinessRuleException('Parçanın stok bakiyesi bulunamadı.');
+            throw new BusinessRuleException('Ürünün stok bakiyesi bulunamadı.');
         }
 
         return $balances;
@@ -479,7 +479,7 @@ class StockService
         }
 
         if (! $part->is_active && ! $type->allowedOnInactivePart()) {
-            throw new BusinessRuleException("{$part->code} {$part->name} pasif. Pasif parçaya yalnızca sayım yapılabilir.");
+            throw new BusinessRuleException("{$part->code} {$part->name} pasif. Pasif ürüne yalnızca sayım yapılabilir.");
         }
     }
 

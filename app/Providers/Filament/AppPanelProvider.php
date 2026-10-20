@@ -32,7 +32,7 @@ class AppPanelProvider extends PanelProvider
             ->default()
             ->id('app')
             ->path('')
-            ->brandName('Tem Motor Üretim')
+            ->brandName(fn (): string => config('app.name'))
             ->login(Login::class)
             ->colors([
                 'primary' => Color::Amber,
@@ -42,6 +42,8 @@ class AppPanelProvider extends PanelProvider
             ->font('Inter Variable', provider: LocalFontProvider::class)
             // Ortak Alpine bileşenleri (submitGuard vb.), Vite ile derlenir.
             ->renderHook(PanelsRenderHook::HEAD_END, fn (): string => Blade::render("@vite('resources/js/filament/app.js')"))
+            // Sol menüde arama kutusu.
+            ->renderHook(PanelsRenderHook::SIDEBAR_NAV_START, fn (): string => view('filament.nav-search')->render())
             ->databaseNotifications()
             // Varsayılan avatar ui-avatars.com'a gider; yerel baş harf avatarı kullanılır.
             ->defaultAvatarProvider(InitialsAvatarProvider::class)

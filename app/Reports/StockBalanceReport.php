@@ -129,7 +129,7 @@ class StockBalanceReport extends Report
     public function summary(ReportFilters $filters, array $rows): array
     {
         return [
-            'Parça sayısı' => (string) count($rows),
+            'Ürün sayısı' => (string) count($rows),
             'Hareket türleri' => implode(', ', array_map(fn ($t) => StockMovementType::from($t)->label(), array_keys(self::MOVEMENT_COLUMNS))),
         ];
     }

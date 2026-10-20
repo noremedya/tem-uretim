@@ -3,9 +3,12 @@
 namespace App\Filament\Resources\Parts\Schemas;
 
 use App\Enums\PartType;
+use App\Filament\Resources\Brands\Schemas\BrandForm;
 use App\Filament\Resources\Units\Schemas\UnitForm;
+use App\Models\Brand;
 use App\Models\Part;
 use App\Models\Unit;
+use App\Services\BrandService;
 use App\Services\PartService;
 use App\Services\UnitService;
 use App\Support\Quantity;
@@ -13,6 +16,7 @@ use Closure;
 use Filament\Actions\Action;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
@@ -24,7 +28,7 @@ class PartForm
     {
         return $schema
             ->components([
-                Section::make('Stok kartı')
+                Section::make('Ürün')
                     ->columns(2)
                     ->schema([
                         // Mamul kartının kodu, adı ve birimi motor modelinden yönetilir.
@@ -61,7 +65,7 @@ class PartForm
                             // Hareketi olan parçanın birimi değiştirilemez (PartService'te de kontrol edilir).
                             ->disabled(fn (?Part $record): bool => ($record?->isFinishedGood() ?? false) || ($record?->stockMovements()->exists() ?? false))
                             ->helperText(fn (?Part $record): ?string => ($record?->stockMovements()->exists() ?? false)
-                                ? 'Stok hareketi olan parçanın birimi değiştirilemez.'
+                                ? 'Stok hareketi olan ürünün birimi değiştirilemez.'
                                 : null)
                             // "+": formdan çıkmadan yeni birim; yalnızca birim yönetme yetkisi olanlar görür.
                             ->createOptionForm(UnitForm::fields())
@@ -75,6 +79,17 @@ class PartForm
                             ->maxLength(100)
                             ->unique(ignoreRecord: true)
                             ->helperText('İsteğe bağlı. USB okuyucuyla okutabilirsiniz.'),
+                        Select::make('brand_id')
+                            ->label('Marka')
+                            ->relationship('brand', 'name', modifyQueryUsing: fn ($query, ?Part $record) => $query
+                                ->where(fn ($q) => $q->where('is_active', true)->orWhere('id', $record?->brand_id)))
+                            ->searchable()
+                            ->preload()
+                            ->createOptionForm(BrandForm::fields())
+                            ->createOptionUsing(fn (array $data): int => app(BrandService::class)->create($data)->getKey())
+                            ->createOptionAction(fn (Action $action) => $action->modalHeading('Yeni marka')
+                                ->visible(fn (): bool => Auth::user()?->can('create', Brand::class) ?? false))
+                            ->helperText('İsteğe bağlı. Yeni marka "+" ile veya Markalar ekranından eklenir.'),
                         TextInput::make('critical_level')
                             ->label('Kritik seviye')
                             ->required()
@@ -87,6 +102,11 @@ class PartForm
                                 }
                             })
                             ->helperText('Bakiye bu değere eşit veya altındaysa kritik sayılır. 0 = takip yok.'),
+                        Textarea::make('description')
+                            ->label('Açıklama')
+                            ->rows(3)
+                            ->maxLength(2000)
+                            ->columnSpanFull(),
                         // Görsel sunucunun kendi diskinde tutulur (CDN yok); yüklerken uzun kenar 1200 px'e küçültülür.
                         FileUpload::make('image_path')
                             ->label('Görsel')
@@ -102,7 +122,7 @@ class PartForm
                             ->imageResizeUpscale(false)
                             ->imagePreviewHeight('160')
                             ->columnSpanFull()
-                            ->helperText('JPG, PNG veya WebP; en fazla 5 MB. Parçanın kendi fotoğrafını yükleyin.'),
+                            ->helperText('JPG, PNG veya WebP; en fazla 5 MB. Ürünün kendi fotoğrafını yükleyin.'),
                     ]),
             ]);
     }

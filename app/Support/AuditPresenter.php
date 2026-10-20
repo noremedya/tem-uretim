@@ -17,7 +17,7 @@ use Spatie\Activitylog\Models\Activity;
 final class AuditPresenter
 {
     public const SUBJECT_LABELS = [
-        'user' => 'Kullanıcı', 'unit' => 'Birim', 'part' => 'Stok kartı', 'motor_model' => 'Motor modeli',
+        'user' => 'Kullanıcı', 'unit' => 'Birim', 'brand' => 'Marka', 'part' => 'Ürün', 'motor_model' => 'Motor modeli',
         'bom_item' => 'Reçete satırı', 'customer' => 'Cari hesap', 'order' => 'Sipariş', 'order_item' => 'Sipariş kalemi',
         'production_batch' => 'Üretim partisi', 'work_order' => 'İş emri', 'motor_unit' => 'Motor', 'exchange_rate' => 'Döviz kuru',
         'price' => 'Fiyat', 'invoice' => 'Fatura', 'invoice_line' => 'Fatura satırı', 'cash_account' => 'Kasa/banka hesabı',
@@ -54,11 +54,11 @@ final class AuditPresenter
         'valid_from' => 'Geçerlilik başlangıcı', 'direction' => 'Yön', 'kind' => 'Tür', 'invoice_number' => 'Fatura no',
         'counterparty_number' => 'Karşı taraf belge no', 'original_invoice_id' => 'Orijinal fatura', 'invoice_date' => 'Fatura tarihi',
         'exchange_rate' => 'Kur', 'grand_total' => 'Genel toplam', 'grand_total_try' => 'TL karşılığı', 'invoice_id' => 'Fatura',
-        'part_id' => 'Parça', 'unit' => 'Birim', 'discount_rate' => 'İskonto (%)', 'vat_rate' => 'KDV (%)', 'line_total' => 'Satır toplamı',
+        'part_id' => 'Ürün', 'unit' => 'Birim', 'discount_rate' => 'İskonto (%)', 'vat_rate' => 'KDV (%)', 'line_total' => 'Satır toplamı',
         'bank_name' => 'Banka', 'branch' => 'Şube', 'iban' => 'IBAN', 'payment_date' => 'Tarih', 'method' => 'Yöntem',
         'cash_account_id' => 'Kasa/banka', 'cheque_id' => 'Çek/senet', 'amount' => 'Tutar', 'account_currency' => 'Cari para birimi',
         'account_amount' => 'Cari tutarı', 'number' => 'Numara', 'drawer' => 'Keşideci', 'production_date' => 'Üretim tarihi',
-        'country_code' => 'Ülke', 'foreign_tax_id' => 'Yabancı vergi no', 'gtip_code' => 'GTİP', 'net_weight_kg' => 'Net ağırlık (kg)',
+        'brand_id' => 'Marka', 'image_path' => 'Görsel', 'country_code' => 'Ülke', 'foreign_tax_id' => 'Yabancı vergi no', 'gtip_code' => 'GTİP', 'net_weight_kg' => 'Net ağırlık (kg)',
         'gross_weight_kg' => 'Brüt ağırlık (kg)', 'export_type' => 'İhracat türü', 'incoterm' => 'Teslim şekli',
         'transport_mode' => 'Gönderim şekli', 'package_count' => 'Kap sayısı', 'package_type' => 'Kap cinsi',
         'customs_declaration_number' => 'Gümrük beyannamesi no', 'customs_declaration_date' => 'Gümrük beyannamesi tarihi',
@@ -66,7 +66,7 @@ final class AuditPresenter
 
     /** Alan => [model sınıfı, gösterim alanı] */
     private const FOREIGN_KEYS = [
-        'unit_id' => [Models\Unit::class, 'name'], 'part_id' => [Models\Part::class, 'code'], 'parent_part_id' => [Models\Part::class, 'code'],
+        'unit_id' => [Models\Unit::class, 'name'], 'brand_id' => [Models\Brand::class, 'name'], 'part_id' => [Models\Part::class, 'code'], 'parent_part_id' => [Models\Part::class, 'code'],
         'component_part_id' => [Models\Part::class, 'code'], 'product_part_id' => [Models\Part::class, 'code'],
         'motor_model_id' => [Models\MotorModel::class, 'code'], 'customer_id' => [Models\Customer::class, 'name'],
         'order_id' => [Models\Order::class, 'order_number'], 'production_batch_id' => [Models\ProductionBatch::class, 'batch_number'],
@@ -96,7 +96,7 @@ final class AuditPresenter
     ];
 
     private const SUBJECT_TITLES = [
-        'user' => 'username', 'unit' => 'name', 'part' => 'code', 'motor_model' => 'code', 'customer' => 'name',
+        'user' => 'username', 'unit' => 'name', 'brand' => 'name', 'part' => 'code', 'motor_model' => 'code', 'customer' => 'name',
         'order' => 'order_number', 'production_batch' => 'batch_number', 'work_order' => 'work_order_number',
         'motor_unit' => 'serial_number', 'cash_account' => 'name', 'cheque' => 'number',
     ];

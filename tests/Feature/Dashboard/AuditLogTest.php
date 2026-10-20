@@ -46,7 +46,7 @@ it('değişiklik detayı Türkçe alan adları, enum etiketleri ve bağlı kayı
     $activity = Activity::where('subject_type', 'part')->where('event', 'updated')->sole();
     $changes = collect(AuditPresenter::changes($activity))->keyBy('field');
 
-    expect(AuditPresenter::subjectType('part'))->toBe('Stok kartı')
+    expect(AuditPresenter::subjectType('part'))->toBe('Ürün')
         ->and(AuditPresenter::subject($activity))->toBe('HM-1')
         ->and(AuditPresenter::event($activity))->toBe('Güncellendi')
         ->and($changes['Tür'])->toMatchArray(['old' => 'Direkt sarf', 'new' => 'Endirekt sarf'])

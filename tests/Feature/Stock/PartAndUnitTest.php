@@ -23,7 +23,7 @@ beforeEach(function () {
     $this->user = User::factory()->admin()->create();
 });
 
-it('parça oluşturulurken 0 bakiyeli satır açılır', function () {
+it('ürün oluşturulurken 0 bakiyeli satır açılır', function () {
     $unit = Unit::factory()->create();
 
     $part = app(PartService::class)->create([
@@ -39,7 +39,7 @@ it('parça oluşturulurken 0 bakiyeli satır açılır', function () {
         ->and((string) $part->stockBalance->quantity)->toBe('0.000');
 });
 
-it('formdan parça oluşturulur ve denetim izine yazılır', function () {
+it('formdan ürün oluşturulur ve denetim izine yazılır', function () {
     $this->actingAs($this->user);
     $unit = Unit::factory()->create(['name' => 'kg']);
 
@@ -69,7 +69,7 @@ it('geçersiz veya negatif kritik seviye reddedilir', function (string $value) {
         ->assertHasFormErrors(['critical_level']);
 })->with(['-1', 'abc']);
 
-it('hareketi olan parçanın birimi değiştirilemez', function () {
+it('hareketi olan ürünün birimi değiştirilemez', function () {
     $part = Part::factory()->withStock(1)->create();
     $other = Unit::factory()->create();
 
@@ -84,7 +84,7 @@ it('hareketi olan parçanın birimi değiştirilemez', function () {
         ->assertFormFieldDisabled('unit_id');
 });
 
-it('hareketi olmayan parçanın birimi değiştirilebilir', function () {
+it('hareketi olmayan ürünün birimi değiştirilebilir', function () {
     $part = Part::factory()->create();
     $other = Unit::factory()->create();
 
@@ -93,7 +93,7 @@ it('hareketi olmayan parçanın birimi değiştirilebilir', function () {
     expect($part->fresh()->unit_id)->toBe($other->id);
 });
 
-it('parça düzenlemesi iki ayrı oturumda çakışırsa ikincisi reddedilir', function () {
+it('ürün düzenlemesi iki ayrı oturumda çakışırsa ikincisi reddedilir', function () {
     $part = Part::factory()->create(['name' => 'Eski']);
     $a = User::factory()->admin()->create();
     $b = User::factory()->admin()->create();
@@ -113,19 +113,19 @@ it('parça düzenlemesi iki ayrı oturumda çakışırsa ikincisi reddedilir', f
     expect($part->fresh())->name->toBe('A adı')->lock_version->toBe(1);
 });
 
-it('parça pasifleştirilir ve aktifleştirilir; silinemez', function () {
+it('ürün pasifleştirilir ve aktifleştirilir; silinemez', function () {
     $this->actingAs($this->user);
     $part = Part::factory()->create();
 
     Livewire::test(ListParts::class)
         ->callAction(TestAction::make('deactivate')->table($part))
-        ->assertNotified('Parça pasifleştirildi');
+        ->assertNotified('Ürün pasifleştirildi');
     expect($part->fresh()->is_active)->toBeFalse();
 
     Livewire::test(ListParts::class)
         ->filterTable('is_active', false)
         ->callAction(TestAction::make('activate')->table($part))
-        ->assertNotified('Parça aktifleştirildi');
+        ->assertNotified('Ürün aktifleştirildi');
     expect($part->fresh()->is_active)->toBeTrue()
         ->and($this->user->can('delete', $part))->toBeFalse();
 });
@@ -171,7 +171,7 @@ it('birim düzenlemesi optimistic locking ile korunur', function () {
         ->toThrow(StaleModelException::class);
 });
 
-it('parça formundan "+" ile yeni birim eklenir ve seçilir', function () {
+it('ürün formundan "+" ile yeni birim eklenir ve seçilir', function () {
     $this->actingAs($this->user);
 
     $component = Livewire::test(CreatePart::class)

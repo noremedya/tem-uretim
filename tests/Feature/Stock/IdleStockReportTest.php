@@ -23,7 +23,7 @@ function partMovedDaysAgo(int $daysAgo, array $attributes = [], string $quantity
     return $part;
 }
 
-it('90+ gündür hareketsiz parçaları tek özet bildirimle yönetici ve depoya bildirir', function () {
+it('90+ gündür hareketsiz ürünlerı tek özet bildirimle yönetici ve depoya bildirir', function () {
     $idle = partMovedDaysAgo(100, ['code' => 'HM-ESKI']);
     partMovedDaysAgo(10, ['code' => 'HM-YENI']);
     partMovedDaysAgo(120, ['code' => 'PASIF'])->forceFill(['is_active' => false])->save();
@@ -35,12 +35,12 @@ it('90+ gündür hareketsiz parçaları tek özet bildirimle yönetici ve depoya
     $this->travelBack();
 
     $this->artisan('stock:idle-report')
-        ->expectsOutputToContain('1 parça 90 gündür hareket görmedi')
+        ->expectsOutputToContain('1 ürün 90 gündür hareket görmedi')
         ->assertSuccessful();
 
     foreach ([$this->admin, $this->warehouse] as $user) {
         $notification = $user->notifications()->sole();
-        expect($notification->data['title'])->toBe('Hareketsiz stok: 1 parça 90 gündür hareket görmedi')
+        expect($notification->data['title'])->toBe('Hareketsiz stok: 1 ürün 90 gündür hareket görmedi')
             ->and($notification->data['body'])->toContain('HM-ESKI')
             ->toContain(now()->subDays(100)->format('d.m.Y'))
             ->not->toContain('HM-YENI')
@@ -51,11 +51,11 @@ it('90+ gündür hareketsiz parçaları tek özet bildirimle yönetici ve depoya
     expect($this->operator->notifications()->count())->toBe(0);
 });
 
-it('hareketsiz parça yoksa bildirim göndermez', function () {
+it('hareketsiz ürün yoksa bildirim göndermez', function () {
     partMovedDaysAgo(30);
 
     $this->artisan('stock:idle-report')
-        ->expectsOutput('90 gündür hareketsiz parça yok.')
+        ->expectsOutput('90 gündür hareketsiz ürün yok.')
         ->assertSuccessful();
 
     expect($this->admin->notifications()->count())->toBe(0);
@@ -70,7 +70,7 @@ it('eşik ayardan değiştirilebilir', function () {
     expect($this->admin->notifications()->sole()->data['body'])->toContain('OTUZ');
 });
 
-it('10\'dan fazla parçada listeyi kısaltır', function () {
+it('10\'dan fazla üründe listeyi kısaltır', function () {
     foreach (range(1, 12) as $i) {
         partMovedDaysAgo(100, ['code' => sprintf('P-%02d', $i)]);
     }
@@ -80,7 +80,7 @@ it('10\'dan fazla parçada listeyi kısaltır', function () {
     expect($this->admin->notifications()->sole()->data['body'])
         ->toContain('P-10')
         ->not->toContain('P-11')
-        ->toContain('… ve 2 parça daha.');
+        ->toContain('… ve 2 ürün daha.');
 });
 
 it('her pazartesi 08:00\'de zamanlanmıştır', function () {
@@ -91,7 +91,7 @@ it('her pazartesi 08:00\'de zamanlanmıştır', function () {
         ->and($event->expression)->toBe('0 8 * * 1');
 });
 
-it('parça listesinde hareketsiz filtresi çalışır', function () {
+it('ürün listesinde hareketsiz filtresi çalışır', function () {
     $this->actingAs($this->warehouse);
     $idle = partMovedDaysAgo(100);
     $recent = partMovedDaysAgo(5);

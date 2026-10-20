@@ -3,6 +3,7 @@
 use App\Enums\InvoiceDirection;
 use App\Enums\OrderStatus;
 use App\Enums\WorkOrderStatus;
+use App\Models\Brand;
 use App\Models\CashAccount;
 use App\Models\Customer;
 use App\Models\ExchangeRate;
@@ -56,6 +57,9 @@ function sweepExpectations(): array
         'users' => ['yonetici'],
         'users/create' => ['yonetici'],
         'users/{record}/edit' => ['yonetici'],
+        'brands' => $all,
+        'brands/create' => ['yonetici'],
+        'brands/{record}/edit' => ['yonetici'],
         'units' => $all,
         // Operatör ve depo stokları görür, kart açıp düzenleyemez; hareketleri görür.
         'units/create' => ['yonetici'],
@@ -118,6 +122,7 @@ function sweepRecords(): array
     return [
         'denetim-izi' => Activity::query()->value('id'),
         'users' => User::query()->where('username', 'operator2')->value('id'),
+        'brands' => Brand::query()->value('id'),
         'units' => Unit::query()->value('id'),
         'parts' => Part::query()->where('code', DemoDataSeeder::MARKER_PART)->value('id'),
         'motor-models' => MotorModel::query()->where('is_active', true)->value('id'),

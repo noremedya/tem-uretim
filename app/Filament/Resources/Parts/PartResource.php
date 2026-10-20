@@ -30,17 +30,17 @@ class PartResource extends Resource
 
     protected static ?int $navigationSort = 10;
 
-    protected static ?string $modelLabel = 'parça';
+    protected static ?string $modelLabel = 'ürün';
 
-    protected static ?string $pluralModelLabel = 'parçalar';
+    protected static ?string $pluralModelLabel = 'ürünler';
 
-    protected static ?string $navigationLabel = 'Parçalar';
+    protected static ?string $navigationLabel = 'Ürünler';
 
     protected static ?string $recordTitleAttribute = 'name';
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['unit', 'stockBalance']);
+        return parent::getEloquentQuery()->with(['unit', 'stockBalance', 'brand']);
     }
 
     public static function form(Schema $schema): Schema

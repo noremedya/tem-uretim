@@ -17,7 +17,8 @@ x-logging: &logging
     max-file: "5"
 
 x-app-environment: &app-environment
-  APP_NAME: "Tem Motor Üretim"
+  APP_NAME: ${APP_NAME:-Tem Motor Üretim}
+  COMPANY_NAME: ${COMPANY_NAME:-TEM MOTOR}
   APP_ENV: production
   APP_DEBUG: "false"
   # İlk kurulumda boştur; "key:generate --show" ile üretilip .env'e yazılır (KURULUM_KILAVUZU bölüm 10).

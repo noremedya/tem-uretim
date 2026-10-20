@@ -148,7 +148,7 @@ it('ihracat yalnızca yurt dışındaki cariye ve yalnızca satış faturasında
 
 it('taslak ihracata çevrilince satırların KDV si sıfırlanır; veritabanı KDV li ihracat faturasını reddeder', function () {
     $invoice = $this->service->createDraft(['type' => InvoiceType::SalesInvoice, 'customer_id' => $this->foreign->id, 'exchange_rate' => '48,5']);
-    $this->service->addLine($invoice, ['description' => 'Yedek parça', 'quantity' => 1, 'unit_price' => '100', 'vat_rate' => 20]);
+    $this->service->addLine($invoice, ['description' => 'Yedek ürün', 'quantity' => 1, 'unit_price' => '100', 'vat_rate' => 20]);
     expect($invoice->fresh()->vat_total)->toBe('20.00');
 
     $invoice = $this->service->updateDraft($invoice->fresh(), ['export_type' => 'export'], $invoice->fresh()->lock_version);

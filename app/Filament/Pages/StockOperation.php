@@ -110,7 +110,7 @@ class StockOperation extends Page
                             ->live()
                             ->columnSpanFull(),
                         Select::make('part_id')
-                            ->label('Parça')
+                            ->label('Ürün')
                             ->placeholder('Kod, ad veya barkod ile arayın')
                             ->searchable()
                             ->required()

@@ -219,7 +219,7 @@ describe('alış faturası', function () {
         expect($invoice->fresh()->status)->toBe(InvoiceStatus::Issued);
     });
 
-    it('karşı taraf numarası zorunlu ve aynı caride tekrar edemez; parça zorunlu', function () {
+    it('karşı taraf numarası zorunlu ve aynı caride tekrar edemez; ürün zorunlu', function () {
         $invoice = draft(InvoiceType::PurchaseInvoice);
         $this->service->addLine($invoice, ['part_id' => $this->copper->id, 'quantity' => 1, 'unit_price' => 1]);
 
@@ -227,7 +227,7 @@ describe('alış faturası', function () {
 
         draft(InvoiceType::PurchaseInvoice, ['counterparty_number' => 'DUP-1']);
         expect(fn () => draft(InvoiceType::PurchaseInvoice, ['counterparty_number' => 'DUP-1']))->toThrow(BusinessRuleException::class, 'zaten kayıtlı')
-            ->and(fn () => $this->service->addLine($invoice, ['description' => 'parçasız', 'quantity' => 1, 'unit_price' => 1]))->toThrow(BusinessRuleException::class, 'parça seçilmelidir');
+            ->and(fn () => $this->service->addLine($invoice, ['description' => 'ürünsız', 'quantity' => 1, 'unit_price' => 1]))->toThrow(BusinessRuleException::class, 'ürün seçilmelidir');
     });
 });
 

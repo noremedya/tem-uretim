@@ -15,7 +15,7 @@ beforeEach(function () {
     $this->reference = User::factory()->create();
 });
 
-it('birden fazla malzemeyi tek işlemde düşer; aynı parça satırları toplanır', function () {
+it('birden fazla malzemeyi tek işlemde düşer; aynı ürün satırları toplanır', function () {
     $copper = Part::factory()->withStock(10)->create();
     $bearing = Part::factory()->withStock(4)->create();
 
@@ -55,7 +55,7 @@ it('herhangi bir malzeme yetersizse hiçbir şey değişmez ve tüm eksikler lis
         ->and((string) $enough->stockBalance()->value('quantity'))->toBe('10.000');
 });
 
-it('pasif parçadan üretim sarfı yapılamaz', function () {
+it('pasif üründen üretim sarfı yapılamaz', function () {
     $part = Part::factory()->withStock(5)->inactive()->create();
 
     expect(fn () => $this->stock->consume([['part' => $part, 'quantity' => 1]], $this->reference, $this->user))

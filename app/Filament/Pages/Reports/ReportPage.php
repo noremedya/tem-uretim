@@ -129,7 +129,7 @@ abstract class ReportPage extends Page implements HasTable
             'batch_id' => fn () => Select::make('batch_id')->label('Parti')->searchable()->placeholder('Tümü')
                 ->options(fn () => ProductionBatch::query()->orderByDesc('date')->pluck('batch_number', 'id')->all()),
             'part_type' => fn () => Select::make('part_type')->label('Kart türü')->placeholder('Tümü')->options(PartType::class),
-            'part_id' => fn () => Select::make('part_id')->label('Parça')->searchable()->placeholder('Tümü')
+            'part_id' => fn () => Select::make('part_id')->label('Ürün')->searchable()->placeholder('Tümü')
                 ->getSearchResultsUsing(fn (string $search) => Part::query()
                     ->where(fn (Builder $q) => $q->where('code', 'ilike', "%{$search}%")->orWhere('name', 'ilike', "%{$search}%"))
                     ->orderBy('code')->limit(50)->get()->mapWithKeys(fn ($p) => [$p->id => "{$p->code} — {$p->name}"])->all())

@@ -30,7 +30,7 @@ it('tutarsızlığı yakalar, loglar ve yöneticiye bildirir; düzeltme yapmaz',
     Log::spy();
 
     $this->artisan('stock:reconcile')
-        ->expectsOutputToContain('1 parçada fark bulundu')
+        ->expectsOutputToContain('1 üründe fark bulundu')
         ->assertFailed();
 
     Log::shouldHaveReceived('warning')->once()->withArgs(fn (string $message, array $context) => str_contains($message, 'stock:reconcile')
@@ -39,14 +39,14 @@ it('tutarsızlığı yakalar, loglar ve yöneticiye bildirir; düzeltme yapmaz',
         && $context['mismatches'][0]['movements_total'] === '5.000');
 
     $notification = $admin->notifications()->sole();
-    expect($notification->data['title'])->toContain('1 parçada fark')
+    expect($notification->data['title'])->toContain('1 üründe fark')
         ->and($notification->data['body'])->toContain('BOZUK-1')
         ->and($warehouse->notifications()->count())->toBe(0)
         // Otomatik düzeltme yok.
         ->and((string) $broken->stockBalance()->value('quantity'))->toBe('7.000');
 });
 
-it('bakiye satırı olmayan parçayı da yakalar', function () {
+it('bakiye satırı olmayan ürünü da yakalar', function () {
     $part = Part::factory()->create();
     DB::table('stock_balances')->where('part_id', $part->id)->delete();
 

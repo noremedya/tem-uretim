@@ -5,7 +5,8 @@
  * Yazıcıda "gerçek boyut / %100" ve kenar boşluğu "yok" seçilmelidir.
  */
 return [
-    'company' => 'TEM MOTOR',
+    // Etiketlerde yazan firma adı; her kurulumda .env'den (COMPANY_NAME) verilir.
+    'company' => env('COMPANY_NAME', 'TEM MOTOR'),
 
     'default_layout' => 'thermal',
 

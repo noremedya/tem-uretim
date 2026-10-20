@@ -43,7 +43,9 @@ class PartInfolist
                                 ? Quantity::format($state, $record->unit->name)
                                 : 'Takip yok'),
                         TextEntry::make('barcode')->label('Barkod')->placeholder('—'),
+                        TextEntry::make('brand.name')->label('Marka')->placeholder('—'),
                         IconEntry::make('is_active')->label('Aktif')->boolean(),
+                        TextEntry::make('description')->label('Açıklama')->placeholder('—')->columnSpanFull(),
                     ]),
             ]);
     }

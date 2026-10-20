@@ -21,12 +21,12 @@ class PartStatusActions
             ->color('danger')
             ->authorize('deactivate')
             ->requiresConfirmation()
-            ->modalHeading('Parçayı pasifleştir')
-            ->modalDescription('Pasif parçaya yalnızca sayım yapılabilir. Kayıtları ve hareket geçmişi korunur.')
+            ->modalHeading('Ürünü pasifleştir')
+            ->modalDescription('Pasif ürüne yalnızca sayım yapılabilir. Kayıtları ve hareket geçmişi korunur.')
             ->action(function (Part $record): void {
                 app(PartService::class)->deactivate($record);
 
-                Notification::make()->success()->title('Parça pasifleştirildi')->send();
+                Notification::make()->success()->title('Ürün pasifleştirildi')->send();
             });
     }
 
@@ -38,11 +38,11 @@ class PartStatusActions
             ->color('success')
             ->authorize('activate')
             ->requiresConfirmation()
-            ->modalHeading('Parçayı aktifleştir')
+            ->modalHeading('Ürünü aktifleştir')
             ->action(function (Part $record): void {
                 app(PartService::class)->activate($record);
 
-                Notification::make()->success()->title('Parça aktifleştirildi')->send();
+                Notification::make()->success()->title('Ürün aktifleştirildi')->send();
             });
     }
 }

@@ -98,7 +98,7 @@ class ReconcileStock extends Command
 
         Log::warning('stock:reconcile: stok bakiyesi ile hareket toplamı arasında fark bulundu.', ['mismatches' => $mismatches]);
 
-        $this->error(sprintf('%d parçada fark bulundu:', count($mismatches)));
+        $this->error(sprintf('%d üründe fark bulundu:', count($mismatches)));
         $this->table(
             ['Kod', 'Ad', 'Bakiye', 'Hareket toplamı'],
             array_map(fn (array $m): array => [

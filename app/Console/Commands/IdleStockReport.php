@@ -31,12 +31,12 @@ class IdleStockReport extends Command
             ->get();
 
         if ($parts->isEmpty()) {
-            $this->info("{$days} gündür hareketsiz parça yok.");
+            $this->info("{$days} gündür hareketsiz ürün yok.");
 
             return self::SUCCESS;
         }
 
-        $this->warn(sprintf('%d parça %d gündür hareket görmedi:', $parts->count(), $days));
+        $this->warn(sprintf('%d ürün %d gündür hareket görmedi:', $parts->count(), $days));
         $this->table(
             ['Kod', 'Ad', 'Bakiye', 'Son hareket'],
             $parts->map(fn (Part $part): array => [

@@ -34,7 +34,7 @@ class StockMovementsTable
                     ->dateTime('d.m.Y H:i')
                     ->sortable(),
                 TextColumn::make('part.code')
-                    ->label('Parça')
+                    ->label('Ürün')
                     ->description(fn (StockMovement $record): string => $record->part->name)
                     ->searchable(['code', 'name'])
                     ->visible($showPart),
@@ -74,7 +74,7 @@ class StockMovementsTable
             ])
             ->filters([
                 SelectFilter::make('part_id')
-                    ->label('Parça')
+                    ->label('Ürün')
                     ->relationship('part', 'code')
                     ->getOptionLabelFromRecordUsing(fn ($record): string => "{$record->code} — {$record->name}")
                     ->searchable(['code', 'name'])

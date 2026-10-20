@@ -25,7 +25,7 @@ beforeEach(function () {
     $this->f->bearing->forceFill(['barcode' => '8690000062021'])->save();
 });
 
-it('kod çözümü: barkod, parça kodu, seri no, iş emri no; büyük/küçük harf ve boşluk önemsiz', function () {
+it('kod çözümü: barkod, ürün kodu, seri no, iş emri no; büyük/küçük harf ve boşluk önemsiz', function () {
     $service = app(QuickScanService::class);
     app(ProductionService::class)->complete($wo = $this->f->startedMotorWorkOrder($this->admin, 1), $this->admin);
     $motor = MotorUnit::sole();
@@ -53,7 +53,7 @@ it('operatör tüm iş emirlerini görür; tüm iş emirlerini görmeyen role ba
     expect($service->resolve($other->work_order_number, $limited))->type->toBe('not_assigned')->record->toBeNull()->message->toBe('Bu iş emri size atanmamış.');
 });
 
-it('depo parça okutur, hızlı giriş yapar; aynı gönderim anahtarıyla ikinci hareket oluşmaz', function () {
+it('depo ürün okutur, hızlı giriş yapar; aynı gönderim anahtarıyla ikinci hareket oluşmaz', function () {
     $this->actingAs($this->warehouse);
 
     $page = Livewire::test(QuickScan::class)
@@ -78,7 +78,7 @@ it('depo parça okutur, hızlı giriş yapar; aynı gönderim anahtarıyla ikinc
         ->assertHasActionErrors(['description' => 'required']);
 });
 
-it('operatör parçayı görür ama stok işlemi yapamaz; mamul kartında stok butonu yok', function () {
+it('operatör ürünü görür ama stok işlemi yapamaz; mamul kartında stok butonu yok', function () {
     $this->actingAs($this->operator);
 
     Livewire::test(QuickScan::class)

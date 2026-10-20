@@ -39,6 +39,6 @@ class CriticalStock extends TableWidget
                 TextColumn::make('critical_level')->label('Kritik seviye')->alignEnd()
                     ->formatStateUsing(fn ($state, Part $record): string => Quantity::format($state, $record->unit->name)),
             ])
-            ->emptyStateHeading('Kritik seviyede parça yok');
+            ->emptyStateHeading('Kritik seviyede ürün yok');
     }
 }

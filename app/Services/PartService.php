@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\PartType;
 use App\Exceptions\BusinessRuleException;
+use App\Models\Brand;
 use App\Models\Part;
 use App\Models\StockBalance;
 use App\Models\Unit;
@@ -17,7 +18,7 @@ use Illuminate\Support\Facades\Storage;
  */
 class PartService
 {
-    private const FIELDS = ['code', 'name', 'unit_id', 'type', 'barcode', 'critical_level', 'image_path'];
+    private const FIELDS = ['code', 'name', 'unit_id', 'type', 'barcode', 'critical_level', 'image_path', 'brand_id', 'description'];
 
     /** Stok kartı görsellerinin diski ve klasörü (yerel; gece yedeğine dahil). */
     public const IMAGE_DISK = 'local';
@@ -47,6 +48,7 @@ class PartService
             }
 
             $part->is_active = true;
+            $this->ensureActiveBrand($part);
             $part->save();
 
             $this->stock->openBalance($part);
@@ -121,9 +123,11 @@ class PartService
                 StockBalance::query()->where('part_id', $part->getKey())->lockForUpdate()->first();
 
                 if ($part->stockMovements()->exists()) {
-                    throw new BusinessRuleException('Hareketi olan parçanın birimi değiştirilemez.');
+                    throw new BusinessRuleException('Hareketi olan ürünün birimi değiştirilemez.');
                 }
             }
+
+            $this->ensureActiveBrand($part);
 
             $replacedImage = $part->isDirty('image_path') ? $part->getRawOriginal('image_path') : null;
 
@@ -193,8 +197,24 @@ class PartService
             ?? app(UnitService::class)->create(['name' => 'Adet', 'allows_decimal' => false]);
     }
 
+    /** Pasif marka yeni seçilemez; ürünün mevcut (sonradan pasifleşen) markası korunur. */
+    private function ensureActiveBrand(Part $part): void
+    {
+        if ($part->brand_id !== null && $part->isDirty('brand_id') && ! Brand::query()->whereKey($part->brand_id)->where('is_active', true)->exists()) {
+            throw new BusinessRuleException('Seçilen marka pasif veya bulunamadı.');
+        }
+    }
+
     private function normalize(array $data): array
     {
+        if (array_key_exists('description', $data)) {
+            $data['description'] = filled($data['description']) ? trim((string) $data['description']) : null;
+        }
+
+        if (array_key_exists('brand_id', $data)) {
+            $data['brand_id'] = filled($data['brand_id']) ? (int) $data['brand_id'] : null;
+        }
+
         if (array_key_exists('image_path', $data)) {
             $path = filled($data['image_path']) ? (string) $data['image_path'] : null;
 

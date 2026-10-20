@@ -51,7 +51,7 @@ class UnitService
             ->exists();
 
         if ($fractionalBalances || $fractionalLevels) {
-            throw new BusinessRuleException('Bu birimde küsuratlı bakiyesi veya kritik seviyesi olan parçalar var; küsurat kapatılamaz.');
+            throw new BusinessRuleException('Bu birimde küsuratlı bakiyesi veya kritik seviyesi olan ürünler var; küsurat kapatılamaz.');
         }
     }
 }

@@ -22,7 +22,7 @@ class UnitsTable
                     ->label('Küsuratlı')
                     ->boolean(),
                 TextColumn::make('parts_count')
-                    ->label('Parça sayısı')
+                    ->label('Ürün sayısı')
                     ->counts('parts')
                     ->numeric()
                     ->sortable(),

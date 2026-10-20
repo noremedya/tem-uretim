@@ -694,7 +694,7 @@ class InvoiceService
         $type = $invoice->type();
 
         if ($type === InvoiceType::PurchaseInvoice) {
-            $part = Part::query()->with('unit')->find($data['part_id'] ?? $line->part_id) ?? throw new BusinessRuleException('Alış faturası satırında parça seçilmelidir.');
+            $part = Part::query()->with('unit')->find($data['part_id'] ?? $line->part_id) ?? throw new BusinessRuleException('Alış faturası satırında ürün seçilmelidir.');
 
             if (! $part->type->isManuallyAssignable()) {
                 throw new BusinessRuleException('Mamul kartı alış faturasına yazılamaz.');
@@ -811,7 +811,7 @@ class InvoiceService
         $allowed = $this->linkableReceipts($line->part_id ?? 0, $line)->pluck('id')->all();
 
         if (array_diff($ids, $allowed) !== []) {
-            throw new BusinessRuleException('Seçilen stok girişi bu parçaya ait değil, ters kaydedilmiş veya başka bir faturaya bağlı.');
+            throw new BusinessRuleException('Seçilen stok girişi bu ürüne ait değil, ters kaydedilmiş veya başka bir faturaya bağlı.');
         }
 
         $sum = StockMovement::query()->whereKey($ids)->sum('quantity');

@@ -37,7 +37,13 @@ class PartsTable
                 TextColumn::make('name')
                     ->label('Ad')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->description(fn (Part $record): ?string => $record->description ? str($record->description)->limit(60)->toString() : null),
+                TextColumn::make('brand.name')
+                    ->label('Marka')
+                    ->placeholder('—')
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('type')
                     ->label('Tür')
                     ->badge(),
@@ -73,6 +79,11 @@ class PartsTable
                 SelectFilter::make('type')
                     ->label('Tür')
                     ->options(PartType::class),
+                SelectFilter::make('brand_id')
+                    ->label('Marka')
+                    ->relationship('brand', 'name')
+                    ->searchable()
+                    ->preload(),
                 SelectFilter::make('unit_id')
                     ->label('Birim')
                     ->relationship('unit', 'name'),

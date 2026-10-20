@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Models\AccountTransaction;
 use App\Models\BomItem;
+use App\Models\Brand;
 use App\Models\CashAccount;
 use App\Models\CashMovement;
 use App\Models\Cheque;
@@ -57,6 +58,7 @@ class AppServiceProvider extends ServiceProvider
         Relation::enforceMorphMap([
             'user' => User::class,
             'unit' => Unit::class,
+            'brand' => Brand::class,
             'part' => Part::class,
             'stock_movement' => StockMovement::class,
             'motor_model' => MotorModel::class,

@@ -30,6 +30,7 @@ use App\Models\Unit;
 use App\Models\User;
 use App\Models\WorkOrder;
 use App\Services\BomService;
+use App\Services\BrandService;
 use App\Services\CashAccountService;
 use App\Services\ChequeService;
 use App\Services\CustomerService;
@@ -164,6 +165,7 @@ class DemoDataSeeder extends Seeder
             $this->createCustomers();
         });
         $this->as('yonetici', fn () => $this->attachImages());
+        $this->as('yonetici', fn () => $this->assignBrands());
         $this->as('muhasebe', fn () => $this->createRatesAndPrices($start));
         $this->as('yonetici', fn () => $this->createAccountsAndOpenings($start));
 
@@ -317,6 +319,23 @@ class DemoDataSeeder extends Seeder
             'phase' => MotorPhase::SinglePhase, 'mounting_type' => 'B14', 'protection_class' => 'IP54',
         ]);
         $models->deactivate($old);
+    }
+
+    /** Markalar: kendi ürettiklerimiz "Tem Motor", demo tedarikçinin rulmanları kendi markası. */
+    private function assignBrands(): void
+    {
+        $brands = app(BrandService::class);
+        $own = $brands->create(['name' => 'Tem Motor']);
+        $bearing = $brands->create(['name' => 'Rulman Market']);
+        $parts = app(PartService::class);
+
+        foreach (Part::query()->whereIn('type', [PartType::SemiFinished->value, PartType::FinishedGood->value])->orWhere('code', 'like', 'KOM-RUL-%')->get() as $part) {
+            $brand = str_starts_with($part->code, 'KOM-RUL-') ? $bearing : $own;
+            $parts->update($part, ['brand_id' => $brand->getKey()], $part->lock_version);
+        }
+
+        $sac = Part::query()->where('code', 'HM-SAC-050')->firstOrFail();
+        $parts->update($sac, ['description' => 'M470 kalite, 0,50 mm; preste paket boyuna göre basılır.'], $sac->lock_version);
     }
 
     /** Serbest lisanslı örnek görseller (database/seeders/demo-images, kaynaklar KAYNAKLAR.md'de). */

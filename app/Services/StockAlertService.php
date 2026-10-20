@@ -32,7 +32,7 @@ class StockAlertService
             ))
             ->actions([
                 Action::make('view')
-                    ->label('Parçayı aç')
+                    ->label('Ürünü aç')
                     ->url(PartResource::getUrl('view', ['record' => $part])),
             ])
             ->sendToDatabase($this->recipients(Role::Admin, Role::Warehouse));
@@ -57,12 +57,12 @@ class StockAlertService
         );
 
         if (count($mismatches) > 10) {
-            $lines[] = sprintf('… ve %d parça daha (ayrıntılar uygulama logunda).', count($mismatches) - 10);
+            $lines[] = sprintf('… ve %d ürün daha (ayrıntılar uygulama logunda).', count($mismatches) - 10);
         }
 
         Notification::make()
             ->danger()
-            ->title(sprintf('Stok tutarlılık kontrolü: %d parçada fark bulundu', count($mismatches)))
+            ->title(sprintf('Stok tutarlılık kontrolü: %d üründe fark bulundu', count($mismatches)))
             ->body(implode("\n", $lines))
             ->sendToDatabase($this->recipients(Role::Admin));
     }
@@ -106,12 +106,12 @@ class StockAlertService
         ))->all();
 
         if ($parts->count() > 10) {
-            $lines[] = sprintf('… ve %d parça daha.', $parts->count() - 10);
+            $lines[] = sprintf('… ve %d ürün daha.', $parts->count() - 10);
         }
 
         Notification::make()
             ->warning()
-            ->title(sprintf('Hareketsiz stok: %d parça %d gündür hareket görmedi', $parts->count(), $days))
+            ->title(sprintf('Hareketsiz stok: %d ürün %d gündür hareket görmedi', $parts->count(), $days))
             ->body(implode("\n", $lines))
             ->actions([
                 Action::make('list')

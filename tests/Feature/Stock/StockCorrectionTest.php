@@ -22,14 +22,14 @@ beforeEach(function () {
 it('ters kayıt orijinalin tam tersi miktarla yapılır ve bakiyeyi geri alır', function () {
     $in = $this->stock->stockIn($this->part, '7,5', $this->user);
 
-    $correction = $this->stock->correct($in, $this->user, 'Yanlış parçaya girilmiş');
+    $correction = $this->stock->correct($in, $this->user, 'Yanlış ürüne girilmiş');
 
     expect($correction->fresh())
         ->type->toBe(StockMovementType::Correction)
         ->quantity->toBe('-7.500')
         ->corrected_movement_id->toBe($in->id)
         ->balance_after->toBe('0.000')
-        ->description->toBe('Yanlış parçaya girilmiş')
+        ->description->toBe('Yanlış ürüne girilmiş')
         ->and($in->fresh()->correction->id)->toBe($correction->id)
         ->and((string) $this->part->stockBalance()->value('quantity'))->toBe('0.000');
 });
@@ -82,7 +82,7 @@ it('ters kaydın kendisi ters kaydedilemez (servis ve veritabanı)', function ()
     ])))->toThrow(QueryException::class, 'Ters kaydın kendisi ters kaydedilemez.');
 });
 
-it('veritabanı ters kaydın tam ters miktarda ve aynı parçada olmasını zorlar', function () {
+it('veritabanı ters kaydın tam ters miktarda ve aynı üründe olmasını zorlar', function () {
     $in = $this->stock->stockIn($this->part, 5, $this->user);
     $other = Part::factory()->withStock(10)->create();
 
@@ -116,7 +116,7 @@ it('ters kayıtta açıklama zorunludur', function () {
         ->toThrow(BusinessRuleException::class, 'açıklama zorunludur');
 });
 
-it('pasif parçanın hareketi ters kaydedilemez', function () {
+it('pasif ürünün hareketi ters kaydedilemez', function () {
     $in = $this->stock->stockIn($this->part, 5, $this->user);
     $this->part->is_active = false;
     $this->part->save();
