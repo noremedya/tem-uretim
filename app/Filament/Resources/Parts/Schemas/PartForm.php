@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Parts\Schemas;
 use App\Enums\PartType;
 use App\Filament\Resources\Brands\Schemas\BrandForm;
 use App\Filament\Resources\Units\Schemas\UnitForm;
+use App\Filament\Support\SubtypeSelect;
 use App\Models\Brand;
 use App\Models\Part;
 use App\Models\Unit;
@@ -19,6 +20,8 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Illuminate\Support\Facades\Auth;
 
@@ -55,7 +58,19 @@ class PartForm
                                 : PartType::manualOptions())
                             ->disabled(fn (?Part $record): bool => $record?->type === PartType::FinishedGood)
                             ->required()
+                            ->live()
+                            // Alt tür ana türe bağlı: tür değişince temizlenir.
+                            ->afterStateUpdated(fn (Set $set) => $set('subtype_id', null))
                             ->helperText('Mamul kartları motor modeliyle birlikte oluşturulur.'),
+                        SubtypeSelect::make(
+                            'subtype_id',
+                            fn (Get $get): ?PartType => $get('type') instanceof PartType ? $get('type') : PartType::tryFrom((string) $get('type')),
+                            fn (?Part $record): ?int => $record?->subtype_id,
+                        )
+                            ->disabled(fn (?Part $record): bool => $record?->isFinishedGood() ?? false)
+                            ->helperText(fn (?Part $record): ?string => ($record?->isFinishedGood() ?? false)
+                                ? 'Mamulün alt türü motor modelinden değiştirilir.'
+                                : 'İsteğe bağlı. Yeni alt tür "+" ile veya Alt türler ekranından eklenir.'),
                         Select::make('unit_id')
                             ->label('Birim')
                             ->relationship('unit', 'name')

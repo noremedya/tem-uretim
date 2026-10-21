@@ -24,6 +24,7 @@ use App\Models\MotorModel;
 use App\Models\MotorUnit;
 use App\Models\Order;
 use App\Models\Part;
+use App\Models\PartSubtype;
 use App\Models\ProductionBatch;
 use App\Models\StockMovement;
 use App\Models\Unit;
@@ -198,6 +199,31 @@ class DemoDataSeeder extends Seeder
         $this->as('yonetici', fn () => $service->deactivate($this->users['operator3'], $this->users['yonetici']));
     }
 
+    /** Kurulumdaki örnek alt türlerden, kod önekine göre (yoksa alt tür yok). */
+    private function subtypeFor(string $code, PartType $type): ?int
+    {
+        $name = match (true) {
+            str_starts_with($code, 'HM-SAC') => 'Silisli sac',
+            str_starts_with($code, 'HM-BAKIR') => 'Bakır tel',
+            str_starts_with($code, 'HM-ALU') => 'Alüminyum',
+            str_starts_with($code, 'HM-MIL') => 'Mil çeliği',
+            str_starts_with($code, 'KOM-RUL') => 'Rulman',
+            str_starts_with($code, 'KOM-KLEMENS') => 'Klemens kutusu',
+            str_starts_with($code, 'KOM-FAN') => 'Pervane',
+            str_starts_with($code, 'DS-VERNIK') => 'Vernik',
+            str_starts_with($code, 'DS-CIVATA') => 'Bağlantı elemanı',
+            $code === 'YM-STATOR' => 'Bobinajlı stator',
+            $code === 'YM-ROTOR' => 'Enjekte rotor',
+            $code === 'YM-MIL' => 'İşlenmiş mil',
+            $code === 'YM-GOVDE' => 'Gövde',
+            $code === 'YM-KAPAK' => 'Kapak',
+            $code === 'MAMUL' => 'Trifaze',
+            default => null,
+        };
+
+        return $name === null ? null : PartSubtype::query()->where('type', $type->value)->where('name', $name)->value('id');
+    }
+
     private function createParts(): void
     {
         // kod => [ad, tür, birim, kritik seviye, tedarikçi, alış fiyatı, barkod]
@@ -231,7 +257,7 @@ class DemoDataSeeder extends Seeder
         foreach ($parts as $code => [$name, $type, $unit, $critical, $supplier, $price, $barcode]) {
             $this->parts[$code] = $service->create([
                 'code' => $code, 'name' => $name, 'type' => $type, 'unit_id' => $this->units[$unit]->getKey(),
-                'critical_level' => $critical, 'barcode' => $barcode,
+                'critical_level' => $critical, 'barcode' => $barcode, 'subtype_id' => $this->subtypeFor($code, $type),
             ]);
             $this->partSupplier[$code] = $supplier;
             $this->purchasePrice[$code] = $price;
@@ -272,12 +298,13 @@ class DemoDataSeeder extends Seeder
                 'frequency_hz' => 50, 'pole_count' => $poles, 'frame_size' => $frame, 'phase' => MotorPhase::ThreePhase,
                 'mounting_type' => 'B3', 'protection_class' => 'IP55', 'efficiency_class' => $efficiency,
                 'description' => 'Alüminyum gövdeli asenkron motor', 'gtip_code' => $gtip, 'net_weight_kg' => $weight,
+                'subtype_id' => $this->subtypeFor('MAMUL', PartType::FinishedGood),
             ]);
             $this->models[$frame] = $model;
 
             $semi = fn (string $prefix, string $label) => $this->parts["{$prefix}-{$frame}"] = $parts->create([
                 'code' => "{$prefix}-{$frame}", 'name' => "{$label} {$frame} tip ({$kw} kW)", 'type' => PartType::SemiFinished,
-                'unit_id' => $piece,
+                'unit_id' => $piece, 'subtype_id' => $this->subtypeFor($prefix, PartType::SemiFinished),
             ]);
 
             $shaft = $semi('YM-MIL', 'İşlenmiş mil');

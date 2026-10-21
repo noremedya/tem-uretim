@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Parts\Tables;
 use App\Enums\PartType;
 use App\Filament\Resources\Parts\Actions\PartStatusActions;
 use App\Models\Part;
+use App\Models\PartSubtype;
 use App\Models\Warehouse;
 use App\Support\Quantity;
 use Filament\Actions\EditAction;
@@ -47,7 +48,8 @@ class PartsTable
                     ->toggleable(),
                 TextColumn::make('type')
                     ->label('Tür')
-                    ->badge(),
+                    ->badge()
+                    ->description(fn (Part $record): ?string => $record->subtype?->name),
                 // Depo filtresi seçiliyse o depodaki bakiye, değilse tüm depoların toplamı.
                 TextColumn::make('balance')
                     ->label(fn ($livewire): string => static::warehouseFilter($livewire) !== null ? 'Bakiye (depo)' : 'Bakiye')
@@ -87,6 +89,12 @@ class PartsTable
                 SelectFilter::make('type')
                     ->label('Tür')
                     ->options(PartType::class),
+                SelectFilter::make('subtype_id')
+                    ->label('Alt tür')
+                    ->options(fn (): array => PartSubtype::query()->get()->sortBy(fn (PartSubtype $s) => $s->fullLabel())
+                        ->mapWithKeys(fn (PartSubtype $s) => [$s->getKey() => $s->fullLabel()])->all())
+                    ->searchable()
+                    ->multiple(),
                 SelectFilter::make('brand_id')
                     ->label('Marka')
                     ->relationship('brand', 'name')

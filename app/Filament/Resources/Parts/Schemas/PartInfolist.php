@@ -32,6 +32,7 @@ class PartInfolist
                         TextEntry::make('code')->label('Kod'),
                         TextEntry::make('name')->label('Ad'),
                         TextEntry::make('type')->label('Tür')->badge(),
+                        TextEntry::make('subtype.name')->label('Alt tür')->placeholder('—'),
                         TextEntry::make('unit.name')->label('Birim'),
                         TextEntry::make('total_stock')
                             ->label('Bakiye (tüm depolar)')

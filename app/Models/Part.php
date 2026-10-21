@@ -22,7 +22,7 @@ use Spatie\Activitylog\Support\LogOptions;
  * Stok kartı. Bakiye ve kritik seviye depo bazlıdır (stock_balances) ve yalnızca StockService tarafından değiştirilir.
  * Bakiyeyle ilgili yardımcılar yüklü stockBalances ilişkisini kullanır (with('stockBalances')).
  */
-#[Fillable(['code', 'name', 'unit_id', 'type', 'barcode', 'image_path', 'brand_id', 'description', 'default_warehouse_id'])]
+#[Fillable(['code', 'name', 'unit_id', 'type', 'barcode', 'image_path', 'brand_id', 'description', 'default_warehouse_id', 'subtype_id'])]
 class Part extends Model
 {
     /** @use HasFactory<PartFactory> */
@@ -56,6 +56,18 @@ class Part extends Model
     public function brand(): BelongsTo
     {
         return $this->belongsTo(Brand::class);
+    }
+
+    /** @return BelongsTo<PartSubtype, $this> */
+    public function subtype(): BelongsTo
+    {
+        return $this->belongsTo(PartSubtype::class, 'subtype_id');
+    }
+
+    /** "Hammadde › Silisli sac" veya yalnızca ana tür. */
+    public function typeLabel(): string
+    {
+        return $this->type->label().($this->subtype_id !== null ? ' › '.$this->subtype->name : '');
     }
 
     /** @return BelongsTo<Unit, $this> */
@@ -211,7 +223,7 @@ class Part extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['code', 'name', 'unit_id', 'type', 'barcode', 'is_active', 'image_path', 'brand_id', 'description', 'default_warehouse_id'])
+            ->logOnly(['code', 'name', 'unit_id', 'type', 'barcode', 'is_active', 'image_path', 'brand_id', 'description', 'default_warehouse_id', 'subtype_id'])
             ->logOnlyDirty()
             ->dontLogEmptyChanges();
     }

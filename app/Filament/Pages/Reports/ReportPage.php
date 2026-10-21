@@ -8,6 +8,7 @@ use App\Enums\Role;
 use App\Models\Customer;
 use App\Models\MotorModel;
 use App\Models\Part;
+use App\Models\PartSubtype;
 use App\Models\ProductionBatch;
 use App\Models\User;
 use App\Models\Warehouse;
@@ -27,6 +28,7 @@ use Filament\Schemas\Components\EmbeddedSchema;
 use Filament\Schemas\Components\EmbeddedTable;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -129,7 +131,11 @@ abstract class ReportPage extends Page implements HasTable
                 ->options(fn () => User::query()->role(Role::Operator->value)->orderBy('name')->pluck('name', 'id')->all()),
             'batch_id' => fn () => Select::make('batch_id')->label('Parti')->searchable()->placeholder('Tümü')
                 ->options(fn () => ProductionBatch::query()->orderByDesc('date')->pluck('batch_number', 'id')->all()),
-            'part_type' => fn () => Select::make('part_type')->label('Kart türü')->placeholder('Tümü')->options(PartType::class),
+            'part_type' => fn () => Select::make('part_type')->label('Kart türü')->placeholder('Tümü')->options(PartType::class)->live(),
+            'subtype_id' => fn () => Select::make('subtype_id')->label('Alt tür')->placeholder('Tümü')->searchable()
+                ->options(fn (Get $get) => PartSubtype::query()
+                    ->when(filled($get('part_type')), fn (Builder $q) => $q->where('type', $get('part_type') instanceof PartType ? $get('part_type')->value : $get('part_type')))
+                    ->get()->sortBy(fn (PartSubtype $s) => $s->fullLabel())->mapWithKeys(fn (PartSubtype $s) => [$s->getKey() => $s->fullLabel()])->all()),
             'part_id' => fn () => Select::make('part_id')->label('Ürün')->searchable()->placeholder('Tümü')
                 ->getSearchResultsUsing(fn (string $search) => Part::query()
                     ->where(fn (Builder $q) => $q->where('code', 'ilike', "%{$search}%")->orWhere('name', 'ilike', "%{$search}%"))

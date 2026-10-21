@@ -17,7 +17,7 @@ use Spatie\Activitylog\Models\Activity;
 final class AuditPresenter
 {
     public const SUBJECT_LABELS = [
-        'user' => 'Kullanıcı', 'unit' => 'Birim', 'brand' => 'Marka', 'warehouse' => 'Depo', 'part' => 'Ürün', 'motor_model' => 'Motor modeli',
+        'user' => 'Kullanıcı', 'unit' => 'Birim', 'brand' => 'Marka', 'part_subtype' => 'Alt tür', 'warehouse' => 'Depo', 'part' => 'Ürün', 'motor_model' => 'Motor modeli',
         'bom_item' => 'Reçete satırı', 'customer' => 'Cari hesap', 'order' => 'Sipariş', 'order_item' => 'Sipariş kalemi',
         'production_batch' => 'Üretim partisi', 'work_order' => 'İş emri', 'motor_unit' => 'Motor', 'exchange_rate' => 'Döviz kuru',
         'price' => 'Fiyat', 'invoice' => 'Fatura', 'invoice_line' => 'Fatura satırı', 'cash_account' => 'Kasa/banka hesabı',
@@ -61,7 +61,7 @@ final class AuditPresenter
         'brand_id' => 'Marka', 'image_path' => 'Görsel', 'country_code' => 'Ülke', 'foreign_tax_id' => 'Yabancı vergi no', 'gtip_code' => 'GTİP', 'net_weight_kg' => 'Net ağırlık (kg)',
         'gross_weight_kg' => 'Brüt ağırlık (kg)', 'export_type' => 'İhracat türü', 'incoterm' => 'Teslim şekli',
         'transport_mode' => 'Gönderim şekli', 'package_count' => 'Kap sayısı', 'package_type' => 'Kap cinsi',
-        'warehouse_id' => 'Depo', 'default_warehouse_id' => 'Varsayılan depo', 'source_warehouse_id' => 'Malzeme deposu',
+        'subtype_id' => 'Alt tür', 'warehouse_id' => 'Depo', 'default_warehouse_id' => 'Varsayılan depo', 'source_warehouse_id' => 'Malzeme deposu',
         'target_warehouse_id' => 'Çıktı deposu', 'allows_negative' => 'Eksiye düşebilir',
         'is_production' => 'Üretim deposu', 'is_shipping' => 'Sevkiyat deposu', 'default_part_types' => 'Varsayılan türler',
         'customs_declaration_number' => 'Gümrük beyannamesi no', 'customs_declaration_date' => 'Gümrük beyannamesi tarihi',
@@ -69,7 +69,7 @@ final class AuditPresenter
 
     /** Alan => [model sınıfı, gösterim alanı] */
     private const FOREIGN_KEYS = [
-        'unit_id' => [Models\Unit::class, 'name'], 'brand_id' => [Models\Brand::class, 'name'], 'warehouse_id' => [Models\Warehouse::class, 'name'],
+        'unit_id' => [Models\Unit::class, 'name'], 'brand_id' => [Models\Brand::class, 'name'], 'subtype_id' => [Models\PartSubtype::class, 'name'], 'warehouse_id' => [Models\Warehouse::class, 'name'],
         'default_warehouse_id' => [Models\Warehouse::class, 'name'], 'source_warehouse_id' => [Models\Warehouse::class, 'name'],
         'target_warehouse_id' => [Models\Warehouse::class, 'name'], 'part_id' => [Models\Part::class, 'code'], 'parent_part_id' => [Models\Part::class, 'code'],
         'component_part_id' => [Models\Part::class, 'code'], 'product_part_id' => [Models\Part::class, 'code'],
@@ -84,6 +84,7 @@ final class AuditPresenter
     /** Kayıt türü => [alan => enum] (aynı alan adı farklı kayıtta farklı enum olabilir). */
     private const ENUMS = [
         'part' => ['type' => Enums\PartType::class],
+        'part_subtype' => ['type' => Enums\PartType::class],
         'motor_model' => ['phase' => Enums\MotorPhase::class],
         'customer' => ['default_currency' => Enums\Currency::class],
         'order' => ['status' => Enums\OrderStatus::class],
@@ -101,7 +102,7 @@ final class AuditPresenter
     ];
 
     private const SUBJECT_TITLES = [
-        'user' => 'username', 'unit' => 'name', 'brand' => 'name', 'warehouse' => 'name', 'part' => 'code', 'motor_model' => 'code', 'customer' => 'name',
+        'user' => 'username', 'unit' => 'name', 'brand' => 'name', 'part_subtype' => 'name', 'warehouse' => 'name', 'part' => 'code', 'motor_model' => 'code', 'customer' => 'name',
         'order' => 'order_number', 'production_batch' => 'batch_number', 'work_order' => 'work_order_number',
         'motor_unit' => 'serial_number', 'cash_account' => 'name', 'cheque' => 'number',
     ];

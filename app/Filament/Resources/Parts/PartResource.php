@@ -41,7 +41,7 @@ class PartResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->with(['unit', 'stockBalances', 'brand']);
+        return parent::getEloquentQuery()->with(['unit', 'stockBalances', 'brand', 'subtype']);
     }
 
     public static function form(Schema $schema): Schema

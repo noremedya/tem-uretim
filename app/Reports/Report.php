@@ -25,7 +25,7 @@ abstract class Report
 
     /**
      * Raporun kullandığı filtreler (ekranda gösterilecek alanlar): grouping, motor_model_id, operator_id, batch_id,
-     * part_type, part_id, warehouse_id, customer_id, order_status, include_semi_finished.
+     * part_type, subtype_id, part_id, warehouse_id, customer_id, order_status, include_semi_finished.
      *
      * @return list<string>
      */

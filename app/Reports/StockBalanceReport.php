@@ -47,13 +47,14 @@ class StockBalanceReport extends Report
 
     public function filters(): array
     {
-        return ['part_type', 'part_id', 'warehouse_id'];
+        return ['part_type', 'subtype_id', 'part_id', 'warehouse_id'];
     }
 
     public function columns(): array
     {
         return [
             ReportColumn::text('accounting_code', 'Muhasebe kodu'),
+            ReportColumn::text('subtype', 'Alt tür'),
             ReportColumn::text('code', 'Kod'),
             ReportColumn::text('name', 'Ad'),
             ReportColumn::text('unit', 'Birim'),
@@ -88,22 +89,27 @@ class StockBalanceReport extends Report
             $where .= ' AND p.type = :part_type';
             $bindings['part_type'] = $filters->partType;
         }
+        if ($filters->subtypeId !== null) {
+            $where .= ' AND p.subtype_id = :subtype_id';
+            $bindings['subtype_id'] = $filters->subtypeId;
+        }
         if ($filters->partId !== null) {
             $where .= ' AND p.id = :part_id';
             $bindings['part_id'] = $filters->partId;
         }
 
         $rows = DB::select(<<<SQL
-            SELECT p.code, p.name, p.type, u.name AS unit,
+            SELECT p.code, p.name, p.type, s.name AS subtype, u.name AS unit,
                 COALESCE(SUM(m.quantity) FILTER (WHERE m.created_at < :opening_from), 0) AS opening,
                 {$sums},
                 COALESCE(SUM(m.quantity), 0) AS closing,
                 count(m.id) FILTER (WHERE m.created_at >= :any_from) AS movement_count
             FROM parts p
             JOIN units u ON u.id = p.unit_id
+            LEFT JOIN part_subtypes s ON s.id = p.subtype_id
             LEFT JOIN stock_movements m ON m.part_id = p.id AND m.created_at < :to{$movementWhere}
             WHERE TRUE {$where}
-            GROUP BY p.id, p.code, p.name, p.type, u.name
+            GROUP BY p.id, p.code, p.name, p.type, s.name, u.name
             HAVING count(m.id) > 0
         SQL, $bindings);
 
@@ -113,6 +119,7 @@ class StockBalanceReport extends Report
                 $type = PartType::from($row->type);
                 $result = [
                     'accounting_code' => $type->accountingCode(),
+                    'subtype' => $row->subtype,
                     'code' => $row->code,
                     'name' => $row->name,
                     'unit' => $row->unit,
@@ -128,7 +135,7 @@ class StockBalanceReport extends Report
 
                 return $result;
             })
-            ->sortBy(fn (array $r) => [$r['accounting_code'], $r['code']])
+            ->sortBy(fn (array $r) => [$r['accounting_code'], $r['subtype'] ?? '', $r['code']])
             ->values()
             ->all();
     }

@@ -28,7 +28,7 @@ class StockMovementListReport extends Report
 
     public function filters(): array
     {
-        return ['part_type', 'part_id', 'warehouse_id'];
+        return ['part_type', 'subtype_id', 'part_id', 'warehouse_id'];
     }
 
     public function columns(): array
@@ -62,6 +62,7 @@ class StockMovementListReport extends Report
             ->where('m.created_at', '>=', $filters->from)
             ->where('m.created_at', '<', $filters->toExclusive())
             ->when($filters->partType, fn ($q, $type) => $q->where('p.type', $type))
+            ->when($filters->subtypeId, fn ($q, $id) => $q->where('p.subtype_id', $id))
             ->when($filters->partId, fn ($q, $id) => $q->where('p.id', $id))
             ->when($filters->warehouseId, fn ($q, $id) => $q->where('m.warehouse_id', $id))
             ->orderBy('m.created_at')->orderBy('m.id')

@@ -6,6 +6,7 @@ use App\Enums\PartType;
 use App\Exceptions\BusinessRuleException;
 use App\Models\Brand;
 use App\Models\Part;
+use App\Models\PartSubtype;
 use App\Models\StockBalance;
 use App\Models\Unit;
 use App\Models\Warehouse;
@@ -19,7 +20,7 @@ use Illuminate\Support\Facades\Storage;
  */
 class PartService
 {
-    private const FIELDS = ['code', 'name', 'unit_id', 'type', 'barcode', 'image_path', 'brand_id', 'description', 'default_warehouse_id'];
+    private const FIELDS = ['code', 'name', 'unit_id', 'type', 'barcode', 'image_path', 'brand_id', 'description', 'default_warehouse_id', 'subtype_id'];
 
     /** Stok kartı görsellerinin diski ve klasörü (yerel; gece yedeğine dahil). */
     public const IMAGE_DISK = 'local';
@@ -27,7 +28,7 @@ class PartService
     public const IMAGE_DIRECTORY = 'part-images';
 
     /** Mamul kartında motor modelinden yönetilen alanlar. */
-    private const FINISHED_GOOD_MANAGED_FIELDS = ['code', 'name', 'unit_id', 'type'];
+    private const FINISHED_GOOD_MANAGED_FIELDS = ['code', 'name', 'unit_id', 'type', 'subtype_id'];
 
     public function __construct(
         private readonly StockService $stock,
@@ -51,6 +52,7 @@ class PartService
             }
 
             $part->is_active = true;
+            $this->ensureSubtype($part);
             $this->ensureActiveBrand($part);
             $this->ensureActiveWarehouse($part);
             $part->save();
@@ -118,7 +120,14 @@ class PartService
 
             if ($part->type !== $originalType) {
                 $this->ensureTypeChangeAllowed($part, $originalType);
+
+                // Alt tür ana türe bağlıdır: tür değişince eski türün alt türü temizlenir (denetim izine yazılır).
+                if ($part->subtype_id !== null && $part->subtype?->type !== $part->type) {
+                    $part->subtype_id = null;
+                }
             }
+
+            $this->ensureSubtype($part);
 
             if ($part->isDirty('unit_id')) {
                 // Bakiye satırı kilitlenir: StockService hareket yazarken aynı satırı kilitlediği için
@@ -213,6 +222,36 @@ class PartService
         }
     }
 
+    /** Alt tür ürünün ana türüne ait olmalı (veritabanında da); pasif alt tür yeni seçilemez. */
+    private function ensureSubtype(Part $part): void
+    {
+        if ($part->subtype_id === null || ! $part->isDirty('subtype_id')) {
+            return;
+        }
+
+        $subtype = PartSubtype::query()->find($part->subtype_id);
+
+        if ($subtype === null || ! $subtype->is_active) {
+            throw new BusinessRuleException('Seçilen alt tür pasif veya bulunamadı.');
+        }
+
+        if ($subtype->type !== $part->type) {
+            throw new BusinessRuleException("\"{$subtype->name}\" alt türü {$subtype->type->label()} türüne ait; ürünün türü {$part->type->label()}.");
+        }
+
+        $part->setRelation('subtype', $subtype);
+    }
+
+    /** Mamul kartının alt türü motor modelinden (yalnızca MotorModelService). */
+    public function setFinishedGoodSubtype(Part $part, ?int $subtypeId): Part
+    {
+        $part->subtype_id = $subtypeId;
+        $this->ensureSubtype($part);
+        $part->save();
+
+        return $part;
+    }
+
     /** Pasif depo ürünün varsayılan deposu olarak yeni seçilemez. */
     private function ensureActiveWarehouse(Part $part): void
     {
@@ -224,6 +263,10 @@ class PartService
 
     private function normalize(array $data): array
     {
+        if (array_key_exists('subtype_id', $data)) {
+            $data['subtype_id'] = filled($data['subtype_id']) ? (int) $data['subtype_id'] : null;
+        }
+
         if (array_key_exists('default_warehouse_id', $data)) {
             $data['default_warehouse_id'] = filled($data['default_warehouse_id']) ? (int) $data['default_warehouse_id'] : null;
         }

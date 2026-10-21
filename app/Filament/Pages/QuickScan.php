@@ -85,7 +85,7 @@ class QuickScan extends Page
 
     public function part(): ?Part
     {
-        return $this->resultType === 'part' ? Part::query()->with(['unit', 'stockBalances.warehouse'])->find($this->resultId) : null;
+        return $this->resultType === 'part' ? Part::query()->with(['unit', 'stockBalances.warehouse', 'subtype'])->find($this->resultId) : null;
     }
 
     public function motor(): ?MotorUnit

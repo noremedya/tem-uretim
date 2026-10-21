@@ -17,6 +17,7 @@ use App\Models\MotorUnit;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Part;
+use App\Models\PartSubtype;
 use App\Models\Payment;
 use App\Models\Price;
 use App\Models\ProductionBatch;
@@ -62,6 +63,7 @@ class AppServiceProvider extends ServiceProvider
             'user' => User::class,
             'unit' => Unit::class,
             'brand' => Brand::class,
+            'part_subtype' => PartSubtype::class,
             'warehouse' => Warehouse::class,
             'part' => Part::class,
             'stock_movement' => StockMovement::class,

@@ -3,6 +3,9 @@
 namespace App\Filament\Resources\MotorModels\Schemas;
 
 use App\Enums\MotorPhase;
+use App\Enums\PartType;
+use App\Filament\Support\SubtypeSelect;
+use App\Models\MotorModel;
 use App\Support\Gtip;
 use App\Support\Quantity;
 use Closure;
@@ -31,6 +34,9 @@ class MotorModelForm
                             ->label('Ad')
                             ->required()
                             ->maxLength(255),
+                        // Mamul alt türü (Trifaze, Monofaze MD…): mamul kartında tutulur.
+                        SubtypeSelect::make('subtype_id', fn () => PartType::FinishedGood, fn (?MotorModel $record) => $record?->finishedPart?->subtype_id)
+                            ->afterStateHydrated(fn (Select $component, ?MotorModel $record) => $component->state($record?->finishedPart?->subtype_id)),
                         Textarea::make('description')
                             ->label('Açıklama')
                             ->rows(2)

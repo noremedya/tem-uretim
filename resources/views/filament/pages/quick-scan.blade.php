@@ -61,7 +61,7 @@
                 @endif
                 <div class="space-y-2 text-lg">
                     <p class="text-2xl font-semibold">{{ $part->name }}</p>
-                    <p>Tür: {{ $part->type->getLabel() }}</p>
+                    <p>Tür: {{ $part->type->getLabel() }}@if ($part->subtype) › {{ $part->subtype->name }}@endif</p>
                     <p class="text-2xl">
                         Bakiye:
                         <span @class(['font-bold', 'text-danger-600' => $part->isCritical()])>

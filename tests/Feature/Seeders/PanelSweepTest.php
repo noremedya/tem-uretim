@@ -12,6 +12,7 @@ use App\Models\MotorModel;
 use App\Models\MotorUnit;
 use App\Models\Order;
 use App\Models\Part;
+use App\Models\PartSubtype;
 use App\Models\Payment;
 use App\Models\Price;
 use App\Models\ProductionBatch;
@@ -61,6 +62,9 @@ function sweepExpectations(): array
         'brands' => $all,
         'brands/create' => ['yonetici'],
         'brands/{record}/edit' => ['yonetici'],
+        'part-subtypes' => $all,
+        'part-subtypes/create' => ['yonetici'],
+        'part-subtypes/{record}/edit' => ['yonetici'],
         'warehouses' => $all,
         'warehouses/create' => ['yonetici'],
         'warehouses/{record}/edit' => ['yonetici'],
@@ -128,6 +132,7 @@ function sweepRecords(): array
         'users' => User::query()->where('username', 'operator2')->value('id'),
         'brands' => Brand::query()->value('id'),
         'warehouses' => Warehouse::query()->value('id'),
+        'part-subtypes' => PartSubtype::query()->value('id'),
         'units' => Unit::query()->value('id'),
         'parts' => Part::query()->where('code', DemoDataSeeder::MARKER_PART)->value('id'),
         'motor-models' => MotorModel::query()->where('is_active', true)->value('id'),

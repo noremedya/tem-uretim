@@ -32,9 +32,15 @@ class MotorModelService
             $model = new MotorModel(Arr::only($data, MotorModel::FIELDS));
             $this->ensurePartCodeFree($model->code);
 
-            $model->finished_part_id = $this->parts->createFinishedGood($model->code, $model->name, true)->getKey();
+            $finished = $this->parts->createFinishedGood($model->code, $model->name, true);
+            $model->finished_part_id = $finished->getKey();
             $model->is_active = true;
             $model->save();
+
+            // Mamul alt türü (Trifaze, Monofaze MD…) modelin formundan girilir, mamul kartında tutulur.
+            if (filled($data['subtype_id'] ?? null)) {
+                $this->parts->setFinishedGoodSubtype($finished, (int) $data['subtype_id']);
+            }
 
             return $model;
         });
@@ -56,6 +62,15 @@ class MotorModelService
 
             $model->saveExpectingVersion($expectedLockVersion);
             $this->syncFinishedPart($model);
+
+            if (array_key_exists('subtype_id', $data)) {
+                $finished = $model->finishedPart()->firstOrFail();
+                $subtypeId = filled($data['subtype_id']) ? (int) $data['subtype_id'] : null;
+
+                if ($finished->subtype_id !== $subtypeId) {
+                    $this->parts->setFinishedGoodSubtype($finished, $subtypeId);
+                }
+            }
 
             return $model;
         });
