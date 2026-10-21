@@ -15,6 +15,7 @@ use App\Models\Part;
 use App\Models\StockMovement;
 use App\Models\Unit;
 use App\Models\User;
+use App\Models\Warehouse;
 use App\Services\ExchangeRateService;
 use App\Services\InvoiceService;
 use App\Services\PriceService;
@@ -186,6 +187,23 @@ describe('alış faturası', function () {
         $this->service->cancel($invoice->fresh(), $this->admin, 'Hatalı giriş');
         expect((string) $this->copper->defaultStockBalance()->value('quantity'))->toBe('0.000')
             ->and($movement->correction()->exists())->toBeTrue();
+    });
+
+    it('satırda seçilen depoya giriş yapılır; iptalde ters kayıt aynı depoda', function () {
+        $production = Warehouse::query()->where('code', 'URT')->sole();
+        $invoice = draft(InvoiceType::PurchaseInvoice, ['counterparty_number' => 'DEPO-1']);
+        $line = $this->service->addLine($invoice, ['part_id' => $this->copper->id, 'warehouse_id' => $production->id, 'quantity' => '10', 'unit_price' => '1']);
+
+        expect($line->warehouse_id)->toBe($production->id);
+
+        $this->service->issue($invoice, $this->admin);
+        $movement = StockMovement::where('reference_type', 'invoice')->where('reference_id', $invoice->id)->sole();
+
+        expect($movement->warehouse_id)->toBe($production->id)
+            ->and((string) $this->copper->defaultStockBalance()->value('quantity'))->toBe('0.000');
+
+        $this->service->cancel($invoice->fresh(), $this->admin, 'Yanlış depo');
+        expect($movement->correction->warehouse_id)->toBe($production->id);
     });
 
     it('önceden yapılmış stok girişlerine bağlanır; toplam eşit olmalı; aynı mal iki kez girilmez', function () {

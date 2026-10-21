@@ -90,7 +90,7 @@ class QuickScan extends Page
 
     public function motor(): ?MotorUnit
     {
-        return $this->resultType === 'motor' ? MotorUnit::query()->with(['motorModel', 'workOrder', 'order.customer', 'shippedBy'])->find($this->resultId) : null;
+        return $this->resultType === 'motor' ? MotorUnit::query()->with(['motorModel', 'workOrder', 'order.customer', 'shippedBy', 'warehouse'])->find($this->resultId) : null;
     }
 
     public function workOrder(): ?WorkOrder

@@ -61,7 +61,8 @@ final class AuditPresenter
         'brand_id' => 'Marka', 'image_path' => 'Görsel', 'country_code' => 'Ülke', 'foreign_tax_id' => 'Yabancı vergi no', 'gtip_code' => 'GTİP', 'net_weight_kg' => 'Net ağırlık (kg)',
         'gross_weight_kg' => 'Brüt ağırlık (kg)', 'export_type' => 'İhracat türü', 'incoterm' => 'Teslim şekli',
         'transport_mode' => 'Gönderim şekli', 'package_count' => 'Kap sayısı', 'package_type' => 'Kap cinsi',
-        'warehouse_id' => 'Depo', 'default_warehouse_id' => 'Varsayılan depo', 'allows_negative' => 'Eksiye düşebilir',
+        'warehouse_id' => 'Depo', 'default_warehouse_id' => 'Varsayılan depo', 'source_warehouse_id' => 'Malzeme deposu',
+        'target_warehouse_id' => 'Çıktı deposu', 'allows_negative' => 'Eksiye düşebilir',
         'is_production' => 'Üretim deposu', 'is_shipping' => 'Sevkiyat deposu', 'default_part_types' => 'Varsayılan türler',
         'customs_declaration_number' => 'Gümrük beyannamesi no', 'customs_declaration_date' => 'Gümrük beyannamesi tarihi',
     ];
@@ -69,7 +70,8 @@ final class AuditPresenter
     /** Alan => [model sınıfı, gösterim alanı] */
     private const FOREIGN_KEYS = [
         'unit_id' => [Models\Unit::class, 'name'], 'brand_id' => [Models\Brand::class, 'name'], 'warehouse_id' => [Models\Warehouse::class, 'name'],
-        'default_warehouse_id' => [Models\Warehouse::class, 'name'], 'part_id' => [Models\Part::class, 'code'], 'parent_part_id' => [Models\Part::class, 'code'],
+        'default_warehouse_id' => [Models\Warehouse::class, 'name'], 'source_warehouse_id' => [Models\Warehouse::class, 'name'],
+        'target_warehouse_id' => [Models\Warehouse::class, 'name'], 'part_id' => [Models\Part::class, 'code'], 'parent_part_id' => [Models\Part::class, 'code'],
         'component_part_id' => [Models\Part::class, 'code'], 'product_part_id' => [Models\Part::class, 'code'],
         'motor_model_id' => [Models\MotorModel::class, 'code'], 'customer_id' => [Models\Customer::class, 'name'],
         'order_id' => [Models\Order::class, 'order_number'], 'production_batch_id' => [Models\ProductionBatch::class, 'batch_number'],

@@ -33,6 +33,15 @@ class MotorUnit extends Model
         static::deleting(fn () => throw new BusinessRuleException('Üretilen motor kayıtları silinemez.'));
     }
 
+    /** Motorun bulunduğu depo.
+     *
+     * @return BelongsTo<Warehouse, $this>
+     */
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class, 'warehouse_id');
+    }
+
     /** @return BelongsTo<MotorModel, $this> */
     public function motorModel(): BelongsTo
     {
@@ -72,7 +81,7 @@ class MotorUnit extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['serial_number', 'motor_model_id', 'work_order_id', 'order_id', 'status', 'shipped_at', 'shipped_by_user_id', 'notes'])
+            ->logOnly(['serial_number', 'motor_model_id', 'work_order_id', 'order_id', 'status', 'warehouse_id', 'shipped_at', 'shipped_by_user_id', 'notes'])
             ->logOnlyDirty()
             ->dontLogEmptyChanges();
     }

@@ -46,6 +46,7 @@ use App\Services\ProductionBatchService;
 use App\Services\ProductionService;
 use App\Services\StockService;
 use App\Services\UserService;
+use App\Services\WarehouseService;
 use App\Services\WorkOrderService;
 use App\Support\Quantity;
 use App\Support\TaxNumber;
@@ -665,7 +666,7 @@ class DemoDataSeeder extends Seeder
 
     private function complete(WorkOrder $workOrder, string $operator): void
     {
-        $workOrder = $workOrder->fresh(['materials.part.unit', 'materials.part.stockBalances']);
+        $workOrder = $workOrder->fresh(['materials.part.unit', 'materials.part.stockBalances', 'materials.warehouse']);
 
         if ($workOrder->status !== WorkOrderStatus::InProgress) {
             return;
@@ -683,13 +684,16 @@ class DemoDataSeeder extends Seeder
         $this->as($operator, fn () => app(ProductionService::class)->complete($workOrder, $this->users[$operator], $scraps));
     }
 
-    /** Eksik malzemeyi depo, tedarikçi lotu kadar girer (girişler hafta sonunda alış faturasına bağlanır). */
+    /**
+     * Eksik malzemeyi tamamlar: ana depoda yoksa depo tedarikçi lotu kadar girer (girişler hafta sonunda alış
+     * faturasına bağlanır), sonra iş emrinin malzeme deposuna (üretim deposu) eksik kadar besleme transferi yapar.
+     */
     private function ensureMaterials(WorkOrder $workOrder, array $scraps): void
     {
         foreach ($workOrder->materials as $material) {
             $part = $material->part;
             $need = Quantity::add((string) $material->required_quantity, $scraps[$part->getKey()] ?? (string) $material->planned_scrap);
-            $balance = $part->defaultQuantity();
+            $balance = $material->available();
 
             if (Quantity::compare($balance, $need) >= 0) {
                 continue;
@@ -699,15 +703,25 @@ class DemoDataSeeder extends Seeder
                 throw new RuntimeException("Demo kurgu hatası: {$part->code} yarı mamulü yetersiz.");
             }
 
-            $lot = match ($part->unit->name) {
-                'Kg' => '50', 'Litre' => '10', default => '100',
-            };
             $shortage = Quantity::sub($need, $balance);
-            $quantity = Quantity::mul(Quantity::ceil(bcdiv($shortage, $lot, 3), 0), $lot);
-            $quantity = Quantity::add($quantity, $lot);
+            $home = app(WarehouseService::class)->defaultFor($part);
+            $homeBalance = $home->is($material->warehouse) ? $balance : $part->quantityIn($home->getKey());
 
-            $movement = $this->as('depo', fn () => app(StockService::class)->stockIn($part, $quantity, $this->users['depo'], 'Tedarikçi teslimatı'));
-            $this->pendingReceipts[$this->partSupplier[$part->code]][$part->code][] = $movement->getKey();
+            if (Quantity::compare($homeBalance, $home->is($material->warehouse) ? $need : $shortage) < 0) {
+                $lot = match ($part->unit->name) {
+                    'Kg' => '50', 'Litre' => '10', default => '100',
+                };
+                $missing = Quantity::sub($home->is($material->warehouse) ? $need : $shortage, $homeBalance);
+                $quantity = Quantity::add(Quantity::mul(Quantity::ceil(bcdiv($missing, $lot, 3), 0), $lot), $lot);
+
+                $movement = $this->as('depo', fn () => app(StockService::class)->stockIn($part, $quantity, $this->users['depo'], 'Tedarikçi teslimatı', warehouse: $home));
+                $this->pendingReceipts[$this->partSupplier[$part->code]][$part->code][] = $movement->getKey();
+            }
+
+            if (! $home->is($material->warehouse)) {
+                $this->as('depo', fn () => app(StockService::class)->transfer($part, $home, $material->warehouse, $shortage, $this->users['depo'], "Hat besleme: {$workOrder->work_order_number}"));
+            }
+
             $part->load('stockBalances');
         }
     }

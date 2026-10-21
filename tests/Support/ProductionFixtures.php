@@ -17,6 +17,9 @@ use App\Services\WorkOrderService;
  *
  * Motor (mamul) reçetesi: 1 stator (yarı mamul, adet) + 2 rulman (komponent, adet, %0 fire) + 0,2 kg vernik (%5 fire).
  * Stator reçetesi: 1,25 kg silisli sac (%4 fire) + 0,8 kg bakır.
+ *
+ * İş emirleri varsayılan olarak "her malzeme kendi deposundan" açılır (stok ürünlerin varsayılan depolarına girer);
+ * üretim deposundan çekme ayrı testlerde ('source_warehouse_id' verilerek) denenir.
  */
 final class ProductionFixtures
 {
@@ -88,6 +91,7 @@ final class ProductionFixtures
             'product_part_id' => $this->model->finished_part_id,
             'quantity' => $quantity,
             'planned_end' => today()->addWeek(),
+            'source_warehouse_id' => null,
             ...$data,
         ], $actor);
     }
@@ -99,6 +103,7 @@ final class ProductionFixtures
             'product_part_id' => $this->stator->id,
             'quantity' => $quantity,
             'planned_end' => today()->addWeek(),
+            'source_warehouse_id' => null,
             ...$data,
         ], $actor);
     }

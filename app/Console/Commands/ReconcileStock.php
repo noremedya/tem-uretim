@@ -33,19 +33,25 @@ class ReconcileStock extends Command
         return self::FAILURE;
     }
 
-    /** Mamul bakiyesi = modelin stoktaki (in_stock) motor sayısı. */
+    /** Her depoda mamul bakiyesi = modelin o depodaki stoktaki (in_stock) motor sayısı. */
     private function checkFinishedGoods(StockAlertService $alerts): bool
     {
         $rows = DB::select(<<<'SQL'
-            SELECT p.code, p.name, b.total AS balance, COALESCE(u.in_stock, 0) AS in_stock
-            FROM motor_models m
+            WITH keys AS (
+                SELECT m.id AS motor_model_id, b.warehouse_id FROM motor_models m JOIN stock_balances b ON b.part_id = m.finished_part_id
+                UNION SELECT motor_model_id, warehouse_id FROM motor_units WHERE status = 'in_stock'
+            )
+            SELECT p.code, p.name, w.name AS warehouse, COALESCE(b.quantity, 0) AS balance, COALESCE(u.in_stock, 0) AS in_stock
+            FROM keys k
+            JOIN motor_models m ON m.id = k.motor_model_id
             JOIN parts p ON p.id = m.finished_part_id
-            JOIN (SELECT part_id, SUM(quantity) AS total FROM stock_balances GROUP BY part_id) b ON b.part_id = p.id
+            JOIN warehouses w ON w.id = k.warehouse_id
+            LEFT JOIN stock_balances b ON b.part_id = p.id AND b.warehouse_id = k.warehouse_id
             LEFT JOIN (
-                SELECT motor_model_id, count(*) AS in_stock FROM motor_units WHERE status = 'in_stock' GROUP BY motor_model_id
-            ) u ON u.motor_model_id = m.id
-            WHERE b.total <> COALESCE(u.in_stock, 0)
-            ORDER BY p.code
+                SELECT motor_model_id, warehouse_id, count(*) AS in_stock FROM motor_units WHERE status = 'in_stock' GROUP BY motor_model_id, warehouse_id
+            ) u ON u.motor_model_id = k.motor_model_id AND u.warehouse_id = k.warehouse_id
+            WHERE COALESCE(b.quantity, 0) <> COALESCE(u.in_stock, 0)
+            ORDER BY p.code, w.code
         SQL);
 
         if ($rows === []) {
@@ -55,6 +61,7 @@ class ReconcileStock extends Command
         $mismatches = array_map(fn (object $row): array => [
             'code' => $row->code,
             'name' => $row->name,
+            'warehouse' => $row->warehouse,
             'balance' => Quantity::parse($row->balance),
             'in_stock' => (int) $row->in_stock,
         ], $rows);
@@ -63,8 +70,8 @@ class ReconcileStock extends Command
 
         $this->error(sprintf('%d mamul kartında bakiye stoktaki motor sayısıyla uyuşmuyor:', count($mismatches)));
         $this->table(
-            ['Kod', 'Ad', 'Bakiye', 'Stoktaki motor'],
-            array_map(fn (array $m): array => [$m['code'], $m['name'], Quantity::format($m['balance']), $m['in_stock']], $mismatches),
+            ['Kod', 'Ad', 'Depo', 'Bakiye', 'Stoktaki motor'],
+            array_map(fn (array $m): array => [$m['code'], $m['name'], $m['warehouse'], Quantity::format($m['balance']), $m['in_stock']], $mismatches),
         );
 
         $alerts->finishedGoodMismatches($mismatches);

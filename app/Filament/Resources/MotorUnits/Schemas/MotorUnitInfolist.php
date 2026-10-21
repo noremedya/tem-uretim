@@ -22,6 +22,7 @@ class MotorUnitInfolist
                 ->schema([
                     TextEntry::make('serial_number')->label('Seri no')->weight('bold')->copyable(),
                     TextEntry::make('status')->label('Durum')->badge(),
+                    TextEntry::make('warehouse.name')->label('Depo'),
                     TextEntry::make('motorModel.code')
                         ->label('Model')
                         ->formatStateUsing(fn (MotorUnit $record): string => "{$record->motorModel->code} — {$record->motorModel->name}")

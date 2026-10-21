@@ -9,7 +9,9 @@ use App\Enums\WorkOrderStatus;
 use App\Models\OrderItem;
 use App\Models\Part;
 use App\Models\User;
+use App\Models\Warehouse;
 use App\Models\WorkOrder;
+use App\Services\WarehouseService;
 use App\Support\Quantity;
 use Closure;
 use Filament\Forms\Components\DatePicker;
@@ -18,6 +20,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -38,6 +41,8 @@ class WorkOrderForm
                         ->getSearchResultsUsing(fn (string $search): array => static::searchProducts($search))
                         ->getOptionLabelUsing(fn ($value): ?string => ($part = Part::query()->find($value)) ? static::productLabel($part) : null)
                         ->disabledOn('edit')
+                        // Çıktı deposu üretilen ürünün varsayılan deposuyla dolar.
+                        ->afterStateUpdated(fn ($state, Set $set) => $set('target_warehouse_id', filled($state) ? Part::query()->find($state)?->defaultWarehouseId() : null))
                         ->helperText('Reçetesi tanımlı aktif yarı mamul veya mamul (motor).'),
                     TextInput::make('quantity')
                         ->label('Adet')
@@ -61,6 +66,24 @@ class WorkOrderForm
                         ->relationship('productionBatch', 'batch_number')
                         ->searchable()
                         ->preload(),
+                ]),
+            Section::make('Depolar')
+                ->columns(2)
+                ->columnSpanFull()
+                ->schema([
+                    Select::make('source_warehouse_id')
+                        ->label('Malzeme deposu')
+                        ->placeholder('Her malzeme kendi deposundan')
+                        ->options(fn (?WorkOrder $record): array => static::warehouseOptions($record?->source_warehouse_id))
+                        ->default(fn (): ?int => app(WarehouseService::class)->production()?->getKey())
+                        ->disabled(fn (?WorkOrder $record): bool => $record !== null && $record->status !== WorkOrderStatus::Planned)
+                        ->helperText('Hammadde, komponent ve sarf bu depodan düşer; yarı mamul her zaman kendi deposundan. Yalnızca planlandı durumunda değişir.'),
+                    Select::make('target_warehouse_id')
+                        ->label('Çıktı deposu')
+                        ->required()
+                        ->options(fn (?WorkOrder $record): array => static::warehouseOptions($record?->target_warehouse_id))
+                        ->disabled(fn (?WorkOrder $record): bool => $record !== null && $record->status !== WorkOrderStatus::Planned)
+                        ->helperText('Üretilen ürün (mamulde motorlar) bu depoya girer.'),
                 ]),
             Section::make('Planlama')
                 ->columns(3)
@@ -87,6 +110,16 @@ class WorkOrderForm
                     Textarea::make('notes')->label('Notlar')->rows(3)->columnSpanFull(),
                 ]),
         ]);
+    }
+
+    /** @return array<int, string> aktif depolar (kayıttaki pasif depo da listede kalır) */
+    private static function warehouseOptions(?int $current): array
+    {
+        return Warehouse::query()
+            ->where(fn (Builder $q) => $q->where('is_active', true)->orWhere('id', $current))
+            ->orderBy('code')
+            ->pluck('name', 'id')
+            ->all();
     }
 
     /** @return array<int, string> */

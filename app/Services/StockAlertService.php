@@ -73,12 +73,12 @@ class StockAlertService
     /**
      * stock:reconcile mamul bakiyesi ile stoktaki motor sayısı arasında fark buldu: aktif yöneticilere.
      *
-     * @param  list<array{code: string, name: string, balance: string, in_stock: int}>  $mismatches
+     * @param  list<array{code: string, name: string, warehouse: string, balance: string, in_stock: int}>  $mismatches
      */
     public function finishedGoodMismatches(array $mismatches): void
     {
         $lines = array_map(
-            fn (array $m): string => sprintf('%s %s: bakiye %s, stoktaki motor %d', $m['code'], $m['name'], Quantity::format($m['balance']), $m['in_stock']),
+            fn (array $m): string => sprintf('%s %s (%s): bakiye %s, stoktaki motor %d', $m['code'], $m['name'], $m['warehouse'], Quantity::format($m['balance']), $m['in_stock']),
             array_slice($mismatches, 0, 10),
         );
 

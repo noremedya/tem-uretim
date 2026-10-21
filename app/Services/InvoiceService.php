@@ -23,6 +23,7 @@ use App\Models\MotorUnit;
 use App\Models\Part;
 use App\Models\StockMovement;
 use App\Models\User;
+use App\Models\Warehouse;
 use App\Support\Gtip;
 use App\Support\Money;
 use App\Support\Quantity;
@@ -152,7 +153,7 @@ class InvoiceService
      * Elle satır (satış: nakliye, hizmet; iadeler) veya alış faturasında parça satırı. Alış faturası satırı
      * aynı parçanın stok girişlerine bağlanabilir ($stockMovementIds).
      *
-     * @param  array{part_id?: ?int, description?: ?string, quantity: mixed, unit?: ?string, unit_price: mixed, discount_rate?: mixed, vat_rate?: mixed, stock_movement_ids?: list<int>}  $data
+     * @param  array{part_id?: ?int, warehouse_id?: ?int, description?: ?string, quantity: mixed, unit?: ?string, unit_price: mixed, discount_rate?: mixed, vat_rate?: mixed, stock_movement_ids?: list<int>}  $data
      */
     public function addLine(Invoice $invoice, array $data): InvoiceLine
     {
@@ -393,6 +394,7 @@ class InvoiceService
     public function linkableReceipts(int $partId, ?InvoiceLine $except = null): Collection
     {
         return StockMovement::query()
+            ->with('warehouse')
             ->where('part_id', $partId)
             ->where('type', StockMovementType::StockIn->value)
             ->whereDoesntHave('correction')
@@ -418,7 +420,7 @@ class InvoiceService
         $linked = $line->stockMovements;
 
         if ($linked->isEmpty()) {
-            $movement = $this->stock->receiveForInvoice($line->part, (string) $line->quantity, $invoice, $actor, "Alış faturası {$invoice->counterparty_number}");
+            $movement = $this->stock->receiveForInvoice($line->part, (string) $line->quantity, $invoice, $actor, "Alış faturası {$invoice->counterparty_number}", $line->warehouse);
             $line->stockMovements()->attach($movement->getKey());
 
             return;
@@ -701,6 +703,18 @@ class InvoiceService
             }
 
             $line->part_id = $part->getKey();
+
+            // Kesimde oluşacak stok girişinin deposu (boşsa ürünün varsayılan deposu).
+            if (array_key_exists('warehouse_id', $data)) {
+                $warehouseId = filled($data['warehouse_id']) ? (int) $data['warehouse_id'] : null;
+
+                if ($warehouseId !== null && $warehouseId !== $line->warehouse_id && ! Warehouse::query()->whereKey($warehouseId)->where('is_active', true)->exists()) {
+                    throw new BusinessRuleException('Seçilen depo pasif veya bulunamadı.');
+                }
+
+                $line->warehouse_id = $warehouseId;
+            }
+
             $line->description = filled($data['description'] ?? null) ? trim($data['description']) : "{$part->code} {$part->name}";
             $line->unit = $part->unit->name;
             $quantity = Quantity::parse($data['quantity'] ?? $line->quantity ?? '');
@@ -710,6 +724,7 @@ class InvoiceService
             }
         } else {
             $line->part_id = null;
+            $line->warehouse_id = null;
             $line->description = trim((string) ($data['description'] ?? $line->description));
 
             if (array_key_exists('gtip_code', $data)) {

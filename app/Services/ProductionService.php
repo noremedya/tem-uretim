@@ -13,6 +13,7 @@ use App\Models\MotorUnit;
 use App\Models\Part;
 use App\Models\StockMovement;
 use App\Models\User;
+use App\Models\Warehouse;
 use App\Models\WorkOrder;
 use App\Support\Quantity;
 use Illuminate\Support\Collection;
@@ -42,7 +43,7 @@ class ProductionService
         return DB::transaction(function () use ($workOrder, $actor, $actualScraps): WorkOrder {
             // Satır kilidi: aynı iş emri iki kez tamamlanamaz; durum kilit altında okunur.
             $locked = WorkOrder::query()
-                ->with(['materials.part.unit', 'product.unit', 'motorModel', 'orderItem.order'])
+                ->with(['materials.part.unit', 'product.unit', 'motorModel', 'orderItem.order', 'targetWarehouse'])
                 ->lockForUpdate()
                 ->findOrFail($workOrder->getKey());
 
@@ -59,10 +60,10 @@ class ProductionService
                 $material->actual_scrap = $scrap;
                 $material->save();
 
-                $lines[] = ['part_id' => $material->part_id, 'consumption' => (string) $material->required_quantity, 'scrap' => $scrap];
+                $lines[] = ['part_id' => $material->part_id, 'warehouse_id' => $material->warehouse_id, 'consumption' => (string) $material->required_quantity, 'scrap' => $scrap];
             }
 
-            $this->stock->recordProduction($lines, $locked->product, (string) $locked->quantity, $locked, $actor, $locked->work_order_number);
+            $this->stock->recordProduction($lines, $locked->product, (string) $locked->quantity, $locked, $actor, $locked->work_order_number, $locked->targetWarehouse);
 
             if ($locked->motor_model_id !== null) {
                 $this->createMotorUnits($locked);
@@ -111,6 +112,13 @@ class ProductionService
 
             if ($notInStock->isNotEmpty()) {
                 throw new BusinessRuleException('Sevk edilmiş motor var, üretim geri alınamaz: '.$notInStock->pluck('serial_number')->implode(', '));
+            }
+
+            // Üretimden giriş çıktı deposunda ters kaydedilir: motorlar orada olmalı.
+            $moved = $units->filter(fn (MotorUnit $unit) => $unit->warehouse_id !== $locked->target_warehouse_id);
+
+            if ($moved->isNotEmpty()) {
+                throw new BusinessRuleException('Bazı motorlar başka depoya aktarılmış; önce iş emrinin çıktı deposuna geri aktarın: '.$moved->pluck('serial_number')->implode(', '));
             }
 
             // Son tamamlamanın henüz ters kaydedilmemiş üretim hareketleri.
@@ -171,7 +179,7 @@ class ProductionService
         $note = filled($note) ? trim($note) : null;
 
         return DB::transaction(function () use ($ids, $actor, $note): Collection {
-            $locked = MotorUnit::query()->with('motorModel.finishedPart')->whereKey($ids)->orderBy('id')->lockForUpdate()->get();
+            $locked = MotorUnit::query()->with(['motorModel.finishedPart', 'warehouse'])->whereKey($ids)->orderBy('id')->lockForUpdate()->get();
 
             $notInStock = $locked->filter(fn (MotorUnit $unit) => $unit->status !== MotorUnitStatus::InStock);
 
@@ -180,7 +188,8 @@ class ProductionService
             }
 
             foreach ($locked as $unit) {
-                $this->stock->recordShipment($unit->motorModel->finishedPart, 1, $unit, $actor, $note ?? "Sevk: {$unit->serial_number}");
+                // Motor bulunduğu depodan sevk edilir.
+                $this->stock->recordShipment($unit->motorModel->finishedPart, 1, $unit, $actor, $note ?? "Sevk: {$unit->serial_number}", $unit->warehouse);
 
                 $unit->forceFill([
                     'status' => MotorUnitStatus::Shipped,
@@ -188,6 +197,48 @@ class ProductionService
                     'shipped_by_user_id' => $actor->getKey(),
                     'notes' => $note ?? $unit->notes,
                 ])->save();
+            }
+
+            return $locked;
+        });
+    }
+
+    /**
+     * Stoktaki motorları başka depoya aktarır (yönetici ve depo; stok hareketi yetkisi): motor başına mamul kartında
+     * bir transfer (kaynakta −1, hedefte +1, referans motor). Seçilenlerden biri stokta değilse veya zaten hedef
+     * depodaysa hiçbiri aktarılmaz.
+     *
+     * @param  iterable<MotorUnit|int>  $units
+     * @return Collection<int, MotorUnit>
+     */
+    public function transferMotors(iterable $units, Warehouse $to, User $actor, ?string $note = null): Collection
+    {
+        if (! $actor->is_active || ! $actor->can(Permission::StockMove)) {
+            throw new BusinessRuleException('Motor aktarma yetkiniz yok.');
+        }
+
+        $ids = collect($units)->map(fn (MotorUnit|int $unit) => $unit instanceof MotorUnit ? $unit->getKey() : $unit)->unique()->sort()->values();
+
+        if ($ids->isEmpty()) {
+            throw new BusinessRuleException('Aktarılacak motor seçilmedi.');
+        }
+
+        $note = filled($note) ? trim($note) : null;
+
+        return DB::transaction(function () use ($ids, $to, $actor, $note): Collection {
+            $locked = MotorUnit::query()->with(['motorModel.finishedPart', 'warehouse'])->whereKey($ids)->orderBy('id')->lockForUpdate()->get();
+
+            $invalid = $locked->filter(fn (MotorUnit $unit) => $unit->status !== MotorUnitStatus::InStock || $unit->warehouse_id === $to->getKey());
+
+            if ($invalid->isNotEmpty() || $locked->count() !== $ids->count()) {
+                throw new BusinessRuleException("Yalnızca stokta olan ve {$to->name} dışındaki motorlar aktarılabilir: ".$invalid->pluck('serial_number')->implode(', '));
+            }
+
+            foreach ($locked as $unit) {
+                $this->stock->transferMotor($unit->motorModel->finishedPart, $unit, $unit->warehouse, $to, $actor, $note ?? "Motor aktarımı: {$unit->serial_number}");
+
+                $unit->warehouse_id = $to->getKey();
+                $unit->save();
             }
 
             return $locked;
@@ -208,6 +259,7 @@ class ProductionService
                 'work_order_id' => $workOrder->getKey(),
                 'production_batch_id' => $workOrder->production_batch_id,
                 'order_id' => $orderId,
+                'warehouse_id' => $workOrder->target_warehouse_id,
                 'production_date' => today(),
                 'status' => MotorUnitStatus::InStock,
             ])->save();

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\MotorUnits\Pages;
 
 use App\Filament\Resources\MotorUnits\Actions\ShipMotorUnitsAction;
+use App\Filament\Resources\MotorUnits\Actions\TransferMotorUnitsAction;
 use App\Filament\Resources\MotorUnits\MotorUnitResource;
 use App\Filament\Support\AuditTrailAction;
 use App\Filament\Support\LabelActions;
@@ -18,6 +19,7 @@ class ViewMotorUnit extends ViewRecord
             AuditTrailAction::make(),
             LabelActions::motor(),
             ShipMotorUnitsAction::single(),
+            TransferMotorUnitsAction::single(),
         ];
     }
 }

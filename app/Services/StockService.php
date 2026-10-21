@@ -188,13 +188,32 @@ class StockService
     /**
      * Depolar arası transfer: kaynakta − ve hedefte + iki transfer hareketi (aynı transfer_id). Çift gönderim
      * anahtarı çıkış bacağında tutulur; aynı anahtarla ikinci istek ilk transferin çıkış hareketini döndürür.
-     * Mamul transferi motor seçimiyle yapılır (Aşama B2); burada reddedilir.
+     * Mamul burada reddedilir; mamul transferi motor seçimiyle yapılır (transferMotor).
      *
      * @return EloquentCollection<int, StockMovement> [çıkış, giriş]
      */
     public function transfer(Part $part, Warehouse $from, Warehouse $to, string|int|float $quantity, User $user, ?string $description = null, ?string $idempotencyKey = null): EloquentCollection
     {
-        $quantity = $this->positive($quantity);
+        return $this->transferLegs($part, $from, $to, $this->positive($quantity), $user, $description, $idempotencyKey);
+    }
+
+    /**
+     * Mamul transferi: bir motorun mamul stoğu kaynak depodan hedef depoya (motor başına bir transfer, referans motor
+     * kaydı; veritabanı da mamulde yalnızca böyle transfere izin verir). Yalnızca ProductionService::transferMotors çağırır.
+     *
+     * @return EloquentCollection<int, StockMovement> [çıkış, giriş]
+     */
+    public function transferMotor(Part $finishedPart, Model $motorUnit, Warehouse $from, Warehouse $to, User $user, ?string $description = null): EloquentCollection
+    {
+        if (! $finishedPart->isFinishedGood()) {
+            throw new BusinessRuleException('Motor transferi yalnızca mamul kartında yapılır.');
+        }
+
+        return $this->transferLegs($finishedPart, $from, $to, '1.000', $user, $description, null, $motorUnit);
+    }
+
+    private function transferLegs(Part $part, Warehouse $from, Warehouse $to, string $quantity, User $user, ?string $description, ?string $idempotencyKey, ?Model $motorUnit = null): EloquentCollection
+    {
         $description = filled($description) ? trim($description) : null;
 
         if ($from->is($to)) {
@@ -202,7 +221,7 @@ class StockService
         }
 
         try {
-            return DB::transaction(function () use ($part, $from, $to, $quantity, $user, $description, $idempotencyKey): EloquentCollection {
+            return DB::transaction(function () use ($part, $from, $to, $quantity, $user, $description, $idempotencyKey, $motorUnit): EloquentCollection {
                 $balances = $this->lockBalances([[$part->getKey(), $from->getKey()], [$part->getKey(), $to->getKey()]]);
 
                 if ($idempotencyKey !== null && ($existing = StockMovement::query()->firstWhere('idempotency_key', $idempotencyKey))) {
@@ -213,7 +232,10 @@ class StockService
                 $from = Warehouse::query()->findOrFail($from->getKey());
                 $to = Warehouse::query()->findOrFail($to->getKey());
 
-                $this->ensureTypeAllowed($part, StockMovementType::Transfer);
+                // Mamulde yalnızca motor seçimiyle (transferMotor); diğer kurallar aynı.
+                if ($motorUnit === null) {
+                    $this->ensureTypeAllowed($part, StockMovementType::Transfer);
+                }
                 $this->ensureUnitPrecision($part, $quantity);
                 $this->ensureWarehouseAllowed($from, StockMovementType::Transfer, outgoing: true);
                 $this->ensureWarehouseAllowed($to, StockMovementType::Transfer, outgoing: false);
@@ -221,8 +243,8 @@ class StockService
                 $transferId = (string) Str::uuid();
 
                 return new EloquentCollection([
-                    $this->apply($part, $from, $balances[$this->key($part->getKey(), $from->getKey())], StockMovementType::Transfer, Quantity::negate($quantity), $user, $description, $idempotencyKey, transferId: $transferId),
-                    $this->apply($part, $to, $balances[$this->key($part->getKey(), $to->getKey())], StockMovementType::Transfer, $quantity, $user, $description, transferId: $transferId),
+                    $this->apply($part, $from, $balances[$this->key($part->getKey(), $from->getKey())], StockMovementType::Transfer, Quantity::negate($quantity), $user, $description, $idempotencyKey, reference: $motorUnit, transferId: $transferId),
+                    $this->apply($part, $to, $balances[$this->key($part->getKey(), $to->getKey())], StockMovementType::Transfer, $quantity, $user, $description, reference: $motorUnit, transferId: $transferId),
                 ]);
             });
         } catch (UniqueConstraintViolationException $exception) {
@@ -298,46 +320,56 @@ class StockService
 
     /**
      * İş emri tamamlama: net sarf (production_consumption), fire (production_scrap) ve üretilen kartın girişi
-     * (production_output) tek transaction'da; her ürün kendi varsayılan deposunda. Tüm bakiyeler sırayla
+     * (production_output) tek transaction'da. Malzeme satırın deposundan (warehouse_id; yoksa ürünün varsayılan
+     * deposu) düşer, çıktı $outputWarehouse'a (yoksa ürünün varsayılan deposuna) girer. Tüm bakiyeler sırayla
      * kilitlenir. Herhangi bir malzeme (fire dahil) yetersizse hiçbir şey değişmez ve tüm eksikler
      * InsufficientStockException ile listelenir.
      *
-     * @param  list<array{part_id: int, consumption: string, scrap: string}>  $materials
+     * @param  list<array{part_id: int, warehouse_id?: ?int, consumption: string, scrap: string}>  $materials
      * @return Collection<int, StockMovement>
      */
-    public function recordProduction(array $materials, Part $output, string|int $outputQuantity, Model $reference, User $user, ?string $description = null): Collection
+    public function recordProduction(array $materials, Part $output, string|int $outputQuantity, Model $reference, User $user, ?string $description = null, ?Warehouse $outputWarehouse = null): Collection
     {
         $outputQuantity = $this->positive($outputQuantity);
 
-        return DB::transaction(function () use ($materials, $output, $outputQuantity, $reference, $user, $description): Collection {
+        return DB::transaction(function () use ($materials, $output, $outputQuantity, $reference, $user, $description, $outputWarehouse): Collection {
             $partIds = array_values(array_unique([...array_column($materials, 'part_id'), $output->getKey()]));
             $parts = Part::query()->with('unit')->findMany($partIds)->keyBy('id');
-            $warehouseIds = $parts->map(fn (Part $part) => $this->warehouses->defaultFor($part)->getKey());
-            $balances = $this->lockBalances($parts->map(fn (Part $part) => [$part->getKey(), $warehouseIds[$part->getKey()]])->values()->all());
-            $parts = Part::query()->with('unit')->findMany($partIds)->keyBy('id');
-            $warehouses = Warehouse::query()->findMany($warehouseIds->unique()->values())->keyBy('id');
-            $balanceOf = fn (Part $part): StockBalance => $balances[$this->key($part->getKey(), $warehouseIds[$part->getKey()])];
-            $warehouseOf = fn (Part $part): Warehouse => $warehouses[$warehouseIds[$part->getKey()]];
 
-            // Aynı ürün birden fazla satırda olabilir: ihtiyaç toplanarak kontrol edilir.
+            // Satır başına depo (aynı ürün farklı depolardan da düşebilir).
+            $materials = array_map(fn (array $line) => [
+                ...$line,
+                'warehouse_id' => (int) ($line['warehouse_id'] ?? $this->warehouses->defaultFor($parts[$line['part_id']])->getKey()),
+            ], $materials);
+            $outputWarehouseId = $outputWarehouse?->getKey() ?? $this->warehouses->defaultFor($parts[$output->getKey()])->getKey();
+
+            $pairs = [...array_map(fn (array $line) => [$line['part_id'], $line['warehouse_id']], $materials), [$output->getKey(), $outputWarehouseId]];
+            $balances = $this->lockBalances($pairs);
+            $parts = Part::query()->with('unit')->findMany($partIds)->keyBy('id');
+            $warehouses = Warehouse::query()->findMany(array_unique(array_column($pairs, 1)))->keyBy('id');
+
+            // Aynı ürün ve depo birden fazla satırda olabilir: ihtiyaç toplanarak kontrol edilir.
             $needed = [];
             foreach ($materials as $line) {
                 $part = $parts[$line['part_id']];
                 $this->ensureTypeAllowed($part, StockMovementType::ProductionConsumption);
-                $this->ensureWarehouseAllowed($warehouseOf($part), StockMovementType::ProductionConsumption);
+                $this->ensureWarehouseAllowed($warehouses[$line['warehouse_id']], StockMovementType::ProductionConsumption);
                 $this->ensureUnitPrecision($part, $line['consumption']);
                 $this->ensureUnitPrecision($part, $line['scrap']);
 
-                $needed[$part->getKey()] = Quantity::add($needed[$part->getKey()] ?? '0', Quantity::add($line['consumption'], $line['scrap']));
+                $key = $this->key($line['part_id'], $line['warehouse_id']);
+                $needed[$key] = Quantity::add($needed[$key] ?? '0', Quantity::add($line['consumption'], $line['scrap']));
             }
 
             $shortages = [];
-            foreach ($needed as $partId => $quantity) {
-                $part = $parts[$partId];
-                $available = (string) $balanceOf($part)->quantity;
+            foreach ($needed as $key => $quantity) {
+                $balance = $balances[$key];
+                $part = $parts[$balance->part_id];
+                $warehouse = $warehouses[$balance->warehouse_id];
+                $available = (string) $balance->quantity;
 
-                if (! $warehouseOf($part)->allowsNegativeFor($part) && Quantity::compare($available, $quantity) < 0) {
-                    $shortages[] = $this->shortage($part, $quantity, $available, $warehouseOf($part));
+                if (! $warehouse->allowsNegativeFor($part) && Quantity::compare($available, $quantity) < 0) {
+                    $shortages[] = $this->shortage($part, $quantity, $available, $warehouse);
                 }
             }
 
@@ -347,23 +379,25 @@ class StockService
 
             $product = $parts[$output->getKey()];
             $this->ensureTypeAllowed($product, StockMovementType::ProductionOutput);
-            $this->ensureWarehouseAllowed($warehouseOf($product), StockMovementType::ProductionOutput);
+            $this->ensureWarehouseAllowed($warehouses[$outputWarehouseId], StockMovementType::ProductionOutput);
             $this->ensureUnitPrecision($product, $outputQuantity);
 
             $movements = collect();
             foreach ($materials as $line) {
                 $part = $parts[$line['part_id']];
+                $warehouse = $warehouses[$line['warehouse_id']];
+                $balance = $balances[$this->key($line['part_id'], $line['warehouse_id'])];
 
                 if (Quantity::compare($line['consumption'], '0') > 0) {
-                    $movements->push($this->apply($part, $warehouseOf($part), $balanceOf($part), StockMovementType::ProductionConsumption, Quantity::negate($line['consumption']), $user, $description, reference: $reference));
+                    $movements->push($this->apply($part, $warehouse, $balance, StockMovementType::ProductionConsumption, Quantity::negate($line['consumption']), $user, $description, reference: $reference));
                 }
 
                 if (Quantity::compare($line['scrap'], '0') > 0) {
-                    $movements->push($this->apply($part, $warehouseOf($part), $balanceOf($part), StockMovementType::ProductionScrap, Quantity::negate($line['scrap']), $user, $description, reference: $reference));
+                    $movements->push($this->apply($part, $warehouse, $balance, StockMovementType::ProductionScrap, Quantity::negate($line['scrap']), $user, $description, reference: $reference));
                 }
             }
 
-            $movements->push($this->apply($product, $warehouseOf($product), $balanceOf($product), StockMovementType::ProductionOutput, $outputQuantity, $user, $description, reference: $reference));
+            $movements->push($this->apply($product, $warehouses[$outputWarehouseId], $balances[$this->key($output->getKey(), $outputWarehouseId)], StockMovementType::ProductionOutput, $outputQuantity, $user, $description, reference: $reference));
 
             return $movements;
         });

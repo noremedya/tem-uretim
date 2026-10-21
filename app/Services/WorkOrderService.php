@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\OrderStatus;
+use App\Enums\PartType;
 use App\Enums\Permission;
 use App\Enums\Role;
 use App\Enums\WorkOrderStatus;
@@ -10,6 +11,7 @@ use App\Exceptions\BusinessRuleException;
 use App\Models\OrderItem;
 use App\Models\Part;
 use App\Models\User;
+use App\Models\Warehouse;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderMaterial;
 use App\Models\WorkOrderStatusHistory;
@@ -25,10 +27,16 @@ class WorkOrderService
 {
     private const EDITABLE_FIELDS = ['assigned_user_id', 'planned_start', 'planned_end', 'production_batch_id', 'notes'];
 
-    public function __construct(private readonly NumberSequenceService $numbers) {}
+    public function __construct(
+        private readonly NumberSequenceService $numbers,
+        private readonly WarehouseService $warehouses,
+    ) {}
 
     /**
-     * @param  array{product_part_id: int, quantity: mixed, order_item_id?: ?int, assigned_user_id?: ?int, planned_start?: mixed, planned_end: mixed, production_batch_id?: ?int, notes?: ?string}  $data
+     * Depolar: source_warehouse_id verilmezse üretim deposu (yoksa boş = her malzeme kendi deposundan), açıkça boş
+     * verilirse her malzeme kendi deposundan; target_warehouse_id verilmezse üretilen ürünün varsayılan deposu.
+     *
+     * @param  array{product_part_id: int, quantity: mixed, order_item_id?: ?int, assigned_user_id?: ?int, planned_start?: mixed, planned_end: mixed, production_batch_id?: ?int, notes?: ?string, source_warehouse_id?: ?int, target_warehouse_id?: ?int}  $data
      */
     public function create(array $data, User $actor): WorkOrder
     {
@@ -54,7 +62,10 @@ class WorkOrderService
                 'motor_model_id' => $product->isFinishedGood() ? $product->motorModel->getKey() : null,
                 'quantity' => $quantity,
                 'status' => WorkOrderStatus::Planned,
+                'source_warehouse_id' => array_key_exists('source_warehouse_id', $data) ? $data['source_warehouse_id'] : $this->warehouses->production()?->getKey(),
+                'target_warehouse_id' => $data['target_warehouse_id'] ?? $this->warehouses->defaultFor($product)->getKey(),
             ]);
+            $this->ensureActiveWarehouses($workOrder);
 
             $this->ensureValid($workOrder);
 
@@ -94,6 +105,21 @@ class WorkOrderService
                 $workOrder->quantity = $this->quantity($workOrder->product()->with('unit')->firstOrFail(), $data['quantity']);
             }
 
+            foreach (['source_warehouse_id', 'target_warehouse_id'] as $field) {
+                if (array_key_exists($field, $data) && $data[$field] !== $workOrder->{$field}) {
+                    if ($workOrder->status !== WorkOrderStatus::Planned) {
+                        throw new BusinessRuleException('Depolar yalnızca planlandı durumundaki iş emrinde değiştirilebilir.');
+                    }
+
+                    if ($field === 'target_warehouse_id' && $data[$field] === null) {
+                        throw new BusinessRuleException('Çıktı deposu zorunludur.');
+                    }
+
+                    $workOrder->{$field} = $data[$field];
+                }
+            }
+            $this->ensureActiveWarehouses($workOrder);
+
             if (array_key_exists('order_item_id', $data)) {
                 $orderItemId = filled($data['order_item_id']) ? (int) $data['order_item_id'] : null;
 
@@ -111,11 +137,19 @@ class WorkOrderService
             }
 
             $quantityChanged = $workOrder->isDirty('quantity');
+            $sourceChanged = $workOrder->isDirty('source_warehouse_id');
 
             $workOrder->saveExpectingVersion($expectedLockVersion);
 
             if ($quantityChanged) {
                 $this->recalculateMaterials($workOrder);
+            }
+
+            if ($sourceChanged) {
+                foreach ($workOrder->materials()->with('part')->get() as $material) {
+                    $material->warehouse_id = $this->materialWarehouseId($workOrder, $material->part);
+                    $material->save();
+                }
             }
 
             return $workOrder;
@@ -182,8 +216,8 @@ class WorkOrderService
     }
 
     /**
-     * Malzeme durumu (yetersiz malzeme uyarısı): her satır için fire dahil ihtiyaç, mevcut (malzemenin sarf edildiği
-     * varsayılan deposunda) ve eksik.
+     * Malzeme durumu (yetersiz malzeme uyarısı): her satır için fire dahil ihtiyaç, mevcut (satırın deposunda) ve
+     * eksik.
      * Uyarıdır; başka iş emirlerinin ihtiyacını hesaba katmaz.
      *
      * @return list<array{material: WorkOrderMaterial, required: string, available: string, missing: string}>
@@ -193,7 +227,7 @@ class WorkOrderService
         return $workOrder->materials()->with(['part.unit', 'part.stockBalances'])->orderBy('id')->get()
             ->map(function (WorkOrderMaterial $material): array {
                 $required = $material->totalRequirement();
-                $available = $material->part->defaultQuantity();
+                $available = $material->available();
                 $missing = Quantity::sub($required, $available);
 
                 return [
@@ -267,11 +301,35 @@ class WorkOrderService
             $material->forceFill([
                 'work_order_id' => $workOrder->getKey(),
                 'part_id' => $item->component_part_id,
+                'warehouse_id' => $this->materialWarehouseId($workOrder, $item->component),
                 'quantity_per_unit' => (string) $item->quantity_per_unit,
                 'scrap_rate' => (string) $item->scrap_rate,
             ]);
             $this->calculateMaterial($material, (string) $workOrder->quantity, $item->component);
             $material->save();
+        }
+    }
+
+    /**
+     * Malzemenin düşüleceği depo: yarı mamul her zaman kendi (varsayılan) deposundan; diğerleri iş emrinin malzeme
+     * deposundan, o boşsa kendi deposundan.
+     */
+    public function materialWarehouseId(WorkOrder $workOrder, Part $component): int
+    {
+        if ($component->type === PartType::SemiFinished || $workOrder->source_warehouse_id === null) {
+            return $this->warehouses->defaultFor($component)->getKey();
+        }
+
+        return $workOrder->source_warehouse_id;
+    }
+
+    private function ensureActiveWarehouses(WorkOrder $workOrder): void
+    {
+        foreach (['source_warehouse_id' => 'Malzeme deposu', 'target_warehouse_id' => 'Çıktı deposu'] as $field => $label) {
+            if ($workOrder->{$field} !== null && $workOrder->isDirty($field)
+                && ! Warehouse::query()->whereKey($workOrder->{$field})->where('is_active', true)->exists()) {
+                throw new BusinessRuleException("{$label} pasif veya bulunamadı.");
+            }
         }
     }
 
@@ -396,7 +454,7 @@ class WorkOrderService
 
     private function normalize(array $data): array
     {
-        foreach (['assigned_user_id', 'production_batch_id', 'order_item_id'] as $field) {
+        foreach (['assigned_user_id', 'production_batch_id', 'order_item_id', 'source_warehouse_id', 'target_warehouse_id'] as $field) {
             if (array_key_exists($field, $data)) {
                 $data[$field] = filled($data[$field]) ? (int) $data[$field] : null;
             }

@@ -12,6 +12,7 @@ use App\Models\InvoiceLine;
 use App\Models\MotorUnit;
 use App\Models\Part;
 use App\Models\StockMovement;
+use App\Models\Warehouse;
 use App\Services\InvoiceService;
 use App\Support\Gtip;
 use App\Support\Money;
@@ -25,6 +26,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -121,6 +123,7 @@ class LinesRelationManager extends RelationManager
                         : $this->lineFields($record))
                     ->fillForm(fn (InvoiceLine $record): array => [
                         'part_id' => $record->part_id,
+                        'warehouse_id' => $record->warehouse_id,
                         'description' => $record->description,
                         'quantity' => Quantity::toInput((string) $record->quantity),
                         'unit' => $record->unit,
@@ -167,7 +170,15 @@ class LinesRelationManager extends RelationManager
                         ->where(fn (Builder $q) => $q->where('code', 'ilike', "%{$search}%")->orWhere('name', 'ilike', "%{$search}%")->orWhere('barcode', $search))
                         ->orderBy('code')->limit(50)->get()
                         ->mapWithKeys(fn (Part $p) => [$p->getKey() => "{$p->code} — {$p->name}"])->all())
-                    ->getOptionLabelUsing(fn ($value): ?string => ($p = Part::query()->find($value)) ? "{$p->code} — {$p->name}" : null),
+                    ->getOptionLabelUsing(fn ($value): ?string => ($p = Part::query()->find($value)) ? "{$p->code} — {$p->name}" : null)
+                    ->afterStateUpdated(fn ($state, Set $set) => $set('warehouse_id', filled($state) ? Part::query()->find($state)?->defaultWarehouseId() : null)),
+                Select::make('warehouse_id')
+                    ->label('Giriş deposu')
+                    ->options(fn (?InvoiceLine $record): array => Warehouse::query()
+                        ->where(fn (Builder $q) => $q->where('is_active', true)->orWhere('id', $record?->warehouse_id))
+                        ->orderBy('code')->pluck('name', 'id')->all())
+                    ->placeholder('Ürünün varsayılan deposu')
+                    ->helperText('Stok girişi seçilmezse kesimde bu depoya giriş yapılır.'),
                 $this->quantityInput(),
                 $this->priceInput(required: true),
                 $this->rateInput('discount_rate', 'İskonto (%)', '0')->datalist(['15', '20', '30']),
@@ -178,7 +189,7 @@ class LinesRelationManager extends RelationManager
                     ->columnSpanFull()
                     ->options(fn (Get $get): array => blank($get('part_id')) ? [] : app(InvoiceService::class)
                         ->linkableReceipts((int) $get('part_id'), $line)
-                        ->mapWithKeys(fn (StockMovement $m) => [$m->getKey() => sprintf('%s — %s%s', $m->created_at->format('d.m.Y H:i'), Quantity::format((string) $m->quantity), $m->description ? " — {$m->description}" : '')])
+                        ->mapWithKeys(fn (StockMovement $m) => [$m->getKey() => sprintf('%s — %s — %s%s', $m->created_at->format('d.m.Y H:i'), $m->warehouse->name, Quantity::format((string) $m->quantity), $m->description ? " — {$m->description}" : '')])
                         ->all()),
             ];
         }

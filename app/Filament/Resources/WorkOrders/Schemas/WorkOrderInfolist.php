@@ -56,6 +56,8 @@ class WorkOrderInfolist
                             : null),
                     TextEntry::make('assignedUser.name')->label('Atanan operatör')->placeholder('Atanmadı'),
                     TextEntry::make('productionBatch.batch_number')->label('Parti')->placeholder('—'),
+                    TextEntry::make('sourceWarehouse.name')->label('Malzeme deposu')->placeholder('Her malzeme kendi deposundan'),
+                    TextEntry::make('targetWarehouse.name')->label('Çıktı deposu'),
                     TextEntry::make('material_status')
                         ->label('Malzeme durumu')
                         ->state(fn (WorkOrder $record): string => static::shortageSummary($record))

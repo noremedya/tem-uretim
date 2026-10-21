@@ -188,7 +188,7 @@ it('seri no sırası model ve ay bazındadır; biçim ayardan değişir', functi
 
     config(['numbering.serial_number' => 'S{YIL}-{MODEL_KODU}-{SIRA:4}']);
     $wo = app(WorkOrderService::class)->start(app(WorkOrderService::class)->create([
-        'product_part_id' => $other->finished_part_id, 'quantity' => 1, 'planned_end' => today(),
+        'product_part_id' => $other->finished_part_id, 'quantity' => 1, 'planned_end' => today(), 'source_warehouse_id' => null,
     ], $this->admin), $this->admin);
     $this->production->complete($wo, $this->admin);
 
@@ -249,6 +249,6 @@ describe('sevk', function () {
             ->expectsOutputToContain('1 mamul kartında bakiye stoktaki motor sayısıyla uyuşmuyor')
             ->assertFailed();
 
-        expect($this->admin->notifications()->latest()->first()->data['body'])->toContain('TM-71 Trifaze 0,37 kW: bakiye 3, stoktaki motor 2');
+        expect($this->admin->notifications()->latest()->first()->data['body'])->toContain('TM-71 Trifaze 0,37 kW (Mamul / sevkiyat deposu): bakiye 3, stoktaki motor 2');
     });
 });

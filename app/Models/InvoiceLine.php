@@ -38,6 +38,15 @@ class InvoiceLine extends Model
         return $this->belongsTo(Invoice::class);
     }
 
+    /** Alış satırında stok girişinin deposu (boşsa ürünün varsayılan deposu).
+     *
+     * @return BelongsTo<Warehouse, $this>
+     */
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class, 'warehouse_id');
+    }
+
     /** @return BelongsTo<Part, $this> */
     public function part(): BelongsTo
     {
@@ -65,7 +74,7 @@ class InvoiceLine extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['invoice_id', 'part_id', 'motor_model_id', 'description', 'quantity', 'unit', 'unit_price', 'discount_rate', 'vat_rate', 'line_total', 'gtip_code'])
+            ->logOnly(['invoice_id', 'part_id', 'motor_model_id', 'description', 'quantity', 'unit', 'unit_price', 'discount_rate', 'vat_rate', 'line_total', 'gtip_code', 'warehouse_id'])
             ->logOnlyDirty()
             ->dontLogEmptyChanges();
     }

@@ -101,7 +101,7 @@ class Part extends Model
     /** Bir depodaki bakiye (satır yoksa 0). */
     public function quantityIn(?int $warehouseId): string
     {
-        return (string) ($this->balanceIn($warehouseId)?->quantity ?? '0');
+        return (string) ($this->balanceIn($warehouseId)?->quantity ?? '0.000');
     }
 
     /**

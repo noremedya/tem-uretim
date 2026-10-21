@@ -30,6 +30,15 @@ class WorkOrderMaterial extends Model
         return $this->belongsTo(WorkOrder::class);
     }
 
+    /** Malzemenin düşüleceği depo.
+     *
+     * @return BelongsTo<Warehouse, $this>
+     */
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class, 'warehouse_id');
+    }
+
     /** @return BelongsTo<Part, $this> */
     public function part(): BelongsTo
     {
@@ -40,5 +49,11 @@ class WorkOrderMaterial extends Model
     public function totalRequirement(): string
     {
         return Quantity::add((string) $this->required_quantity, (string) $this->planned_scrap);
+    }
+
+    /** Satırın deposundaki bakiye (part.stockBalances yüklüyse sorgu yapmaz). */
+    public function available(): string
+    {
+        return $this->part->quantityIn($this->warehouse_id);
     }
 }

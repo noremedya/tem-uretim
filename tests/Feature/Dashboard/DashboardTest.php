@@ -59,7 +59,10 @@ it('kritik ve hareketsiz stok listeleri', function () {
     $this->travelTo(CarbonImmutable::parse('2026-10-14 09:00'));
     $this->actingAs($this->admin);
 
-    Livewire::test(CriticalStock::class)->assertCanSeeTableRecords([$critical])->assertCanNotSeeTableRecords([$idle]);
+    // Kritik stok listesi depo bazlı bakiye satırlarını gösterir.
+    Livewire::test(CriticalStock::class)
+        ->assertCanSeeTableRecords([$critical->stockBalances()->sole()])
+        ->assertCanNotSeeTableRecords([$idle->stockBalances()->sole()]);
     Livewire::test(IdleStock::class)->assertCanSeeTableRecords([$idle])->assertCanNotSeeTableRecords([$critical]);
 });
 

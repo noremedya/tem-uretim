@@ -39,6 +39,24 @@ class WorkOrder extends Model
         return $this->belongsTo(Part::class, 'product_part_id');
     }
 
+    /** Malzemenin çekildiği depo (boşsa her malzeme kendi deposundan).
+     *
+     * @return BelongsTo<Warehouse, $this>
+     */
+    public function sourceWarehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class, 'source_warehouse_id');
+    }
+
+    /** Üretilen ürünün girdiği depo.
+     *
+     * @return BelongsTo<Warehouse, $this>
+     */
+    public function targetWarehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class, 'target_warehouse_id');
+    }
+
     /** @return BelongsTo<MotorModel, $this> */
     public function motorModel(): BelongsTo
     {
@@ -118,7 +136,7 @@ class WorkOrder extends Model
             ->logOnly([
                 'work_order_number', 'product_part_id', 'motor_model_id', 'order_item_id', 'quantity',
                 'production_batch_id', 'status', 'assigned_user_id', 'planned_start', 'planned_end',
-                'started_at', 'completed_at', 'cancellation_reason', 'notes',
+                'started_at', 'completed_at', 'cancellation_reason', 'notes', 'source_warehouse_id', 'target_warehouse_id',
             ])
             ->logOnlyDirty()
             ->dontLogEmptyChanges();
