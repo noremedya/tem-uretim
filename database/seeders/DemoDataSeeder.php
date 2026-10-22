@@ -214,6 +214,9 @@ class DemoDataSeeder extends Seeder
             str_starts_with($code, 'DS-CIVATA') => 'Bağlantı elemanı',
             $code === 'YM-STATOR' => 'Bobinajlı stator',
             $code === 'YM-ROTOR' => 'Enjekte rotor',
+            $code === 'YM-STP' => 'Stator paketi',
+            $code === 'YM-RTP' => 'Rotor paketi',
+            $code === 'YM-MILROTOR' => 'Mil+rotor',
             $code === 'YM-MIL' => 'İşlenmiş mil',
             $code === 'YM-GOVDE' => 'Gövde',
             $code === 'YM-KAPAK' => 'Kapak',
@@ -231,7 +234,12 @@ class DemoDataSeeder extends Seeder
             'HM-SAC-050' => ['Silisli sac 0,50 mm', PartType::RawMaterial, 'Kg', '600', 'demirsan', '62', null],
             'HM-BAKIR-063' => ['Emaye bakır tel 0,63 mm', PartType::RawMaterial, 'Kg', '120', 'kablotel', '465', null],
             'HM-ALU-ETIAL' => ['Alüminyum döküm alaşımı (Etial 150)', PartType::RawMaterial, 'Kg', '250', 'kuzeyalu', '155', null],
-            'HM-MIL-C45' => ['Mil çeliği C45 Ø25', PartType::RawMaterial, 'Kg', '150', 'demirsan', '48', null],
+            // Mil hammaddesi çap bazında kg (71 tip Ø20, 80 tip Ø25, 90 tip Ø30).
+            'HM-MIL-C45-20' => ['Mil çeliği C45 Ø20', PartType::RawMaterial, 'Kg', '60', 'demirsan', '47', null],
+            'HM-MIL-C45-25' => ['Mil çeliği C45 Ø25', PartType::RawMaterial, 'Kg', '60', 'demirsan', '48', null],
+            'HM-MIL-C45-30' => ['Mil çeliği C45 Ø30', PartType::RawMaterial, 'Kg', '60', 'demirsan', '50', null],
+            // Pres firesi: tamamlamada sac firesi bu karta girer (hurda satışı için).
+            'HM-HURDA-SAC' => ['Sac hurdası (pres firesi)', PartType::RawMaterial, 'Kg', '0', 'demirsan', '0', null],
             'KOM-RUL-6202' => ['Rulman 6202 2RS', PartType::Component, 'Adet', '120', 'rulman', '38', '8690000062027'],
             'KOM-RUL-6204' => ['Rulman 6204 2RS', PartType::Component, 'Adet', '120', 'rulman', '52', '8690000062041'],
             'KOM-RUL-6205' => ['Rulman 6205 2RS', PartType::Component, 'Adet', '80', 'rulman', '64', '8690000062058'],
@@ -268,7 +276,7 @@ class DemoDataSeeder extends Seeder
     private function openingStock(): array
     {
         return [
-            'HM-SAC-050' => '1800', 'HM-BAKIR-063' => '420', 'HM-ALU-ETIAL' => '900', 'HM-MIL-C45' => '400',
+            'HM-SAC-050' => '1800', 'HM-BAKIR-063' => '420', 'HM-ALU-ETIAL' => '900', 'HM-MIL-C45-20' => '150', 'HM-MIL-C45-25' => '150', 'HM-MIL-C45-30' => '150',
             'KOM-RUL-6202' => '300', 'KOM-RUL-6204' => '260', 'KOM-RUL-6205' => '160', 'KOM-KLEMENS' => '240',
             'KOM-KLEMENS-ESKI' => '35', 'KOM-FAN-71' => '120', 'KOM-FAN-80' => '110', 'KOM-FAN-90' => '70',
             'DS-VERNIK' => '90', 'DS-IZOLASYON' => '600', 'DS-FANTASI-71' => '110', 'DS-FANTASI-80' => '100',
@@ -308,28 +316,38 @@ class DemoDataSeeder extends Seeder
             ]);
 
             $shaft = $semi('YM-MIL', 'İşlenmiş mil');
+            // Pres: stator ve rotor paketi aynı kalıpta birlikte basılır (rotor paketi eş ürün).
+            $statorPack = $semi('YM-STP', 'Stator paketi');
+            $rotorPack = $semi('YM-RTP', 'Rotor paketi');
             $stator = $semi('YM-STATOR', 'Bobinajlı stator');
-            $rotor = $semi('YM-ROTOR', 'Rotor');
+            $rotor = $semi('YM-ROTOR', 'Enjekte rotor');
+            $shaftRotor = $semi('YM-MILROTOR', 'Mil+rotor');
             $body = $semi('YM-GOVDE', 'Gövde');
             $cover = $semi('YM-KAPAK', 'Kapak/flanş');
 
             $q = fn (string $base) => Quantity::mul(Quantity::parse($base), Quantity::parse($scale));
             $fan = $frame === '90S' ? '90' : $frame;
 
-            $boms->add($shaft, $this->parts['HM-MIL-C45'], $q('0,6'), 2);
-            $boms->add($stator, $this->parts['HM-SAC-050'], $q('1,6'), 4);
+            $diameter = ['71' => '20', '80' => '25', '90S' => '30'][$frame];
+            // Mil: brüt 2,2 kg, talaş 0,5 kg (71 tip; diğerleri ölçekli).
+            $boms->add($shaft, $this->parts["HM-MIL-C45-{$diameter}"], Quantity::sub($q('2,2'), $q('0,5')), 0, $q('0,5'));
+            // Stator + rotor paketi: sac brüt 6,61 kg, fire 2,88 kg (71 tip 70 mm); fire hurda kartına girer.
+            $boms->add($statorPack, $this->parts['HM-SAC-050'], Quantity::sub($q('6,61'), $q('2,88')), 0, $q('2,88'), $this->parts['HM-HURDA-SAC']);
+            $boms->addCoProduct($statorPack, $rotorPack, 1);
+            $boms->add($stator, $statorPack, 1);
             $boms->add($stator, $this->parts['HM-BAKIR-063'], $q('0,45'), 2);
             $boms->add($stator, $this->parts['DS-IZOLASYON'], $q('0,8'), 5);
             $boms->add($stator, $this->parts['DS-VERNIK'], $q('0,15'), 5);
-            $boms->add($rotor, $this->parts['HM-SAC-050'], $q('0,9'), 4);
+            $boms->add($rotor, $rotorPack, 1);
             $boms->add($rotor, $this->parts['HM-ALU-ETIAL'], $q('0,35'), 3);
-            $boms->add($rotor, $shaft, 1);
+            $boms->add($shaftRotor, $rotor, 1);
+            $boms->add($shaftRotor, $shaft, 1);
             $boms->add($body, $this->parts['HM-ALU-ETIAL'], $q('1,1'), 3);
             $boms->add($cover, $this->parts['HM-ALU-ETIAL'], $q('0,4'), 3);
 
             $finished = $model->finishedPart;
             $boms->add($finished, $stator, 1);
-            $boms->add($finished, $rotor, 1);
+            $boms->add($finished, $shaftRotor, 1);
             $boms->add($finished, $body, 1);
             $boms->add($finished, $cover, 2);
             $boms->add($finished, $this->parts[$bearing], 2);
@@ -370,7 +388,7 @@ class DemoDataSeeder extends Seeder
     private function attachImages(): void
     {
         $images = [
-            'HM-BAKIR-063' => 'bakir-tel', 'HM-ALU-ETIAL' => 'aluminyum', 'HM-MIL-C45' => 'mil-celigi',
+            'HM-BAKIR-063' => 'bakir-tel', 'HM-ALU-ETIAL' => 'aluminyum', 'HM-MIL-C45-20' => 'mil-celigi', 'HM-MIL-C45-25' => 'mil-celigi', 'HM-MIL-C45-30' => 'mil-celigi',
             'KOM-RUL-6202' => 'rulman', 'KOM-RUL-6204' => 'rulman', 'KOM-RUL-6205' => 'rulman',
         ];
 
@@ -602,8 +620,8 @@ class DemoDataSeeder extends Seeder
             $demand['90S'] = ($demand['90S'] ?? 0) + 5;
         }
 
-        // Yarı mamul iş emirleri: önce mil (rotorun bileşeni), sonra diğerleri.
-        $semiOrder = ['YM-MIL', 'YM-STATOR', 'YM-ROTOR', 'YM-GOVDE', 'YM-KAPAK'];
+        // Yarı mamul iş emirleri üretim sırasıyla: mil, pres (stator + rotor paketi), bobinaj, döküm, mil+rotor, gövde, kapak.
+        $semiOrder = ['YM-MIL', 'YM-STP', 'YM-STATOR', 'YM-ROTOR', 'YM-MILROTOR', 'YM-GOVDE', 'YM-KAPAK'];
         $hour = 8;
 
         foreach ($demand as $frame => $quantity) {

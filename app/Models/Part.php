@@ -161,6 +161,26 @@ class Part extends Model
     }
 
     /**
+     * Bu kartla aynı işlemde çıkan eş ürünler (kart ana ürünse).
+     *
+     * @return HasMany<BomCoProduct, $this>
+     */
+    public function coProducts(): HasMany
+    {
+        return $this->hasMany(BomCoProduct::class, 'parent_part_id');
+    }
+
+    /**
+     * Kart bir eş ürünse ana ürünü bağlayan kayıt.
+     *
+     * @return HasOne<BomCoProduct, $this>
+     */
+    public function coProductOf(): HasOne
+    {
+        return $this->hasOne(BomCoProduct::class, 'co_part_id');
+    }
+
+    /**
      * Bu kartın bileşen olarak geçtiği reçete satırları.
      *
      * @return HasMany<BomItem, $this>

@@ -21,6 +21,7 @@ class WorkOrderMaterial extends Model
             'required_quantity' => 'decimal:3',
             'planned_scrap' => 'decimal:3',
             'actual_scrap' => 'decimal:3',
+            'scrap_quantity_per_unit' => 'decimal:3',
         ];
     }
 
@@ -37,6 +38,15 @@ class WorkOrderMaterial extends Model
     public function warehouse(): BelongsTo
     {
         return $this->belongsTo(Warehouse::class, 'warehouse_id');
+    }
+
+    /** Gerçekleşen firenin girdiği fire (hurda) kartı.
+     *
+     * @return BelongsTo<Part, $this>
+     */
+    public function scrapPart(): BelongsTo
+    {
+        return $this->belongsTo(Part::class, 'scrap_part_id');
     }
 
     /** @return BelongsTo<Part, $this> */

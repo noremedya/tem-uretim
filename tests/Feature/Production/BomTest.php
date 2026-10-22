@@ -153,8 +153,8 @@ it('yönetici motor modeli sayfasından reçeteye bileşen ekler', function () {
     $bearing = part(PartType::Component, $this->piece, ['code' => 'RUL-6202']);
 
     Livewire::test(BomItemsRelationManager::class, ['ownerRecord' => $model, 'pageClass' => ViewMotorModel::class])
-        ->callAction(TestAction::make('create')->table(), data: [
-            'component_part_id' => $bearing->id, 'quantity_per_unit' => '2', 'scrap_rate' => '0',
+        ->callAction(TestAction::make('addLine')->table(), data: [
+            'component_part_id' => $bearing->id, 'scrap_mode' => 'rate', 'quantity_per_unit' => '2', 'scrap_rate' => '0',
         ])
         ->assertHasNoFormErrors();
 
@@ -168,8 +168,8 @@ it('iş kuralı ihlali ilişki yöneticisinde bildirim olarak gösterilir', func
 
     // Arama sonuçlarında çıkmasa da istek elle gönderilirse servis reddeder.
     Livewire::test(BomItemsRelationManager::class, ['ownerRecord' => $model, 'pageClass' => ViewMotorModel::class])
-        ->callAction(TestAction::make('create')->table(), data: [
-            'component_part_id' => $indirect->id, 'quantity_per_unit' => '1', 'scrap_rate' => '0',
+        ->callAction(TestAction::make('addLine')->table(), data: [
+            'component_part_id' => $indirect->id, 'scrap_mode' => 'rate', 'quantity_per_unit' => '1', 'scrap_rate' => '0',
         ])
         ->assertNotified('İşlem yapılamadı');
 

@@ -14,6 +14,7 @@ use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderMaterial;
+use App\Models\WorkOrderOutput;
 use App\Models\WorkOrderStatusHistory;
 use App\Support\Quantity;
 use Carbon\CarbonImmutable;
@@ -172,6 +173,7 @@ class WorkOrderService
             $workOrder->saveExpectingVersion($expectedLockVersion);
 
             $workOrder->materials()->delete();
+            $workOrder->outputs()->delete();
             $this->copyMaterials($workOrder, $workOrder->product()->firstOrFail());
 
             return $workOrder;
@@ -304,10 +306,39 @@ class WorkOrderService
                 'warehouse_id' => $this->materialWarehouseId($workOrder, $item->component),
                 'quantity_per_unit' => (string) $item->quantity_per_unit,
                 'scrap_rate' => (string) $item->scrap_rate,
+                'scrap_quantity_per_unit' => $item->scrap_quantity_per_unit,
+                'scrap_part_id' => $item->scrap_part_id,
             ]);
             $this->calculateMaterial($material, (string) $workOrder->quantity, $item->component);
             $material->save();
         }
+
+        // Eş ürünler (aynı işlemde çıkan yarı mamuller) çıktı olarak kopyalanır.
+        foreach ($product->coProducts()->with('coPart.unit')->orderBy('id')->get() as $coProduct) {
+            if (! $coProduct->coPart->is_active) {
+                throw new BusinessRuleException("Eş ürün {$coProduct->coPart->code} pasif; iş emri açılamaz.");
+            }
+
+            $output = new WorkOrderOutput;
+            $output->forceFill([
+                'work_order_id' => $workOrder->getKey(),
+                'part_id' => $coProduct->co_part_id,
+                'quantity_per_unit' => (string) $coProduct->quantity_per_unit,
+            ]);
+            $this->calculateOutput($output, (string) $workOrder->quantity, $coProduct->coPart);
+            $output->save();
+        }
+    }
+
+    private function calculateOutput(WorkOrderOutput $output, string $quantity, Part $part): void
+    {
+        $total = Quantity::mul($quantity, (string) $output->quantity_per_unit);
+
+        if (! $part->unit->allows_decimal && ! Quantity::isWhole($total)) {
+            throw new BusinessRuleException("Eş ürün {$part->code} miktarı ({$total}) bu birimde ({$part->unit->name}) kullanılamaz; iş emri adedini kontrol edin.");
+        }
+
+        $output->quantity = $total;
     }
 
     /**
@@ -339,6 +370,11 @@ class WorkOrderService
             $this->calculateMaterial($material, (string) $workOrder->quantity, $material->part);
             $material->save();
         }
+
+        foreach ($workOrder->outputs()->with('part.unit')->get() as $output) {
+            $this->calculateOutput($output, (string) $workOrder->quantity, $output->part);
+            $output->save();
+        }
     }
 
     private function calculateMaterial(WorkOrderMaterial $material, string $quantity, Part $component): void
@@ -357,7 +393,7 @@ class WorkOrderService
         }
 
         $material->required_quantity = $required;
-        $material->planned_scrap = $this->standardScrap($required, (string) $material->scrap_rate, $wholeUnit);
+        $material->planned_scrap = app(BomService::class)->scrapFor($required, $quantity, $material, $wholeUnit);
     }
 
     /**

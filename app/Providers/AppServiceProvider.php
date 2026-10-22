@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\AccountTransaction;
+use App\Models\BomCoProduct;
 use App\Models\BomItem;
 use App\Models\Brand;
 use App\Models\CashAccount;
@@ -69,6 +70,7 @@ class AppServiceProvider extends ServiceProvider
             'stock_movement' => StockMovement::class,
             'motor_model' => MotorModel::class,
             'bom_item' => BomItem::class,
+            'bom_co_product' => BomCoProduct::class,
             'customer' => Customer::class,
             'order' => Order::class,
             'order_item' => OrderItem::class,

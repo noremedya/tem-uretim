@@ -325,15 +325,19 @@ class StockService
      * kilitlenir. Herhangi bir malzeme (fire dahil) yetersizse hiçbir şey değişmez ve tüm eksikler
      * InsufficientStockException ile listelenir.
      *
+     * Ek çıktılar ($extraOutputs): eş ürünler (çıktı deposuna) ve fire kartları (hurda; kendi deposuna) da
+     * production_output olarak girer; geri alma bunları da ters kaydeder.
+     *
      * @param  list<array{part_id: int, warehouse_id?: ?int, consumption: string, scrap: string}>  $materials
+     * @param  list<array{part_id: int, quantity: string, warehouse_id?: ?int}>  $extraOutputs  warehouse_id yoksa $outputWarehouse
      * @return Collection<int, StockMovement>
      */
-    public function recordProduction(array $materials, Part $output, string|int $outputQuantity, Model $reference, User $user, ?string $description = null, ?Warehouse $outputWarehouse = null): Collection
+    public function recordProduction(array $materials, Part $output, string|int $outputQuantity, Model $reference, User $user, ?string $description = null, ?Warehouse $outputWarehouse = null, array $extraOutputs = []): Collection
     {
         $outputQuantity = $this->positive($outputQuantity);
 
-        return DB::transaction(function () use ($materials, $output, $outputQuantity, $reference, $user, $description, $outputWarehouse): Collection {
-            $partIds = array_values(array_unique([...array_column($materials, 'part_id'), $output->getKey()]));
+        return DB::transaction(function () use ($materials, $output, $outputQuantity, $reference, $user, $description, $outputWarehouse, $extraOutputs): Collection {
+            $partIds = array_values(array_unique([...array_column($materials, 'part_id'), ...array_column($extraOutputs, 'part_id'), $output->getKey()]));
             $parts = Part::query()->with('unit')->findMany($partIds)->keyBy('id');
 
             // Satır başına depo (aynı ürün farklı depolardan da düşebilir).
@@ -342,8 +346,17 @@ class StockService
                 'warehouse_id' => (int) ($line['warehouse_id'] ?? $this->warehouses->defaultFor($parts[$line['part_id']])->getKey()),
             ], $materials);
             $outputWarehouseId = $outputWarehouse?->getKey() ?? $this->warehouses->defaultFor($parts[$output->getKey()])->getKey();
+            $extraOutputs = array_map(fn (array $line) => [
+                ...$line,
+                'quantity' => $this->positive($line['quantity']),
+                'warehouse_id' => (int) ($line['warehouse_id'] ?? $outputWarehouseId),
+            ], $extraOutputs);
 
-            $pairs = [...array_map(fn (array $line) => [$line['part_id'], $line['warehouse_id']], $materials), [$output->getKey(), $outputWarehouseId]];
+            $pairs = [
+                ...array_map(fn (array $line) => [$line['part_id'], $line['warehouse_id']], $materials),
+                [$output->getKey(), $outputWarehouseId],
+                ...array_map(fn (array $line) => [$line['part_id'], $line['warehouse_id']], $extraOutputs),
+            ];
             $balances = $this->lockBalances($pairs);
             $parts = Part::query()->with('unit')->findMany($partIds)->keyBy('id');
             $warehouses = Warehouse::query()->findMany(array_unique(array_column($pairs, 1)))->keyBy('id');
@@ -382,6 +395,12 @@ class StockService
             $this->ensureWarehouseAllowed($warehouses[$outputWarehouseId], StockMovementType::ProductionOutput);
             $this->ensureUnitPrecision($product, $outputQuantity);
 
+            foreach ($extraOutputs as $line) {
+                $this->ensureTypeAllowed($parts[$line['part_id']], StockMovementType::ProductionOutput);
+                $this->ensureWarehouseAllowed($warehouses[$line['warehouse_id']], StockMovementType::ProductionOutput);
+                $this->ensureUnitPrecision($parts[$line['part_id']], $line['quantity']);
+            }
+
             $movements = collect();
             foreach ($materials as $line) {
                 $part = $parts[$line['part_id']];
@@ -398,6 +417,10 @@ class StockService
             }
 
             $movements->push($this->apply($product, $warehouses[$outputWarehouseId], $balances[$this->key($output->getKey(), $outputWarehouseId)], StockMovementType::ProductionOutput, $outputQuantity, $user, $description, reference: $reference));
+
+            foreach ($extraOutputs as $line) {
+                $movements->push($this->apply($parts[$line['part_id']], $warehouses[$line['warehouse_id']], $balances[$this->key($line['part_id'], $line['warehouse_id'])], StockMovementType::ProductionOutput, $line['quantity'], $user, $description, reference: $reference));
+            }
 
             return $movements;
         });

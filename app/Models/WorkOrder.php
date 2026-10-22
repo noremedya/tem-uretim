@@ -87,6 +87,15 @@ class WorkOrder extends Model
         return $this->hasMany(WorkOrderMaterial::class);
     }
 
+    /** Eş ürün çıktıları (ana ürünle birlikte stoğa girer).
+     *
+     * @return HasMany<WorkOrderOutput, $this>
+     */
+    public function outputs(): HasMany
+    {
+        return $this->hasMany(WorkOrderOutput::class);
+    }
+
     /** @return HasMany<WorkOrderStatusHistory, $this> */
     public function statusHistories(): HasMany
     {

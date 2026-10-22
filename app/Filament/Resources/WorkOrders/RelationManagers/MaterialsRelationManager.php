@@ -8,6 +8,7 @@ use App\Enums\WorkOrderStatus;
 use App\Exceptions\BusinessRuleException;
 use App\Filament\Resources\WorkOrders\WorkOrderResource;
 use App\Filament\Support\BusinessRuleNotification;
+use App\Models\Part;
 use App\Models\StockBalance;
 use App\Models\Warehouse;
 use App\Models\WorkOrder;
@@ -65,12 +66,13 @@ class MaterialsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->with(['part.unit', 'part.stockBalances.warehouse', 'warehouse']))
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['part.unit', 'part.stockBalances.warehouse', 'warehouse', 'scrapPart']))
             ->defaultSort('id')
             ->paginated(false)
             ->columns([
                 TextColumn::make('part.code')->label('Kod')->action($this->resolveShortageAction()),
-                TextColumn::make('part.name')->label('Malzeme')->action($this->resolveShortageAction()),
+                TextColumn::make('part.name')->label('Malzeme')->action($this->resolveShortageAction())
+                    ->description(fn (WorkOrderMaterial $record): ?string => $record->scrapPart ? "Fire → {$record->scrapPart->code}" : null),
                 TextColumn::make('part.type')->label('Tür')->badge()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('required_quantity')
                     ->label('Net ihtiyaç')
@@ -80,7 +82,7 @@ class MaterialsRelationManager extends RelationManager
                     ->label('Standart fire')
                     ->alignEnd()
                     ->formatStateUsing(fn ($state, WorkOrderMaterial $record): string => Quantity::format($state, $record->part->unit->name)
-                        .' (%'.Quantity::format((string) $record->scrap_rate).')'),
+                        .($record->scrap_quantity_per_unit !== null ? '' : ' (%'.Quantity::format((string) $record->scrap_rate).')')),
                 TextColumn::make('actual_scrap')
                     ->label('Gerçekleşen fire')
                     ->alignEnd()
@@ -268,10 +270,11 @@ class MaterialsRelationManager extends RelationManager
     private function openWorkOrder(WorkOrderMaterial $material, array $data): void
     {
         $owner = $this->workOrder();
+        [$product, $quantity] = $this->workOrderTarget($material, $data['quantity']);
 
         $created = app(WorkOrderService::class)->create([
-            'product_part_id' => $material->part_id,
-            'quantity' => $data['quantity'],
+            'product_part_id' => $product->getKey(),
+            'quantity' => $quantity,
             'planned_end' => $data['planned_end'],
             'production_batch_id' => $owner->production_batch_id,
             'notes' => "{$owner->work_order_number} için eksik yarı mamul",
@@ -279,9 +282,28 @@ class MaterialsRelationManager extends RelationManager
 
         Notification::make()->success()
             ->title("İş emri açıldı: {$created->work_order_number}")
-            ->body("{$material->part->code} — ".Quantity::format((string) $created->quantity, $material->part->unit->name))
+            ->body("{$product->code} — ".Quantity::format((string) $created->quantity, $product->unit->name))
             ->actions([Action::make('open')->label('İş emrini aç')->url(WorkOrderResource::getUrl('view', ['record' => $created]))])
             ->send();
+    }
+
+    /**
+     * Açılacak iş emrinin ürünü ve adedi: eş ürün kendi başına üretilmez, ana ürünü üretilir (adet = ihtiyaç ÷ birim
+     * başına eş ürün, yukarı yuvarlı).
+     *
+     * @return array{0: Part, 1: string}
+     */
+    private function workOrderTarget(WorkOrderMaterial $material, string $quantity): array
+    {
+        $link = $material->part->coProductOf()->with('parent.unit')->first();
+
+        if ($link === null) {
+            return [$material->part, $quantity];
+        }
+
+        $units = Quantity::ceil(bcdiv(Quantity::parse($quantity), (string) $link->quantity_per_unit, 6), $link->parent->unit->allows_decimal ? Quantity::SCALE : 0);
+
+        return [$link->parent, $units];
     }
 
     /** @return array<string, string> kullanıcının bu malzeme için yapabileceği işlemler */
@@ -298,7 +320,10 @@ class MaterialsRelationManager extends RelationManager
 
         if ($material->part->type === PartType::SemiFinished) {
             if ($user->can('create', WorkOrder::class)) {
-                $modes['work_order'] = 'İş emri aç (fabrikada üretilecek)';
+                $main = $material->part->coProductOf()->with('parent')->first()?->parent;
+                $modes['work_order'] = $main !== null
+                    ? "İş emri aç: {$main->code} (bu ürün onunla birlikte çıkar)"
+                    : 'İş emri aç (fabrikada üretilecek)';
             }
 
             if ($canStock) {

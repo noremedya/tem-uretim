@@ -58,6 +58,13 @@ class WorkOrderInfolist
                     TextEntry::make('productionBatch.batch_number')->label('Parti')->placeholder('—'),
                     TextEntry::make('sourceWarehouse.name')->label('Malzeme deposu')->placeholder('Her malzeme kendi deposundan'),
                     TextEntry::make('targetWarehouse.name')->label('Çıktı deposu'),
+                    TextEntry::make('co_outputs')
+                        ->label('Eş ürünler')
+                        ->state(fn (WorkOrder $record): ?string => $record->outputs()->with('part.unit')->get()
+                            ->map(fn ($output) => "{$output->part->code} — ".Quantity::format((string) $output->quantity, $output->part->unit->name))
+                            ->implode(', ') ?: null)
+                        ->visible(fn (WorkOrder $record): bool => $record->outputs()->exists())
+                        ->helperText('Ana ürünle birlikte tamamlamada stoğa girer.'),
                     TextEntry::make('material_status')
                         ->label('Malzeme durumu')
                         ->state(fn (WorkOrder $record): string => static::shortageSummary($record))

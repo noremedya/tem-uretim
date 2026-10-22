@@ -29,6 +29,7 @@ class ProductionService
         private readonly NumberSequenceService $numbers,
         private readonly OrderService $orders,
         private readonly WorkOrderService $workOrders,
+        private readonly WarehouseService $warehouses,
     ) {}
 
     /**
@@ -43,7 +44,7 @@ class ProductionService
         return DB::transaction(function () use ($workOrder, $actor, $actualScraps): WorkOrder {
             // Satır kilidi: aynı iş emri iki kez tamamlanamaz; durum kilit altında okunur.
             $locked = WorkOrder::query()
-                ->with(['materials.part.unit', 'product.unit', 'motorModel', 'orderItem.order', 'targetWarehouse'])
+                ->with(['materials.part.unit', 'outputs', 'product.unit', 'motorModel', 'orderItem.order', 'targetWarehouse'])
                 ->lockForUpdate()
                 ->findOrFail($workOrder->getKey());
 
@@ -54,6 +55,8 @@ class ProductionService
             }
 
             $lines = [];
+            // Eş ürünler çıktı deposuna; fire kartı (hurda) seçilmiş satırların gerçekleşen firesi o karta (kendi deposuna).
+            $extraOutputs = $locked->outputs->map(fn ($output) => ['part_id' => $output->part_id, 'quantity' => (string) $output->quantity])->all();
             foreach ($locked->materials as $material) {
                 $scrap = $this->scrap($actualScraps[$material->part_id] ?? null, (string) $material->planned_scrap, $material->part);
 
@@ -61,9 +64,17 @@ class ProductionService
                 $material->save();
 
                 $lines[] = ['part_id' => $material->part_id, 'warehouse_id' => $material->warehouse_id, 'consumption' => (string) $material->required_quantity, 'scrap' => $scrap];
+
+                if ($material->scrap_part_id !== null && Quantity::compare($scrap, '0') > 0) {
+                    $extraOutputs[] = [
+                        'part_id' => $material->scrap_part_id,
+                        'quantity' => $scrap,
+                        'warehouse_id' => $this->warehouses->defaultFor(Part::query()->findOrFail($material->scrap_part_id))->getKey(),
+                    ];
+                }
             }
 
-            $this->stock->recordProduction($lines, $locked->product, (string) $locked->quantity, $locked, $actor, $locked->work_order_number, $locked->targetWarehouse);
+            $this->stock->recordProduction($lines, $locked->product, (string) $locked->quantity, $locked, $actor, $locked->work_order_number, $locked->targetWarehouse, $extraOutputs);
 
             if ($locked->motor_model_id !== null) {
                 $this->createMotorUnits($locked);
