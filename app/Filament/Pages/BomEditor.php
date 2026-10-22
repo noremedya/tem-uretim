@@ -11,13 +11,16 @@ use App\Models\BomCoProduct;
 use App\Models\BomItem;
 use App\Models\Part;
 use App\Services\BomService;
+use App\Services\CatalogImportService;
 use App\Support\Quantity;
 use BackedEnum;
 use Closure;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
 use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\EmbeddedSchema;
@@ -139,6 +142,38 @@ class BomEditor extends Page implements HasTable
                     ->visible(fn (): bool => $this->canManage())
                     ->schema(fn (): array => BomLineForm::fields(fn () => $this->part(), creating: true))
                     ->action(fn (array $data, Action $action) => $this->guard($action, fn () => BomLineForm::save($this->part(), $data))),
+                Action::make('paste')
+                    ->label("Excel'den yapıştır")
+                    ->icon(Heroicon::OutlinedClipboardDocument)
+                    ->color('gray')
+                    ->visible(fn (): bool => $this->canManage())
+                    ->modalDescription("Excel'de satırları seçip kopyalayın ve aşağıya yapıştırın. Sütun sırası: bileşen kodu, net miktar, fire oranı (%), brüt miktar, fire miktarı, fire kartı kodu (kullanmadığınızı boş bırakın). Tek satır bile hatalıysa hiçbiri eklenmez.")
+                    ->schema([
+                        Textarea::make('text')->label('Satırlar')->required()->rows(10)->placeholder('HM-SAC-050-110			6,61	2,88	HM-HURDA-SAC
+KOM-RUL-6202	2'),
+                        Toggle::make('update')->label('Reçetede olan bileşenleri güncelle'),
+                    ])
+                    ->action(function (array $data, Action $action): void {
+                        try {
+                            $result = app(CatalogImportService::class)->pasteBom($this->part(), $data['text'], Auth::user(), (bool) ($data['update'] ?? false));
+                        } catch (BusinessRuleException $exception) {
+                            BusinessRuleNotification::send($exception);
+                            $action->halt();
+                        }
+
+                        if (! $result->committed) {
+                            $errors = collect($result->sheets)->flatten(1)->where('status', 'error')
+                                ->map(fn (array $r) => "Satır {$r['row']} ({$r['key']}): {$r['message']}")->take(10)->implode("\n");
+                            Notification::make()->danger()->title('Hiçbir satır eklenmedi')->body($errors)->persistent()->send();
+                            $action->halt();
+                        }
+
+                        $counts = $result->counts();
+                        Notification::make()->success()
+                            ->title(sprintf('%d satır eklendi', $counts['created'] ?? 0))
+                            ->body(collect(['updated' => 'güncellendi', 'skipped' => 'zaten vardı, atlandı'])->filter(fn ($l, $s) => ($counts[$s] ?? 0) > 0)->map(fn ($l, $s) => "{$counts[$s]} satır {$l}")->implode(', ') ?: null)
+                            ->send();
+                    }),
                 Action::make('copy')
                     ->label('Başka reçeteden kopyala')
                     ->icon(Heroicon::OutlinedDocumentDuplicate)

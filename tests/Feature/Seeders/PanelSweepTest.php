@@ -49,6 +49,7 @@ function sweepExpectations(): array
         'overdue-receivables' => ['yonetici', 'muhasebe'],
         'stock-operation' => ['yonetici', 'depo'],
         'receteler' => ['yonetici', 'muhasebe'],
+        'ice-aktar' => ['yonetici'],
         'raporlar/uretim-adedi' => ['yonetici'],
         'raporlar/is-emri-performansi' => ['yonetici'],
         'raporlar/operator-uretimi' => ['yonetici'],

@@ -8,7 +8,7 @@
             <table class="w-full text-sm">
                 <thead>
                     <tr class="border-b border-gray-200 text-left dark:border-white/10">
-                        <th class="py-2 pe-4 text-start">Malzeme</th>
+                        <th class="py-2 pe-4" style="text-align: start">Malzeme</th>
                         <th class="py-2 pe-4 text-end">Net</th>
                         <th class="py-2 pe-4 text-end">Fire</th>
                         <th class="py-2 text-end">Toplam</th>
@@ -28,8 +28,8 @@
             <table class="w-full text-sm">
                 <thead>
                     <tr class="border-b border-gray-200 text-left dark:border-white/10">
-                        <th class="py-2 pe-4 text-start">Malzeme</th>
-                        <th class="py-2 pe-4 text-start">Tür</th>
+                        <th class="py-2 pe-4" style="text-align: start">Malzeme</th>
+                        <th class="py-2 pe-4" style="text-align: start">Tür</th>
                         <th class="py-2 pe-4 text-end">İhtiyaç (fire dahil)</th>
                         <th class="py-2 pe-4 text-end">Stok</th>
                         <th class="py-2 text-end">Eksik</th>
