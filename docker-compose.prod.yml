@@ -19,7 +19,9 @@ x-logging: &logging
 x-app-environment: &app-environment
   APP_NAME: ${APP_NAME:-Tem Motor Üretim}
   COMPANY_NAME: ${COMPANY_NAME:-TEM MOTOR}
-  APP_ENV: production
+  # production (gerçek kullanım) veya demo (örnek verili tanıtım sunucusu; KURULUM_KILAVUZU bölüm 16).
+  APP_ENV: ${APP_ENV:-production}
+  DEMO_PASSWORD: ${DEMO_PASSWORD:-}
   APP_DEBUG: "false"
   # İlk kurulumda boştur; "key:generate --show" ile üretilip .env'e yazılır (KURULUM_KILAVUZU bölüm 10).
   APP_KEY: ${APP_KEY:-}

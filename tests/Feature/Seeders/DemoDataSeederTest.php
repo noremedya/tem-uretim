@@ -81,3 +81,26 @@ it('demo veri üretim ortamında çalışmaz', function () {
     expect(fn () => app(DemoDataSeeder::class)->run())->toThrow(RuntimeException::class, 'üretim ortamında');
     expect(Part::query()->where('code', DemoDataSeeder::MARKER_PART)->exists())->toBeFalse();
 });
+
+it('demo sunucusunda DEMO_PASSWORD zorunludur ve kullanıcı şifresi olur', function () {
+    app()->detectEnvironment(fn () => 'demo');
+
+    config(['demo.password' => 'kisa']);
+    expect(fn () => app(DemoDataSeeder::class)->run())->toThrow(RuntimeException::class, 'DEMO_PASSWORD');
+
+    config(['demo.password' => 'Tanitim-2026-xyz']);
+    $seeder = app(DemoDataSeeder::class);
+    $seeder->weeks = 1;
+    $seeder->run();
+
+    $hash = User::query()->where('username', 'yonetici')->value('password');
+    expect(Hash::check('Tanitim-2026-xyz', $hash))->toBeTrue()
+        ->and(Hash::check(DemoDataSeeder::PASSWORD, $hash))->toBeFalse();
+});
+
+it('demo ortamında her sayfada (giriş dahil) DEMO uyarısı çıkar; diğer ortamlarda çıkmaz', function () {
+    $this->get('/login')->assertOk()->assertDontSee('DEMO ORTAMI');
+
+    app()->detectEnvironment(fn () => 'demo');
+    $this->get('/login')->assertOk()->assertSee('DEMO ORTAMI');
+});

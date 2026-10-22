@@ -433,3 +433,50 @@ Ayda bir, test bilgisayarında veya ayrı bir klasörde son yedeği geri yükley
 - [ ] `.env`, yedek şifresi ve restic şifresi şifre yöneticisinde
 - [ ] Yönetici, operatör ve depo kullanıcıları oluşturuldu; yetkiler test edildi
 - [ ] Kesinti durumunda kullanılacak basılı kayıt formu fabrikaya teslim edildi
+
+---
+
+## 16. Demo (tanıtım) sunucusu
+
+Müşteriye sistemi örnek verilerle göstermek için ayrı bir kurulum. Kurulum adımları gerçek kurulumla aynıdır; farklar aşağıdadır. **Demo sunucusu gerçek iş için kullanılmaz ve sonradan gerçek kullanıma çevrilmez**: örnek siparişler, faturalar ve stok hareketleri silinemez kayıtlardır. Gerçek kullanıma her zaman boş veritabanıyla, `APP_ENV=production` olarak kurulur.
+
+**Nerede?**
+- **Küçük bir VPS** (Hetzner, DigitalOcean vb.; Ubuntu 24.04, 2 vCPU, 2–4 GB RAM, 40 GB disk). Paylaşımlı hosting uygun değildir: Docker, PostgreSQL ve sürekli çalışan kuyruk/zamanlayıcı süreçleri gerekir.
+- veya **fabrikanın mini PC'si**: gerçek kullanıma geçmeden önce demo verileri tamamen silinir (aşağıda "Demoyu sıfırlama") ve bölüm 10'daki gibi `production` olarak yeniden kurulur.
+
+**Adımlar** (bölüm numaraları bu kılavuzdakilerdir):
+1. Bölüm 3, 4 ve 6: Ubuntu, Docker, güvenlik duvarı. VPS'te BIOS/UPS/Tailscale bölümleri gerekmez. Dışarıya yalnızca SSH (22) açık kalır; erişim Cloudflare Tunnel ile verilir (port açmaya gerek yok).
+2. Bölüm 8: projeyi al, `.env` oluştur. Gerçek kurulumdan farklı değerler:
+   ```
+   APP_ENV=demo
+   DEMO_PASSWORD=...              # demo kullanıcılarının şifresi; en az 10 karakter (ör. openssl rand -hex 6)
+   APP_URL=https://demo.alanadi.com
+   APP_DOMAIN=demo.alanadi.com
+   ```
+   `CF_API_TOKEN` (bölüm 9.A) ve `TUNNEL_TOKEN` (bölüm 11) gerçek kurulumdaki gibi; tünelin public hostname'i `demo.alanadi.com`. Bölüm 9.B (yerel DNS) gerekmez.
+3. Bölüm 10, ancak `RolesAndPermissionsSeeder` ve `app:create-admin` yerine örnek verileri yükle (roller dahil; birkaç dakika sürer, ikinci kez çalıştırılırsa bir şey yapmaz):
+   ```bash
+   cd /opt/uretim
+   dc build
+   dc run --rm app php artisan key:generate --show     # çıkan değeri .env içindeki APP_KEY'e yaz
+   ./deploy/scripts/db-migrate.sh
+   dc up -d
+   dc exec app php artisan db:seed --class=DemoDataSeeder --force
+   dc exec app php artisan optimize
+   ```
+4. `https://demo.alanadi.com` aç. Her sayfanın üstünde turuncu **"DEMO ORTAMI"** şeridi görünür. Kullanıcılar: `yonetici`, `operator1`, `operator2`, `depo`, `muhasebe`; şifre `.env` içindeki `DEMO_PASSWORD`. Şifreyi yalnızca tanıtım yapılacak kişilerle paylaş; istersen bölüm 11'deki Cloudflare Access e-posta doğrulamasını da aç.
+
+Yedekleme (bölüm 12) demo için gerekmez. Güncelleme bölüm 13'teki gibi (`deploy.sh`).
+
+**Demoyu sıfırlama** (tüm demo verilerini ve yüklenen dosyaları **siler**, geri alınamaz):
+```bash
+cd /opt/uretim
+dc down
+docker volume rm uretim_pgdata uretim_storage
+./deploy/scripts/db-migrate.sh
+dc up -d
+dc exec app php artisan db:seed --class=DemoDataSeeder --force
+dc exec app php artisan optimize
+```
+
+**Mini PC'de demodan gerçek kullanıma geçiş:** "Demoyu sıfırlama"daki ilk iki komutla verileri sil, `.env` içinde `APP_ENV=production` yap ve `DEMO_PASSWORD`'ü boşalt, adresleri gerçek adresle (`uretim.alanadi.com`) değiştir, sonra bölüm 10'u baştan uygula (rol tohumu ve `app:create-admin` ile). Gerçek ürün yapısı "Stok › İçe aktar (Excel)" ekranından başlangıç dosyasıyla yüklenir.

@@ -89,7 +89,9 @@ class AppServiceProvider extends ServiceProvider
         ]);
 
         // N+1 ve yanlışlıkla atılan alanları geliştirmede erken yakala.
-        Model::preventLazyLoading(! $this->app->isProduction());
-        Model::preventSilentlyDiscardingAttributes(! $this->app->isProduction());
+        // Geliştirici korumaları yalnızca geliştirme ve testte; üretim ve demo sunucusunda kullanıcıya hata göstermez.
+        $strict = ! $this->app->environment('production', config('demo.environment'));
+        Model::preventLazyLoading($strict);
+        Model::preventSilentlyDiscardingAttributes($strict);
     }
 }

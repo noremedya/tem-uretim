@@ -44,6 +44,8 @@ class AppPanelProvider extends PanelProvider
             ->renderHook(PanelsRenderHook::HEAD_END, fn (): string => Blade::render("@vite('resources/js/filament/app.js')"))
             // Sol menüde arama kutusu.
             ->renderHook(PanelsRenderHook::SIDEBAR_NAV_START, fn (): string => view('filament.nav-search')->render())
+            // Demo (tanıtım) sunucusunda her sayfada, giriş dahil, uyarı şeridi.
+            ->renderHook(PanelsRenderHook::BODY_START, fn (): string => app()->environment(config('demo.environment')) ? view('filament.demo-banner')->render() : '')
             ->databaseNotifications()
             // Varsayılan avatar ui-avatars.com'a gider; yerel baş harf avatarı kullanılır.
             ->defaultAvatarProvider(InitialsAvatarProvider::class)

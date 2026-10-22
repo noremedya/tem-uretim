@@ -376,6 +376,7 @@ Kurulum kılavuzu bu dosya adlarına dayanır; isimleri değiştirme.
 - İmaj: `deploy/Dockerfile` (base → vendor → assets → son), eklentilere ek olarak `pcntl` ve Aşama 6 için `soap`; kullanıcı `app` (UID 1000), FrankenPHP'ye yalnızca `CAP_NET_BIND_SERVICE`. Giriş betiği (`deploy/docker-entrypoint.sh`) web sunucusu, kuyruk işçisi ve zamanlayıcı başlarken `optimize` çalıştırır; tek seferlik komutlarda çalıştırmaz.
 - Loglar `stderr` → Docker json-file (servis başına 5 × 10 MB). Şifreler yalnızca harf/rakam (`openssl rand -hex 24`).
 - Yedekte bulut gönderimi başarısızsa yerel yedek korunur, healthchecks'e `/fail` gönderilir; USB disk yoksa yalnızca uyarı.
+- **Demo (tanıtım) sunucusu:** `APP_ENV=demo` (compose'da `${APP_ENV:-production}`): her sayfada (giriş dahil) "DEMO ORTAMI" şeridi; `DemoDataSeeder` çalışabilir ve kullanıcı şifresi `.env`'deki `DEMO_PASSWORD` (en az 10 karakter, yoksa yükleyici durur; geliştirmede sabit `demo1234`). Geliştirici korumaları (lazy loading vb.) production gibi kapalıdır. Demo kurulumu gerçek kullanıma çevrilmez; gerçek kullanım boş veritabanıyla `production` kurulur (KURULUM_KILAVUZU bölüm 16).
 
 Ayrıca kısa bir `README.md`: geliştirme ortamını çalıştırma, testleri çalıştırma, dağıtım için KURULUM_KILAVUZU.md'ye yönlendirme.
 

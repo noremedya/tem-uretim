@@ -126,6 +126,11 @@ class DemoDataSeeder extends Seeder
             throw new RuntimeException('DemoDataSeeder üretim ortamında çalıştırılamaz.');
         }
 
+        // Demo sunucusunda (internete açık) bilinen şifre kullanılmaz.
+        if (app()->environment(config('demo.environment')) && mb_strlen((string) config('demo.password')) < 10) {
+            throw new RuntimeException('Demo sunucusunda .env içine en az 10 karakterlik DEMO_PASSWORD yazın.');
+        }
+
         if (Part::query()->where('code', self::MARKER_PART)->exists()) {
             $this->command?->warn('Demo veri zaten yüklü; bir şey yapılmadı.');
 
@@ -150,7 +155,8 @@ class DemoDataSeeder extends Seeder
             Auth::forgetUser();
         }
 
-        $this->command?->info('Demo veri yüklendi. Kullanıcılar: yonetici, operator1, operator2, depo, muhasebe (şifre: '.self::PASSWORD.')');
+        $this->command?->info('Demo veri yüklendi. Kullanıcılar: yonetici, operator1, operator2, depo, muhasebe (şifre: '
+            .(app()->environment(config('demo.environment')) ? '.env içindeki DEMO_PASSWORD' : self::PASSWORD).')');
     }
 
     // --- Ana veriler (120 gün önce, sistem geçişi) ----------------------------------------------------------
@@ -192,7 +198,7 @@ class DemoDataSeeder extends Seeder
             'muhasebe' => ['Elif Şahin', [Role::Accounting]],
         ] as $username => [$name, $roles]) {
             $this->users[$username] = User::query()->where('username', $username)->first()
-                ?? $service->create(['username' => $username, 'name' => $name, 'password' => self::PASSWORD, 'roles' => $roles]);
+                ?? $service->create(['username' => $username, 'name' => $name, 'password' => $this->password(), 'roles' => $roles]);
         }
 
         // Ayrılmış bir operatör: pasif kullanıcı örneği.
@@ -225,6 +231,12 @@ class DemoDataSeeder extends Seeder
         };
 
         return $name === null ? null : PartSubtype::query()->where('type', $type->value)->where('name', $name)->value('id');
+    }
+
+    /** Demo sunucusunda DEMO_PASSWORD, geliştirmede sabit şifre. */
+    private function password(): string
+    {
+        return app()->environment(config('demo.environment')) ? (string) config('demo.password') : self::PASSWORD;
     }
 
     private function createParts(): void
