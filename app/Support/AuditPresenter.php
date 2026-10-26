@@ -18,7 +18,7 @@ final class AuditPresenter
 {
     public const SUBJECT_LABELS = [
         'user' => 'Kullanıcı', 'unit' => 'Birim', 'brand' => 'Marka', 'part_subtype' => 'Alt tür', 'warehouse' => 'Depo', 'part' => 'Ürün', 'motor_model' => 'Motor modeli',
-        'bom_item' => 'Reçete satırı', 'bom_co_product' => 'Eş ürün', 'customer' => 'Cari hesap', 'order' => 'Sipariş', 'order_item' => 'Sipariş kalemi',
+        'bom_item' => 'Reçete satırı', 'bom_co_product' => 'Eş ürün', 'bom_template' => 'Reçete şablonu', 'customer' => 'Cari hesap', 'order' => 'Sipariş', 'order_item' => 'Sipariş kalemi',
         'production_batch' => 'Üretim partisi', 'work_order' => 'İş emri', 'motor_unit' => 'Motor', 'exchange_rate' => 'Döviz kuru',
         'price' => 'Fiyat', 'invoice' => 'Fatura', 'invoice_line' => 'Fatura satırı', 'cash_account' => 'Kasa/banka hesabı',
         'payment' => 'Tahsilat/ödeme', 'cheque' => 'Çek/senet',
@@ -61,7 +61,7 @@ final class AuditPresenter
         'brand_id' => 'Marka', 'image_path' => 'Görsel', 'country_code' => 'Ülke', 'foreign_tax_id' => 'Yabancı vergi no', 'gtip_code' => 'GTİP', 'net_weight_kg' => 'Net ağırlık (kg)',
         'gross_weight_kg' => 'Brüt ağırlık (kg)', 'export_type' => 'İhracat türü', 'incoterm' => 'Teslim şekli',
         'transport_mode' => 'Gönderim şekli', 'package_count' => 'Kap sayısı', 'package_type' => 'Kap cinsi',
-        'subtype_id' => 'Alt tür', 'scrap_quantity_per_unit' => 'Birim başına fire', 'scrap_part_id' => 'Fire kartı', 'co_part_id' => 'Eş ürün', 'warehouse_id' => 'Depo', 'default_warehouse_id' => 'Varsayılan depo', 'source_warehouse_id' => 'Malzeme deposu',
+        'product_type' => 'Ürün türü', 'subtype_id' => 'Alt tür', 'scrap_quantity_per_unit' => 'Birim başına fire', 'scrap_part_id' => 'Fire kartı', 'co_part_id' => 'Eş ürün', 'warehouse_id' => 'Depo', 'default_warehouse_id' => 'Varsayılan depo', 'source_warehouse_id' => 'Malzeme deposu',
         'target_warehouse_id' => 'Çıktı deposu', 'allows_negative' => 'Eksiye düşebilir',
         'is_production' => 'Üretim deposu', 'is_shipping' => 'Sevkiyat deposu', 'default_part_types' => 'Varsayılan türler',
         'customs_declaration_number' => 'Gümrük beyannamesi no', 'customs_declaration_date' => 'Gümrük beyannamesi tarihi',

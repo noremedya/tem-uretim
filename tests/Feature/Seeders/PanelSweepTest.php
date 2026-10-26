@@ -3,6 +3,7 @@
 use App\Enums\InvoiceDirection;
 use App\Enums\OrderStatus;
 use App\Enums\WorkOrderStatus;
+use App\Models\BomTemplate;
 use App\Models\Brand;
 use App\Models\CashAccount;
 use App\Models\Customer;
@@ -49,6 +50,9 @@ function sweepExpectations(): array
         'overdue-receivables' => ['yonetici', 'muhasebe'],
         'stock-operation' => ['yonetici', 'depo'],
         'receteler' => ['yonetici', 'muhasebe'],
+        'bom-templates' => ['yonetici', 'muhasebe'],
+        'bom-templates/create' => ['yonetici'],
+        'bom-templates/{record}/edit' => ['yonetici'],
         'ice-aktar' => ['yonetici'],
         'raporlar/uretim-adedi' => ['yonetici'],
         'raporlar/is-emri-performansi' => ['yonetici'],
@@ -135,6 +139,7 @@ function sweepRecords(): array
         'brands' => Brand::query()->value('id'),
         'warehouses' => Warehouse::query()->value('id'),
         'part-subtypes' => PartSubtype::query()->value('id'),
+        'bom-templates' => BomTemplate::query()->value('id'),
         'units' => Unit::query()->value('id'),
         'parts' => Part::query()->where('code', DemoDataSeeder::MARKER_PART)->value('id'),
         'motor-models' => MotorModel::query()->where('is_active', true)->value('id'),

@@ -9,8 +9,11 @@ use App\Filament\Support\BomLineForm;
 use App\Filament\Support\BusinessRuleNotification;
 use App\Models\BomCoProduct;
 use App\Models\BomItem;
+use App\Models\BomTemplate;
+use App\Models\BomTemplateLine;
 use App\Models\Part;
 use App\Services\BomService;
+use App\Services\BomTemplateService;
 use App\Services\CatalogImportService;
 use App\Support\Quantity;
 use BackedEnum;
@@ -25,7 +28,11 @@ use Filament\Notifications\Notification;
 use Filament\Pages\Page;
 use Filament\Schemas\Components\EmbeddedSchema;
 use Filament\Schemas\Components\EmbeddedTable;
+use Filament\Schemas\Components\Fieldset;
+use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -142,6 +149,7 @@ class BomEditor extends Page implements HasTable
                     ->visible(fn (): bool => $this->canManage())
                     ->schema(fn (): array => BomLineForm::fields(fn () => $this->part(), creating: true))
                     ->action(fn (array $data, Action $action) => $this->guard($action, fn () => BomLineForm::save($this->part(), $data))),
+                $this->templateAction(),
                 Action::make('paste')
                     ->label("Excel'den yapıştır")
                     ->icon(Heroicon::OutlinedClipboardDocument)
@@ -213,6 +221,98 @@ KOM-RUL-6202	2'),
                         Notification::make()->success()->title('Bileşen kaldırıldı')->send();
                     }),
             ]);
+    }
+
+    /**
+     * Şablondan başlat: şablon seçilir, her satıra uyan ürün (tür ve alt türe göre süzülü) seçilir; miktar ve fire
+     * şablondan dolu gelir. Ürün seçilmeyen satır atlanır; herhangi bir satır reddedilirse hiçbiri eklenmez.
+     */
+    private function templateAction(): Action
+    {
+        return Action::make('fromTemplate')
+            ->label('Şablondan başlat')
+            ->icon(Heroicon::OutlinedClipboardDocumentList)
+            ->visible(fn (): bool => $this->canManage() && $this->part()?->coProductOf === null)
+            ->modalWidth('5xl')
+            ->modalSubmitActionLabel('Reçeteye ekle')
+            ->modalDescription('Her satıra kullanılacak ürünü seçin; kullanılmayacak satırı boş bırakın. Reçetede zaten olan bileşen atlanır.')
+            ->schema([
+                Select::make('template_id')
+                    ->label('Şablon')
+                    ->required()
+                    ->live()
+                    ->options(fn (): array => BomTemplate::query()->where('is_active', true)->where('product_type', $this->part()?->type->value)->orderBy('name')->pluck('name', 'id')->all())
+                    ->afterStateUpdated(function ($state, Set $set): void {
+                        $rows = [];
+                        foreach (BomTemplate::query()->find($state)?->lines ?? [] as $line) {
+                            $input = fn ($v): ?string => $v === null ? null : Quantity::toInput((string) $v);
+                            $rows[$line->getKey()] = [
+                                'part_id' => null,
+                                'quantity_per_unit' => $input($line->quantity_per_unit),
+                                'scrap_rate' => $input($line->scrap_rate),
+                                'gross_per_unit' => $input($line->gross_per_unit),
+                                'scrap_quantity_per_unit' => $input($line->scrap_quantity_per_unit),
+                                'scrap_part_id' => null,
+                            ];
+                        }
+                        $set('rows', $rows);
+                    })
+                    ->helperText(fn (): string => 'Yalnızca '.mb_strtolower($this->part()?->type->label() ?? '').' şablonları. Şablonlar: Üretim › Reçete şablonları.'),
+                Group::make()->schema(fn (Get $get): array => $this->templateRows($get('template_id'))),
+            ])
+            ->action(function (array $data, Action $action): void {
+                $template = BomTemplate::query()->findOrFail($data['template_id']);
+                $result = $this->guard($action, fn () => app(BomTemplateService::class)->apply($template, $this->part(), $data['rows'] ?? []));
+                Notification::make()->success()
+                    ->title("{$result['added']} satır eklendi")
+                    ->body($result['skipped'] > 0 ? "{$result['skipped']} satır boş bırakıldı veya reçetede zaten vardı." : null)
+                    ->send();
+            });
+    }
+
+    /** @return array<int, mixed> */
+    private function templateRows(mixed $templateId): array
+    {
+        $template = filled($templateId) ? BomTemplate::query()->find($templateId) : null;
+        $parent = $this->part();
+
+        if ($template === null || $parent === null) {
+            return [];
+        }
+
+        return $template->lines()->with('subtype')->get()->map(function (BomTemplateLine $line) use ($parent): Fieldset {
+            $key = "rows.{$line->getKey()}";
+            $title = $line->label.($line->isCoProduct() ? ' — eş ürün' : '').' · '.$line->component_type->label().($line->subtype ? ' › '.$line->subtype->name : '');
+            $service = app(BomTemplateService::class);
+
+            $fields = [
+                Select::make("{$key}.part_id")
+                    ->label('Ürün')
+                    ->searchable()
+                    ->placeholder('Kullanılmayacaksa boş bırakın')
+                    ->options(fn (): array => $service->candidates($line, $parent))
+                    ->getSearchResultsUsing(fn (string $search): array => $service->candidates($line, $parent, trim($search)))
+                    ->columnSpan(2),
+            ];
+
+            if ($line->usesScrapQuantity()) {
+                $fields[] = TextInput::make("{$key}.gross_per_unit")->label('Brüt')->inputMode('decimal');
+                $fields[] = TextInput::make("{$key}.scrap_quantity_per_unit")->label('Fire miktarı')->inputMode('decimal');
+                $fields[] = Select::make("{$key}.scrap_part_id")->label('Fire kartı (hurda)')->searchable()->placeholder('Yok')
+                    ->getSearchResultsUsing(fn (string $search): array => Part::query()->where('is_active', true)->where('type', '!=', PartType::FinishedGood->value)
+                        ->where(fn ($q) => $q->where('code', 'ilike', "%{$search}%")->orWhere('name', 'ilike', "%{$search}%"))
+                        ->orderBy('code')->limit(50)->get()->mapWithKeys(fn (Part $p) => [$p->getKey() => "{$p->code} — {$p->name}"])->all())
+                    ->getOptionLabelUsing(fn ($value): ?string => ($p = Part::query()->find($value)) ? "{$p->code} — {$p->name}" : null);
+            } else {
+                $fields[] = TextInput::make("{$key}.quantity_per_unit")->label($line->isCoProduct() ? 'Birim başına' : 'Net miktar')->inputMode('decimal')
+                    ->placeholder($line->quantity_per_unit === null ? 'Girin' : null);
+                if (! $line->isCoProduct()) {
+                    $fields[] = TextInput::make("{$key}.scrap_rate")->label('Fire (%)')->inputMode('decimal');
+                }
+            }
+
+            return Fieldset::make($title)->columns(5)->schema($fields);
+        })->all();
     }
 
     public function addCoProductAction(): Action
