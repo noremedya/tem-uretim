@@ -12,6 +12,8 @@ enum Permission: string
 
     case MotorModelsView = 'motor_models.view';
     case MotorModelsManage = 'motor_models.manage';
+    // "Motor oluştur" ekranı: bileşen seçerek yeni motor modeli ve reçetesi (tüm roller). Düzenleme MotorModelsManage'de.
+    case MotorModelsBuild = 'motor_models.build';
 
     case CustomersView = 'customers.view';
     case CustomersManage = 'customers.manage';
@@ -57,6 +59,7 @@ enum Permission: string
             self::UsersManage => 'Kullanıcı yönetimi',
             self::MotorModelsView => 'Motor modeli ve reçete görüntüleme',
             self::MotorModelsManage => 'Motor modeli ve reçete yönetimi',
+            self::MotorModelsBuild => 'Bileşen seçerek motor oluşturma',
             self::CustomersView => 'Müşteri görüntüleme',
             self::CustomersManage => 'Müşteri yönetimi',
             self::OrdersView => 'Sipariş görüntüleme',

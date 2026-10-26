@@ -62,6 +62,9 @@ class BomTemplateResource extends Resource
                 TextInput::make('name')->label('Şablon adı')->required()->maxLength(150),
                 Select::make('product_type')->label('Hangi ürün için')->required()
                     ->options([PartType::FinishedGood->value => 'Mamul (motor)', PartType::SemiFinished->value => 'Yarı mamul']),
+                Select::make('drawing')->label('Montaj çizimi')->placeholder('Yok')
+                    ->options(fn (): array => collect(config('assembly_drawings'))->map(fn (array $d): string => $d['label'])->all())
+                    ->helperText('"Motor oluştur" ekranında gösterilir; satırlara çizimdeki parça numarasını yazın.'),
                 Textarea::make('description')->label('Açıklama')->rows(2)->columnSpanFull(),
             ]),
             Section::make('Satırlar')->columnSpanFull()->description('Her satırda hangi tür (ve alt tür) ürün seçileceği, varsayılan miktar ve fire. Boş miktar uygulanırken girilir. Fire ya oranla ya brüt/fire miktarıyla.')->schema([
@@ -71,7 +74,7 @@ class BomTemplateResource extends Resource
                     ->minItems(1)
                     ->defaultItems(1)
                     ->columns(4)
-                    ->itemLabel(fn (array $state): ?string => $state['label'] ?? null)
+                    ->itemLabel(fn (array $state): ?string => filled($state['drawing_number'] ?? null) ? sprintf('%02d', (int) $state['drawing_number']).' · '.($state['label'] ?? '') : ($state['label'] ?? null))
                     ->schema([
                         Select::make('kind')->label('Satır')->required()->default(BomTemplateLine::KIND_COMPONENT)->live()
                             ->options([BomTemplateLine::KIND_COMPONENT => 'Bileşen', BomTemplateLine::KIND_CO_PRODUCT => 'Eş ürün (çıktı)']),
@@ -88,6 +91,7 @@ class BomTemplateResource extends Resource
                         TextInput::make('gross_per_unit')->label('Brüt (miktarla fire)')->inputMode('decimal')
                             ->helperText('Doluysa net = brüt − fire; oran kullanılmaz.'),
                         TextInput::make('scrap_quantity_per_unit')->label('Fire miktarı')->inputMode('decimal'),
+                        TextInput::make('drawing_number')->label('Çizimdeki parça no')->integer()->minValue(1)->maxValue(99),
                     ]),
             ]),
         ]);
@@ -107,6 +111,7 @@ class BomTemplateResource extends Resource
             'scrap_rate' => $input($line->scrap_rate),
             'gross_per_unit' => $input($line->gross_per_unit),
             'scrap_quantity_per_unit' => $input($line->scrap_quantity_per_unit),
+            'drawing_number' => $line->drawing_number,
         ])->all();
     }
 

@@ -7,7 +7,9 @@ use Database\Seeders\UnitSeeder;
 it('varsayılan birimleri doğru küsurat ayarıyla ekler', function () {
     $this->seed(UnitSeeder::class);
 
+    // Gram, "Motor oluştur" migration'ıyla gelir (seeder tekrar eklemez).
     expect(Unit::query()->orderBy('id')->pluck('allows_decimal', 'name')->all())->toBe([
+        'Gram' => true,
         'Adet' => false,
         'Takım' => false,
         'Paket' => false,

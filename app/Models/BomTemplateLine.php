@@ -23,6 +23,7 @@ class BomTemplateLine extends Model
     {
         return [
             'component_type' => PartType::class,
+            'drawing_number' => 'integer',
             'quantity_per_unit' => 'decimal:3',
             'scrap_rate' => 'decimal:2',
             'gross_per_unit' => 'decimal:3',
@@ -45,6 +46,12 @@ class BomTemplateLine extends Model
     public function isCoProduct(): bool
     {
         return $this->kind === self::KIND_CO_PRODUCT;
+    }
+
+    /** Montaj çizimindeki parça numarası, iki haneli (ör. "05"); yoksa null. */
+    public function drawingLabel(): ?string
+    {
+        return $this->drawing_number === null ? null : sprintf('%02d', $this->drawing_number);
     }
 
     public function usesScrapQuantity(): bool

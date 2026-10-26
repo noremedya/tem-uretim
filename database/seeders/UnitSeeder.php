@@ -19,6 +19,7 @@ class UnitSeeder extends Seeder
         'Paket' => false,
         'Rulo' => false,
         'Kg' => true,
+        'Gram' => true,
         'Metre' => true,
         'Litre' => true,
     ];

@@ -32,8 +32,18 @@ class BomTemplate extends Model
         return $this->hasMany(BomTemplateLine::class)->orderBy('sort_order')->orderBy('id');
     }
 
+    /**
+     * Şablonun montaj çizimi (config/assembly_drawings.php), yoksa null.
+     *
+     * @return array{label: string, image: string, width: int, height: int, source: string, markers: array<int, list<array{int, int}>>}|null
+     */
+    public function drawingConfig(): ?array
+    {
+        return $this->drawing === null ? null : config("assembly_drawings.{$this->drawing}");
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
-        return LogOptions::defaults()->logOnly(['name', 'product_type', 'description', 'is_active'])->logOnlyDirty()->dontLogEmptyChanges();
+        return LogOptions::defaults()->logOnly(['name', 'product_type', 'description', 'drawing', 'is_active'])->logOnlyDirty()->dontLogEmptyChanges();
     }
 }

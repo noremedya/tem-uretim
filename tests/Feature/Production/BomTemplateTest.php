@@ -52,10 +52,16 @@ it('kurulumda firmanın yapısına göre hazır şablonlar açılır', function 
         'Stator paketi (pres)', 'Bobinajlı stator', 'Enjekte rotor', 'İşlenmiş mil', 'Mil+rotor',
     ]);
 
-    $trifaze = template('Trifaze asenkron motor')->lines->pluck('label')->all();
-    expect($trifaze)->toContain('Bobinajlı stator', 'Mil+rotor', 'Rulman', 'Klemens kutusu (trifaze)', 'Pervane', 'Pervane koruma tası')
-        ->and(lineOf(template('Trifaze asenkron motor'), 'Rulman')->quantity_per_unit)->toBe('2.000')
-        ->and(lineOf(template('Monofaze MSD motor'), 'Kondansatör')->quantity_per_unit)->toBe('2.000')
+    // Motor şablonları Tem Motor B3 montaj parça listesine göre (çizimdeki parça numaralarıyla).
+    $trifaze = template('Trifaze asenkron motor');
+    expect($trifaze->drawing)->toBe('b3-trifaze')
+        ->and($trifaze->lines->whereNotNull('drawing_number')->pluck('drawing_number')->unique()->sort()->values()->all())->toBe(range(1, 15))
+        ->and(lineOf($trifaze, 'Gövde')->quantity_per_unit)->toBeNull()
+        ->and(lineOf($trifaze, 'Ön rulman')->drawing_number)->toBe(15)
+        ->and(lineOf($trifaze, 'Arka rulman')->subtype->name)->toBe('Rulman')
+        ->and(template('Monofaze MD motor')->lines->pluck('label')->all())->toContain('Daimi kondansatör')->not->toContain('Start kondansatörü')
+        ->and(template('Monofaze MSD motor')->lines->pluck('label')->all())->toContain('Start kondansatörü', 'Daimi kondansatör', 'Merkezkaç anahtarı')
+        ->and(Unit::query()->where('name', 'Gram')->value('allows_decimal'))->toBeTrue()
         ->and(template('Vibrasyon motoru')->lines->pluck('label')->all())->not->toContain('Pervane')->toContain('Eksantrik saç')
         ->and(lineOf(template('Vibrasyon motoru'), 'Eksantrik saç')->quantity_per_unit)->toBeNull();
 
@@ -74,8 +80,8 @@ it('motor şablonu uygulanır: seçilen satırlar eklenir, boş bırakılan atla
     app(BomService::class)->add($finished, $bolt, 6);
 
     $result = $this->service->apply($template, $finished, [
-        lineOf($template, 'Bobinajlı stator')->id => ['part_id' => $stator->id, 'quantity_per_unit' => '1'],
-        lineOf($template, 'Rulman')->id => ['part_id' => $bearing->id, 'quantity_per_unit' => '2', 'scrap_rate' => '0'],
+        lineOf($template, 'Sargılı vernikli stator')->id => ['part_id' => $stator->id, 'quantity_per_unit' => '1'],
+        lineOf($template, 'Ön rulman')->id => ['part_id' => $bearing->id, 'quantity_per_unit' => '2', 'scrap_rate' => '0'],
         lineOf($template, 'Civata')->id => ['part_id' => $bolt->id, 'quantity_per_unit' => '8', 'scrap_rate' => '2'],
     ]);
 

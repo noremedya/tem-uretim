@@ -43,7 +43,7 @@ it('mevcut "adet" birimini kullanır, yoksa açar', function () {
     $existing = Unit::factory()->create(['name' => 'ADET', 'allows_decimal' => false]);
 
     expect(createModel()->finishedPart->unit_id)->toBe($existing->id)
-        ->and(Unit::count())->toBe(1);
+        ->and(Unit::query()->where('name', '!=', 'Gram')->count())->toBe(1);
 });
 
 it('aynı kodlu stok kartı varsa model oluşturulmaz', function () {

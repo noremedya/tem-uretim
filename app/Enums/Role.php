@@ -37,8 +37,10 @@ enum Role: string implements HasLabel
             self::Admin => Permission::cases(),
             // Operatör ve depo yalnızca stokları, iş emirlerini ve üretilen motorları görür; müdahaleleri:
             // operatör kendine atanan iş emrini başlatır/tamamlar ve sevk eder, depo stok işlemi ve sevk yapar.
-            // Motor modeli, sipariş, parti, cari, fatura, rapor göremezler (CLAUDE.md bölüm 6).
+            // Motor modeli, sipariş, parti, cari, fatura, rapor göremezler (CLAUDE.md bölüm 6); "Motor oluştur" ekranıyla
+            // yeni motor oluşturabilirler (tüm roller).
             self::Operator => [
+                Permission::MotorModelsBuild,
                 Permission::WorkOrdersView,
                 Permission::WorkOrdersViewAll,
                 Permission::WorkOrdersChangeStatus,
@@ -48,6 +50,7 @@ enum Role: string implements HasLabel
                 Permission::StockMovementsView,
             ],
             self::Warehouse => [
+                Permission::MotorModelsBuild,
                 Permission::WorkOrdersView,
                 Permission::WorkOrdersViewAll,
                 Permission::MotorUnitsView,
@@ -58,6 +61,7 @@ enum Role: string implements HasLabel
             ],
             self::Accounting => [
                 Permission::MotorModelsView,
+                Permission::MotorModelsBuild,
                 Permission::MotorUnitsView,
                 Permission::CustomersView,
                 Permission::CustomersManage,

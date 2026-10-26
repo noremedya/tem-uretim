@@ -88,6 +88,8 @@ class BomTemplateService
             $added = 0;
             $skipped = 0;
             $existing = $parent->bomItems()->pluck('component_part_id')->all();
+            // Aynı ürünü seçen satırlar (ör. ön ve arka rulman aynı tip) tek reçete satırında toplanır.
+            $entries = [];
 
             foreach ($template->lines()->with('subtype')->get() as $line) {
                 $row = $rows[$line->getKey()] ?? [];
@@ -114,22 +116,25 @@ class BomTemplateService
                     continue;
                 }
 
-                $gross = $row['gross_per_unit'] ?? $line->gross_per_unit;
+                $entry = $this->entry($line, $part, $row);
+                $previous = $entries[$part->getKey()] ?? null;
 
-                if ($line->usesScrapQuantity() || filled($row['gross_per_unit'] ?? null)) {
-                    $gross = Quantity::parse($this->required($gross, $line, 'Brüt'));
-                    $scrap = Quantity::parse($row['scrap_quantity_per_unit'] ?? $line->scrap_quantity_per_unit ?? 0);
+                if ($previous === null) {
+                    $entries[$part->getKey()] = $entry;
 
-                    if (Quantity::compare($scrap, $gross) >= 0) {
-                        throw new BusinessRuleException("{$line->label}: fire brüt miktardan küçük olmalıdır.");
-                    }
-
-                    $this->boms->add($parent, $part, Quantity::sub($gross, $scrap), 0, $scrap, filled($row['scrap_part_id'] ?? null) ? (int) $row['scrap_part_id'] : null);
-                } else {
-                    $this->boms->add($parent, $part, $this->required($row['quantity_per_unit'] ?? $line->quantity_per_unit, $line, 'Miktar'), $row['scrap_rate'] ?? $line->scrap_rate);
+                    continue;
                 }
 
-                $existing[] = $part->getKey();
+                if ($previous['scrap_quantity'] !== null || $entry['scrap_quantity'] !== null || Quantity::compare($previous['scrap_rate'], $entry['scrap_rate']) !== 0) {
+                    throw new BusinessRuleException("{$previous['label']} ve {$line->label} aynı ürünü ({$part->code}) seçti; fireleri farklı olduğundan birleştirilemez.");
+                }
+
+                $entries[$part->getKey()]['quantity'] = Quantity::add($previous['quantity'], $entry['quantity']);
+                $skipped++;
+            }
+
+            foreach ($entries as $partId => $entry) {
+                $this->boms->add($parent, Part::query()->findOrFail($partId), $entry['quantity'], $entry['scrap_rate'], $entry['scrap_quantity'], $entry['scrap_part_id']);
                 $added++;
             }
 
@@ -141,15 +146,44 @@ class BomTemplateService
         });
     }
 
+    /**
+     * Satırın reçeteye girecek değerleri: net miktar ve fire (oran veya miktar).
+     *
+     * @return array{label: string, quantity: string, scrap_rate: string, scrap_quantity: ?string, scrap_part_id: ?int}
+     */
+    private function entry(BomTemplateLine $line, Part $part, array $row): array
+    {
+        if ($line->usesScrapQuantity() || filled($row['gross_per_unit'] ?? null)) {
+            $gross = Quantity::parse($this->required($row['gross_per_unit'] ?? $line->gross_per_unit, $line, 'Brüt'));
+            $scrap = Quantity::parse($row['scrap_quantity_per_unit'] ?? $line->scrap_quantity_per_unit ?? 0);
+
+            if (Quantity::compare($scrap, $gross) >= 0) {
+                throw new BusinessRuleException("{$line->label}: fire brüt miktardan küçük olmalıdır.");
+            }
+
+            return ['label' => $line->label, 'quantity' => Quantity::sub($gross, $scrap), 'scrap_rate' => '0', 'scrap_quantity' => $scrap,
+                'scrap_part_id' => filled($row['scrap_part_id'] ?? null) ? (int) $row['scrap_part_id'] : null];
+        }
+
+        $quantity = $this->required($row['quantity_per_unit'] ?? $line->quantity_per_unit, $line, 'Miktar');
+
+        if (! Quantity::isValid($quantity) || Quantity::compare(Quantity::parse($quantity), '0') <= 0) {
+            throw new BusinessRuleException("{$line->label}: miktar sıfırdan büyük bir sayı olmalıdır.");
+        }
+
+        return ['label' => $line->label, 'quantity' => Quantity::parse($quantity), 'scrap_rate' => Quantity::parse($row['scrap_rate'] ?? $line->scrap_rate ?? 0),
+            'scrap_quantity' => null, 'scrap_part_id' => null];
+    }
+
     /** Satıra uyan ürünler: tür (ve alt tür) eşleşen aktif kartlar. */
-    public function candidates(BomTemplateLine $line, Part $parent, string $search = ''): array
+    public function candidates(BomTemplateLine $line, ?Part $parent = null, string $search = ''): array
     {
         return Part::query()
             ->with('unit')
             ->where('is_active', true)
             ->where('type', $line->component_type->value)
             ->when($line->component_subtype_id, fn ($q, $id) => $q->where('subtype_id', $id))
-            ->whereKeyNot($parent->getKey())
+            ->when($parent, fn ($q) => $q->whereKeyNot($parent->getKey()))
             ->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('code', 'ilike', "%{$search}%")->orWhere('name', 'ilike', "%{$search}%")))
             ->orderBy('code')
             ->limit(50)
@@ -196,8 +230,15 @@ class BomTemplateService
             throw new BusinessRuleException("\"{$name}\" adlı bir şablon zaten var.");
         }
 
+        $drawing = array_key_exists('drawing', $data) ? (filled($data['drawing']) ? (string) $data['drawing'] : null) : $template->drawing;
+
+        if ($drawing !== null && config("assembly_drawings.{$drawing}") === null) {
+            throw new BusinessRuleException("Montaj çizimi tanımlı değil: {$drawing}.");
+        }
+
         $template->forceFill([
             'name' => $name,
+            'drawing' => $drawing,
             'product_type' => $type,
             'description' => array_key_exists('description', $data) ? (filled($data['description']) ? trim($data['description']) : null) : $template->description,
         ]);
@@ -242,6 +283,12 @@ class BomTemplateService
                 throw new BusinessRuleException("{$label}: fire brüt miktardan küçük olmalıdır.");
             }
 
+            $number = filled($line['drawing_number'] ?? null) ? (int) $line['drawing_number'] : null;
+
+            if ($number !== null && ($number < 1 || $number > 99)) {
+                throw new BusinessRuleException("{$label}: çizimdeki parça no 1–99 arasında olmalıdır.");
+            }
+
             $model = new BomTemplateLine;
             $model->forceFill([
                 'bom_template_id' => $template->getKey(),
@@ -253,6 +300,7 @@ class BomTemplateService
                 'scrap_rate' => $gross === null ? Quantity::parse($line['scrap_rate'] ?? 0) : '0',
                 'gross_per_unit' => $gross,
                 'scrap_quantity_per_unit' => $gross === null ? null : $scrapQuantity,
+                'drawing_number' => $number,
                 'sort_order' => $order + 1,
             ])->save();
         }

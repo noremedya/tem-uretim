@@ -38,14 +38,15 @@ it('yetki tablosunu (CLAUDE.md bölüm 6) uygular', function () {
     ];
 
     expect(Role::Admin->permissions())->toBe(Permission::cases())
+        // Herkes "Motor oluştur" ekranıyla yeni motor oluşturur (motor_models.build).
         // Operatör: stokları, hareketleri, tüm iş emirlerini ve motorları görür; kendi iş emrini başlatıp tamamlar, sevk eder.
         ->and(Role::Operator->permissions())->toEqualCanonicalizing([
-            Permission::WorkOrdersView, Permission::WorkOrdersViewAll, Permission::WorkOrdersChangeStatus,
+            Permission::MotorModelsBuild, Permission::WorkOrdersView, Permission::WorkOrdersViewAll, Permission::WorkOrdersChangeStatus,
             Permission::MotorUnitsView, Permission::MotorUnitsShip, Permission::PartsView, Permission::StockMovementsView,
         ])
         // Depo: aynı görünürlük; stok işlemi ve sevk yapar, iş emri durumu değiştirmez.
         ->and(Role::Warehouse->permissions())->toEqualCanonicalizing([
-            Permission::WorkOrdersView, Permission::WorkOrdersViewAll, Permission::MotorUnitsView, Permission::MotorUnitsShip,
+            Permission::MotorModelsBuild, Permission::WorkOrdersView, Permission::WorkOrdersViewAll, Permission::MotorUnitsView, Permission::MotorUnitsShip,
             Permission::PartsView, Permission::StockMove, Permission::StockMovementsView,
         ]);
 

@@ -49,6 +49,7 @@ function sweepExpectations(): array
         'hizli-islem' => $all,
         'overdue-receivables' => ['yonetici', 'muhasebe'],
         'stock-operation' => ['yonetici', 'depo'],
+        'motor-olustur' => $all,
         'receteler' => ['yonetici', 'muhasebe'],
         'bom-templates' => ['yonetici', 'muhasebe'],
         'bom-templates/create' => ['yonetici'],

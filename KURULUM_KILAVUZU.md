@@ -372,7 +372,7 @@ cd /opt/uretim
 ./deploy/scripts/deploy.sh
 ```
 
-Betik sırasıyla: yedek alır (`sudo` ile `backup.sh`; şifre sorabilir) → `git pull --ff-only` → imajları yeniden derler → migration'ları tablo sahibiyle çalıştırır ve uygulama kullanıcısının yetkilerini yeniler → konteynerleri yeniler → önbellekleri yeniler → uygulamanın sağlık kontrolünü (`/up`) yapar. Migration, yeni kod çalışmaya başlamadan önce yapılır. Herhangi bir adım başarısız olursa hata verip durur; son yedekten dönmek için Bölüm 14'e bak.
+Betik sırasıyla: yedek alır (`sudo` ile `backup.sh`; şifre sorabilir) → `git pull --ff-only` → imajları yeniden derler → migration'ları tablo sahibiyle çalıştırır ve uygulama kullanıcısının yetkilerini yeniler → konteynerleri yeniler → rolleri ve yetkileri günceller (yeni sürümle gelen yetkiler mevcut rollere eklenir) → önbellekleri yeniler → uygulamanın sağlık kontrolünü (`/up`) yapar. Migration, yeni kod çalışmaya başlamadan önce yapılır. Herhangi bir adım başarısız olursa hata verip durur; son yedekten dönmek için Bölüm 14'e bak.
 
 Uygulama logları: `dc logs --tail=200 app` (aynı şekilde `worker`, `scheduler`). Docker log dosyaları servis başına en fazla 5 × 10 MB tutar.
 
