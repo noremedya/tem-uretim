@@ -36,7 +36,7 @@ function partWith(array $data = []): Part
 it('kurulumda örnek alt türler açılır', function () {
     expect(PartSubtype::where('type', 'raw_material')->pluck('name')->all())->toContain('Silisli sac', 'Mil çeliği')
         ->and(PartSubtype::where('type', 'semi_finished')->pluck('name')->all())->toContain('Stator paketi', 'Mil+rotor')
-        ->and(PartSubtype::where('type', 'finished_good')->orderBy('id')->pluck('name')->all())->toBe(['Trifaze', 'Monofaze MD', 'Monofaze MSD', 'Vibrasyon'])
+        ->and(PartSubtype::where('type', 'finished_good')->orderBy('id')->pluck('name')->all())->toBe(['Trifaze', 'Monofaze MD', 'Monofaze MSD', 'Vibrasyon', 'Bor yağı pompası'])
         ->and(PartSubtype::where('type', 'indirect_consumable')->count())->toBe(0);
 });
 

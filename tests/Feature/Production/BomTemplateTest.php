@@ -50,6 +50,7 @@ it('kurulumda firmanın yapısına göre hazır şablonlar açılır', function 
     expect(BomTemplate::query()->orderBy('id')->pluck('name')->all())->toBe([
         'Trifaze asenkron motor', 'Monofaze MD motor', 'Monofaze MSD motor', 'Vibrasyon motoru',
         'Stator paketi (pres)', 'Bobinajlı stator', 'Enjekte rotor', 'İşlenmiş mil', 'Mil+rotor',
+        'TP serisi bor yağı pompası',
     ]);
 
     // Motor şablonları Tem Motor B3 montaj parça listesine göre (çizimdeki parça numaralarıyla).
@@ -180,4 +181,23 @@ it('şablon ekranında oluşturulur ve düzenlenir; reçete ekranından uygulan�
         ->assertNotified('1 satır eklendi');
 
     expect($finished->bomItems()->sole()->component_part_id)->toBe($bearing->id);
+});
+
+it('montaj çizimli her şablonda numaralı satırların çizimde işareti var; TP pompa şablonu çizimiyle gelir', function () {
+    $templates = BomTemplate::query()->whereNotNull('drawing')->with('lines')->get();
+
+    expect($templates->pluck('drawing', 'name')->all())->toMatchArray(['Trifaze asenkron motor' => 'b3-trifaze', 'TP serisi bor yağı pompası' => 'tp-pompa']);
+
+    foreach ($templates as $template) {
+        $drawing = $template->drawingConfig();
+        expect($drawing)->not->toBeNull()
+            ->and(file_exists(public_path($drawing['image'])))->toBeTrue();
+
+        foreach ($template->lines->whereNotNull('drawing_number') as $line) {
+            expect(array_key_exists($line->drawing_number, $drawing['markers']))->toBeTrue("{$template->name}: {$line->label}");
+        }
+    }
+
+    $pump = $templates->firstWhere('name', 'TP serisi bor yağı pompası');
+    expect($pump->lines->pluck('drawing_number')->filter()->unique()->sort()->values()->all())->toBe(range(1, 20));
 });
