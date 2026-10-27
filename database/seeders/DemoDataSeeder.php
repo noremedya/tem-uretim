@@ -214,6 +214,15 @@ class DemoDataSeeder extends Seeder
             str_starts_with($code, 'HM-ALU') => 'Alüminyum',
             str_starts_with($code, 'HM-MIL') => 'Mil çeliği',
             str_starts_with($code, 'KOM-RUL') => 'Rulman',
+            str_starts_with($code, 'KOM-TAS') => 'Pervane koruma tası',
+            $code === 'KOM-KUTUKAPAK' => 'Klemens kutusu kapağı',
+            str_starts_with($code, 'KOM-CONTA') => 'Conta',
+            str_starts_with($code, 'KOM-VRING') => 'V-ring',
+            $code === 'KOM-KLEMENSBLOK' => 'Klemens',
+            str_starts_with($code, 'KOM-RAKOR') => 'Kablo rakoru',
+            str_starts_with($code, 'KOM-KOND-D') => 'Daimi kondansatör',
+            str_starts_with($code, 'KOM-KOND-S') => 'Start kondansatörü',
+            $code === 'KOM-MERKEZKAC' => 'Merkezkaç anahtarı',
             str_starts_with($code, 'KOM-KLEMENS') => 'Klemens kutusu',
             str_starts_with($code, 'KOM-FAN') => 'Pervane',
             str_starts_with($code, 'DS-VERNIK') => 'Vernik',
@@ -260,11 +269,22 @@ class DemoDataSeeder extends Seeder
             'KOM-FAN-71' => ['Soğutma fanı 71 tip', PartType::Component, 'Adet', '50', 'rulman', '18', '8690000071010'],
             'KOM-FAN-80' => ['Soğutma fanı 80 tip', PartType::Component, 'Adet', '50', 'rulman', '24', '8690000080012'],
             'KOM-FAN-90' => ['Soğutma fanı 90 tip', PartType::Component, 'Adet', '40', 'rulman', '31', '8690000090014'],
+            // B3 montaj parça listesindeki diğer bileşenler ("Motor oluştur" ekranı) ve monofaze parçaları.
+            'KOM-KUTUKAPAK' => ['Uç bağlantı kutu kapağı (alüminyum)', PartType::Component, 'Adet', '50', 'kuzeyalu', '14', null],
+            'KOM-CONTA-KUTU' => ['Conta, klemens kutusu altı', PartType::Component, 'Adet', '100', 'rulman', '3', null],
+            'KOM-CONTA-KAPAK' => ['Conta, kutu kapağı', PartType::Component, 'Adet', '100', 'rulman', '2,50', null],
+            'KOM-VRING-20' => ['V-ring toz contası Ø20', PartType::Component, 'Adet', '100', 'rulman', '4', null],
+            'KOM-VRING-25' => ['V-ring toz contası Ø25', PartType::Component, 'Adet', '100', 'rulman', '5', null],
+            'KOM-KLEMENSBLOK' => ['Klemens bloğu 6 uçlu (köprü, somun ve pullar dahil)', PartType::Component, 'Adet', '100', 'rulman', '22', null],
+            'KOM-RAKOR-M20' => ['Kablo giriş rakoru M20', PartType::Component, 'Adet', '100', 'kablotel', '6', null],
+            'KOM-KOND-D-12' => ['Daimi kondansatör 12 µF 450 V', PartType::Component, 'Adet', '40', 'kablotel', '48', null],
+            'KOM-KOND-S-60' => ['Start kondansatörü 60 µF 250 V', PartType::Component, 'Adet', '40', 'kablotel', '55', null],
+            'KOM-MERKEZKAC' => ['Merkezkaç anahtarı', PartType::Component, 'Adet', '30', 'rulman', '75', null],
             'DS-VERNIK' => ['Emprenye verniği', PartType::DirectConsumable, 'Kg', '40', 'rulman', '310', null],
             'DS-IZOLASYON' => ['Oluk izolasyon kağıdı', PartType::DirectConsumable, 'Metre', '200', 'kablotel', '22', null],
-            'DS-FANTASI-71' => ['Fan muhafaza tası 71 tip', PartType::DirectConsumable, 'Adet', '50', 'kuzeyalu', '35', '8690000071027'],
-            'DS-FANTASI-80' => ['Fan muhafaza tası 80 tip', PartType::DirectConsumable, 'Adet', '50', 'kuzeyalu', '42', '8690000080029'],
-            'DS-FANTASI-90' => ['Fan muhafaza tası 90 tip', PartType::DirectConsumable, 'Adet', '40', 'kuzeyalu', '55', '8690000090021'],
+            'KOM-TAS-71' => ['Pervane muhafaza tası 71 tip', PartType::Component, 'Adet', '50', 'kuzeyalu', '35', '8690000071027'],
+            'KOM-TAS-80' => ['Pervane muhafaza tası 80 tip', PartType::Component, 'Adet', '50', 'kuzeyalu', '42', '8690000080029'],
+            'KOM-TAS-90' => ['Pervane muhafaza tası 90 tip', PartType::Component, 'Adet', '40', 'kuzeyalu', '55', '8690000090021'],
             'DS-CIVATA-M5' => ['Civata M5x16 (gövde/kapak)', PartType::DirectConsumable, 'Adet', '1000', 'rulman', '1,20', null],
             'DS-ETIKET' => ['Motor etiketi (alüminyum)', PartType::DirectConsumable, 'Adet', '150', 'rulman', '2,50', null],
             'ES-ELDIVEN' => ['İş eldiveni', PartType::IndirectConsumable, 'Adet', '20', 'rulman', '30', null],
@@ -291,8 +311,10 @@ class DemoDataSeeder extends Seeder
             'HM-SAC-050' => '1800', 'HM-BAKIR-063' => '420', 'HM-ALU-ETIAL' => '900', 'HM-MIL-C45-20' => '150', 'HM-MIL-C45-25' => '150', 'HM-MIL-C45-30' => '150',
             'KOM-RUL-6202' => '300', 'KOM-RUL-6204' => '260', 'KOM-RUL-6205' => '160', 'KOM-KLEMENS' => '240',
             'KOM-KLEMENS-ESKI' => '35', 'KOM-FAN-71' => '120', 'KOM-FAN-80' => '110', 'KOM-FAN-90' => '70',
-            'DS-VERNIK' => '90', 'DS-IZOLASYON' => '600', 'DS-FANTASI-71' => '110', 'DS-FANTASI-80' => '100',
-            'DS-FANTASI-90' => '60', 'DS-CIVATA-M5' => '4000', 'DS-ETIKET' => '500',
+            'KOM-KUTUKAPAK' => '200', 'KOM-CONTA-KUTU' => '400', 'KOM-CONTA-KAPAK' => '400', 'KOM-VRING-20' => '300', 'KOM-VRING-25' => '300',
+            'KOM-KLEMENSBLOK' => '250', 'KOM-RAKOR-M20' => '300', 'KOM-KOND-D-12' => '80', 'KOM-KOND-S-60' => '60', 'KOM-MERKEZKAC' => '50',
+            'DS-VERNIK' => '90', 'DS-IZOLASYON' => '600', 'KOM-TAS-71' => '110', 'KOM-TAS-80' => '100',
+            'KOM-TAS-90' => '60', 'DS-CIVATA-M5' => '4000', 'DS-ETIKET' => '500',
             'ES-ELDIVEN' => '120', 'ES-KESMEYAGI' => '60', 'ES-ZIMPARA' => '200',
         ];
     }
@@ -365,7 +387,7 @@ class DemoDataSeeder extends Seeder
             $boms->add($finished, $this->parts[$bearing], 2);
             $boms->add($finished, $this->parts['KOM-KLEMENS'], 1);
             $boms->add($finished, $this->parts["KOM-FAN-{$fan}"], 1);
-            $boms->add($finished, $this->parts["DS-FANTASI-{$fan}"], 1);
+            $boms->add($finished, $this->parts["KOM-TAS-{$fan}"], 1);
             $boms->add($finished, $this->parts['DS-CIVATA-M5'], 8, 2);
             $boms->add($finished, $this->parts['DS-ETIKET'], 1);
         }
