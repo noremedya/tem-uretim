@@ -3,6 +3,7 @@
     <tr class="border-b border-gray-100 dark:border-white/5">
         <td class="py-1.5 pe-4" style="padding-inline-start: {{ $node['depth'] * 1.5 }}rem">
             @if ($node['depth'] > 0)<span class="text-gray-400">└</span>@endif
+            <x-part-thumb :part="$node['part']" size="1.75rem" />
             <a href="{{ $node['children'] !== [] ? \App\Filament\Pages\BomEditor::getUrl(['part' => $node['part']->getKey()]) : '#' }}" @class(['font-semibold' => $node['children'] !== [], 'pointer-events-none' => $node['children'] === []])>{{ $node['part']->code }}</a>
             — {{ $node['part']->name }}
             @if ($node['item']->scrapPart)<span class="text-xs text-gray-500">(fire → {{ $node['item']->scrapPart->code }})</span>@endif

@@ -15,6 +15,7 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Illuminate\Database\Eloquent\Builder;
 
@@ -38,8 +39,9 @@ final class BomLineForm
                 ->required()
                 ->searchable()
                 ->live()
+                ->allowHtml()
                 ->getSearchResultsUsing(fn (string $search): array => self::searchComponents($search, $parent()))
-                ->getOptionLabelUsing(fn ($value): ?string => ($part = Part::query()->with('unit')->find($value)) ? self::label($part) : null) : null,
+                ->getOptionLabelUsing(fn ($value): ?string => ($part = Part::query()->with('unit')->find($value)) ? PartOption::html($part, self::label($part)) : null) : null,
             Radio::make('scrap_mode')
                 ->label('Fire')
                 ->options(['rate' => 'Oran (%)', 'quantity' => 'Miktar (brüt / fire)'])
@@ -77,8 +79,9 @@ final class BomLineForm
                 ->label('Fire kartı (hurda)')
                 ->placeholder('Yok — fire yalnızca düşülür')
                 ->searchable()
+                ->allowHtml()
                 ->getSearchResultsUsing(fn (string $search, Get $get, ?BomItem $record): array => self::searchScrapParts($search, $get('component_part_id') ?? $record?->component_part_id))
-                ->getOptionLabelUsing(fn ($value): ?string => ($part = Part::query()->with('unit')->find($value)) ? self::label($part) : null)
+                ->getOptionLabelUsing(fn ($value): ?string => ($part = Part::query()->with('unit')->find($value)) ? PartOption::html($part, self::label($part)) : null)
                 ->helperText('İsteğe bağlı: gerçekleşen fire bu karta stok girişi olur (aynı birimde, ör. HURDA-SAC kg).'),
             Hidden::make('lock_version'),
         ]));
@@ -116,12 +119,16 @@ final class BomLineForm
         return $saved;
     }
 
-    /** @return array<int, TextColumn> */
+    /** @return array<int, ImageColumn|TextColumn> */
     public static function columns(): array
     {
         $unit = fn (BomItem $record): string => $record->component->unit->name;
 
         return [
+            ImageColumn::make('component_image')->label('')
+                ->state(fn (BomItem $record): ?string => $record->component->imageUrl())
+                ->imageHeight(36)
+                ->square(),
             TextColumn::make('component.code')->label('Kod')->searchable(),
             TextColumn::make('component.name')->label('Bileşen')->searchable()
                 ->description(fn (BomItem $record): ?string => $record->scrapPart ? "Fire → {$record->scrapPart->code}" : null),
@@ -191,8 +198,7 @@ final class BomLineForm
             ->orderBy('code')
             ->limit(50)
             ->get()
-            ->mapWithKeys(fn (Part $part): array => [$part->getKey() => self::label($part)])
-            ->all();
+            ->pipe(fn ($parts): array => PartOption::options($parts, self::label(...)));
     }
 
     /** @return array<int, string> Fire kartı adayları: aktif, mamul değil, bileşenle aynı birimde. */
@@ -209,8 +215,7 @@ final class BomLineForm
             ->orderBy('code')
             ->limit(50)
             ->get()
-            ->mapWithKeys(fn (Part $part): array => [$part->getKey() => self::label($part)])
-            ->all();
+            ->pipe(fn ($parts): array => PartOption::options($parts, self::label(...)));
     }
 
     public static function label(Part $part): string

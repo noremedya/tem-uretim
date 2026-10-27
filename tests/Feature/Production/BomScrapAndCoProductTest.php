@@ -240,3 +240,19 @@ it('Reçeteler ekranı: yönetici düzenler; muhasebe görür ama düzenleyemez;
     $this->actingAs(User::factory()->operator()->create());
     $this->get(BomEditor::getUrl())->assertForbidden();
 });
+
+it('Reçeteler ekranı ürün görsellerini gösterir: satır tablosu, ağaç, özet ve bileşen arama listesi', function () {
+    $this->actingAs($this->admin);
+    $this->sheet->forceFill(['image_path' => 'part-images/sac.jpg'])->save();
+    $this->stator->forceFill(['image_path' => 'part-images/stator.jpg'])->save();
+    $bearing = Part::factory()->create(['code' => 'KOM-RUL-T', 'name' => 'Rulman <6202>', 'type' => PartType::Component, 'unit_id' => $this->piece->id, 'image_path' => 'part-images/rulman.jpg']);
+
+    Livewire::withQueryParams(['part' => $this->stator->id])->test(BomEditor::class)
+        ->assertOk()
+        ->assertSeeHtml($this->sheet->fresh()->imageUrl())
+        ->assertSeeHtml($this->stator->fresh()->imageUrl());
+
+    $options = Closure::bind(fn () => BomLineForm::searchComponents('KOM-RUL-T', test()->stator), null, BomLineForm::class)();
+    expect($options[$bearing->id])->toContain('<img src="'.e($bearing->imageUrl()).'"')
+        ->and($options[$bearing->id])->toContain('Rulman &lt;6202&gt;');
+});

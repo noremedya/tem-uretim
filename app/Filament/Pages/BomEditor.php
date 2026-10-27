@@ -7,6 +7,7 @@ use App\Enums\Permission;
 use App\Exceptions\BusinessRuleException;
 use App\Filament\Support\BomLineForm;
 use App\Filament\Support\BusinessRuleNotification;
+use App\Filament\Support\PartOption;
 use App\Models\BomCoProduct;
 use App\Models\BomItem;
 use App\Models\BomTemplate;
@@ -104,10 +105,11 @@ class BomEditor extends Page implements HasTable
                     ->label('Ürün')
                     ->placeholder('Yarı mamul veya mamul arayın (kod, ad)')
                     ->searchable()
+                    ->allowHtml()
                     ->live()
                     ->columnSpan(['md' => 2])
                     ->getSearchResultsUsing(fn (string $search): array => $this->searchProducts($search))
-                    ->getOptionLabelUsing(fn ($value): ?string => ($part = Part::query()->find($value)) ? $this->productLabel($part) : null)
+                    ->getOptionLabelUsing(fn ($value): ?string => ($part = Part::query()->find($value)) ? PartOption::html($part, $this->productLabel($part)) : null)
                     ->afterStateUpdated(function ($state): void {
                         $this->partId = filled($state) ? (int) $state : null;
                         $this->resetTable();
@@ -193,8 +195,9 @@ KOM-RUL-6202	2'),
                             ->label('Kaynak ürün')
                             ->required()
                             ->searchable()
+                            ->allowHtml()
                             ->getSearchResultsUsing(fn (string $search): array => $this->searchProducts($search, onlyWithBom: true))
-                            ->getOptionLabelUsing(fn ($value): ?string => ($part = Part::query()->find($value)) ? $this->productLabel($part) : null),
+                            ->getOptionLabelUsing(fn ($value): ?string => ($part = Part::query()->find($value)) ? PartOption::html($part, $this->productLabel($part)) : null),
                     ])
                     ->action(function (array $data, Action $action): void {
                         $count = $this->guard($action, fn () => app(BomService::class)->copy(Part::query()->findOrFail($data['source_id']), $this->part()));
@@ -290,8 +293,10 @@ KOM-RUL-6202	2'),
                     ->label('Ürün')
                     ->searchable()
                     ->placeholder('Kullanılmayacaksa boş bırakın')
-                    ->options(fn (): array => $service->candidates($line, $parent))
-                    ->getSearchResultsUsing(fn (string $search): array => $service->candidates($line, $parent, trim($search)))
+                    ->allowHtml()
+                    ->options(fn (): array => PartOption::options($service->candidateParts($line, $parent), BomTemplateService::candidateLabel(...)))
+                    ->getSearchResultsUsing(fn (string $search): array => PartOption::options($service->candidateParts($line, $parent, trim($search)), BomTemplateService::candidateLabel(...)))
+                    ->getOptionLabelUsing(fn ($value): ?string => ($p = Part::query()->with('unit')->find($value)) ? PartOption::html($p, BomTemplateService::candidateLabel($p)) : null)
                     ->columnSpan(2),
             ];
 
@@ -299,10 +304,11 @@ KOM-RUL-6202	2'),
                 $fields[] = TextInput::make("{$key}.gross_per_unit")->label('Brüt')->inputMode('decimal');
                 $fields[] = TextInput::make("{$key}.scrap_quantity_per_unit")->label('Fire miktarı')->inputMode('decimal');
                 $fields[] = Select::make("{$key}.scrap_part_id")->label('Fire kartı (hurda)')->searchable()->placeholder('Yok')
-                    ->getSearchResultsUsing(fn (string $search): array => Part::query()->where('is_active', true)->where('type', '!=', PartType::FinishedGood->value)
+                    ->allowHtml()
+                    ->getSearchResultsUsing(fn (string $search): array => PartOption::options(Part::query()->where('is_active', true)->where('type', '!=', PartType::FinishedGood->value)
                         ->where(fn ($q) => $q->where('code', 'ilike', "%{$search}%")->orWhere('name', 'ilike', "%{$search}%"))
-                        ->orderBy('code')->limit(50)->get()->mapWithKeys(fn (Part $p) => [$p->getKey() => "{$p->code} — {$p->name}"])->all())
-                    ->getOptionLabelUsing(fn ($value): ?string => ($p = Part::query()->find($value)) ? "{$p->code} — {$p->name}" : null);
+                        ->orderBy('code')->limit(50)->get(), fn (Part $p): string => "{$p->code} — {$p->name}"))
+                    ->getOptionLabelUsing(fn ($value): ?string => ($p = Part::query()->find($value)) ? PartOption::html($p, "{$p->code} — {$p->name}") : null);
             } else {
                 $fields[] = TextInput::make("{$key}.quantity_per_unit")->label($line->isCoProduct() ? 'Birim başına' : 'Net miktar')->inputMode('decimal')
                     ->placeholder($line->quantity_per_unit === null ? 'Girin' : null);
@@ -435,8 +441,7 @@ KOM-RUL-6202	2'),
             ->orderBy('code')
             ->limit(50)
             ->get()
-            ->mapWithKeys(fn (Part $part) => [$part->getKey() => $this->productLabel($part)])
-            ->all();
+            ->pipe(fn ($parts): array => PartOption::options($parts, $this->productLabel(...)));
     }
 
     private function productLabel(Part $part): string

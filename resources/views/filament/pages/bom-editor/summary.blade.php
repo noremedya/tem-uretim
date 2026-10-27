@@ -1,7 +1,9 @@
 @php($part = $this->part())
 @if ($part)
     <x-filament::section>
-        <x-slot name="heading">{{ $part->code }} — {{ $part->name }}</x-slot>
+        <x-slot name="heading">
+            <span style="display: flex; align-items: center; gap: .75rem;"><x-part-thumb :part="$part" size="4rem" /> {{ $part->code }} — {{ $part->name }}</span>
+        </x-slot>
         <x-slot name="description">
             {{ $part->typeLabel() }} · Birim: {{ $part->unit->name }}@unless ($part->is_active) · <span class="text-danger-600">Pasif</span>@endunless
         </x-slot>
@@ -21,7 +23,8 @@
                 </div>
                 @forelse ($part->coProducts as $coProduct)
                     <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-white/10">
-                        <span>
+                        <span style="display: flex; align-items: center; gap: .5rem;">
+                            <x-part-thumb :part="$coProduct->coPart" />
                             <strong>{{ $coProduct->coPart->code }}</strong> — {{ $coProduct->coPart->name }}:
                             birim başına {{ \App\Support\Quantity::format((string) $coProduct->quantity_per_unit, $coProduct->coPart->unit->name) }}
                         </span>

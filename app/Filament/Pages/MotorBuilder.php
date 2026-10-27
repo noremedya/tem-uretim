@@ -8,6 +8,7 @@ use App\Enums\Permission;
 use App\Exceptions\BusinessRuleException;
 use App\Filament\Resources\MotorModels\MotorModelResource;
 use App\Filament\Support\BusinessRuleNotification;
+use App\Filament\Support\PartOption;
 use App\Models\BomTemplate;
 use App\Models\BomTemplateLine;
 use App\Models\Part;
@@ -199,8 +200,10 @@ class MotorBuilder extends Page
                             ->searchable()
                             ->live()
                             ->placeholder('Yok (kullanılmıyor)')
-                            ->options(fn (): array => $service->candidates($line))
-                            ->getSearchResultsUsing(fn (string $search): array => $service->candidates($line, search: trim($search)))
+                            ->allowHtml()
+                            ->options(fn (): array => PartOption::options($service->candidateParts($line), BomTemplateService::candidateLabel(...)))
+                            ->getSearchResultsUsing(fn (string $search): array => PartOption::options($service->candidateParts($line, search: trim($search)), BomTemplateService::candidateLabel(...)))
+                            ->getOptionLabelUsing(fn ($value): ?string => ($part = $this->part($value)) ? PartOption::html($part, BomTemplateService::candidateLabel($part)) : null)
                             ->helperText(fn (Get $get): ?string => $this->part($get("{$key}.part_id"))?->description
                                 ?? ($line->subtype ? "{$line->component_type->label()} › {$line->subtype->name}" : $line->component_type->label()))
                             ->columnSpan(['default' => 5, 'md' => 7]),

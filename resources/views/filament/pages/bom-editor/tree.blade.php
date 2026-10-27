@@ -39,7 +39,7 @@
                     @foreach ($this->requirementRows() as $row)
                         @php($missing = \App\Support\Quantity::sub($row['total'], $row['stock']))
                         <tr class="border-b border-gray-100 dark:border-white/5">
-                            <td class="py-1.5 pe-4"><strong>{{ $row['part']->code }}</strong> — {{ $row['part']->name }}</td>
+                            <td class="py-1.5 pe-4"><x-part-thumb :part="$row['part']" size="1.75rem" /> <strong>{{ $row['part']->code }}</strong> — {{ $row['part']->name }}</td>
                             <td class="py-1.5 pe-4">{{ $row['part']->type->label() }}</td>
                             <td class="py-1.5 pe-4 text-end">{{ \App\Support\Quantity::format($row['total'], $row['part']->unit->name) }}</td>
                             <td class="py-1.5 pe-4 text-end">{{ \App\Support\Quantity::format($row['stock'], $row['part']->unit->name) }}</td>

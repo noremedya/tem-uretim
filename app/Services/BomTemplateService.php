@@ -9,6 +9,7 @@ use App\Models\BomTemplateLine;
 use App\Models\Part;
 use App\Models\PartSubtype;
 use App\Support\Quantity;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -178,6 +179,14 @@ class BomTemplateService
     /** Satıra uyan ürünler: tür (ve alt tür) eşleşen aktif kartlar. */
     public function candidates(BomTemplateLine $line, ?Part $parent = null, string $search = ''): array
     {
+        return $this->candidateParts($line, $parent, $search)
+            ->mapWithKeys(fn (Part $p) => [$p->getKey() => self::candidateLabel($p)])
+            ->all();
+    }
+
+    /** @return Collection<int, Part> Satırın tür ve alt türündeki aktif ürünler (en fazla 50). */
+    public function candidateParts(BomTemplateLine $line, ?Part $parent = null, string $search = ''): Collection
+    {
         return Part::query()
             ->with('unit')
             ->where('is_active', true)
@@ -187,9 +196,12 @@ class BomTemplateService
             ->when($search !== '', fn ($q) => $q->where(fn ($q) => $q->where('code', 'ilike', "%{$search}%")->orWhere('name', 'ilike', "%{$search}%")))
             ->orderBy('code')
             ->limit(50)
-            ->get()
-            ->mapWithKeys(fn (Part $p) => [$p->getKey() => "{$p->code} — {$p->name} ({$p->unit->name})"])
-            ->all();
+            ->get();
+    }
+
+    public static function candidateLabel(Part $part): string
+    {
+        return "{$part->code} — {$part->name} ({$part->unit->name})";
     }
 
     private function ensureMatches(BomTemplateLine $line, Part $part): void
