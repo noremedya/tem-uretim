@@ -199,5 +199,6 @@ it('montaj çizimli her şablonda numaralı satırların çizimde işareti var; 
     }
 
     $pump = $templates->firstWhere('name', 'TP serisi bor yağı pompası');
-    expect($pump->lines->pluck('drawing_number')->filter()->unique()->sort()->values()->all())->toBe(range(1, 20));
+    expect($pump->lines->pluck('drawing_number')->filter()->unique()->sort()->values()->all())->toBe([...range(1, 20), 22])
+        ->and($pump->lines->firstWhere('label', 'O-ring')->drawing_number)->toBeNull();
 });
