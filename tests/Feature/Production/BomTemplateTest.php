@@ -50,7 +50,7 @@ it('kurulumda firmanın yapısına göre hazır şablonlar açılır', function 
     expect(BomTemplate::query()->orderBy('id')->pluck('name')->all())->toBe([
         'Trifaze asenkron motor', 'Monofaze MD motor', 'Monofaze MSD motor', 'Vibrasyon motoru',
         'Stator paketi (pres)', 'Bobinajlı stator', 'Enjekte rotor', 'İşlenmiş mil', 'Mil+rotor',
-        'TP serisi bor yağı pompası',
+        'TP serisi bor yağı pompası', 'Pompa salyangoz kapağı', 'Pompa flanşı', 'Pompa borusu',
     ]);
 
     // Motor şablonları Tem Motor B3 montaj parça listesine göre (çizimdeki parça numaralarıyla).
@@ -201,4 +201,9 @@ it('montaj çizimli her şablonda numaralı satırların çizimde işareti var; 
     $pump = $templates->firstWhere('name', 'TP serisi bor yağı pompası');
     expect($pump->lines->pluck('drawing_number')->filter()->unique()->sort()->values()->all())->toBe([...range(1, 20), 22])
         ->and($pump->lines->firstWhere('label', 'O-ring')->drawing_number)->toBeNull();
+
+    // Salyangoz kapak, flanşlar ve borular hammaddeden yapılan, pervane dışarıdan gelen yarı mamul.
+    $types = $pump->lines->mapWithKeys(fn (BomTemplateLine $line) => [$line->label => $line->component_type->value]);
+    expect($types->only(['Kör boru', 'Sıvı yolu borusu', 'Pompa pervanesi', 'Salyangoz kapak', 'Salyangoz bağlantı flanşı', 'Motor bağlantı flanşı'])->unique()->values()->all())->toBe(['semi_finished'])
+        ->and(BomTemplate::query()->where('name', 'Pompa borusu')->sole()->lines->sole()->component_type)->toBe(PartType::RawMaterial);
 });
