@@ -22,7 +22,12 @@ use Illuminate\Support\Facades\Storage;
 use Spatie\Activitylog\Models\Activity;
 
 // Demo görselleri geliştirme ortamının diskine yazılmasın.
-beforeEach(fn () => Storage::fake('local'));
+beforeEach(function () {
+    Storage::fake('local');
+
+    // Örnek veri haftalık kurguludur: pazartesi erken saatte son haftanın adımları ileri tarihli kalıp atlanır.
+    $this->travelTo(now()->startOfWeek()->addDays(2)->setTime(14, 0));
+});
 
 it('demo veri servislerle, kurallara uygun ve tutarlı yüklenir', function () {
     app(DemoDataSeeder::class)->run();

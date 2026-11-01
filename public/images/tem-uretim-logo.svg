@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 186 66" role="img" aria-label="Tem Üretim">
+  <path d="M46.31 55.9A27 27 0 1 1 46.31 10.1" fill="none" stroke="#004b9b" stroke-width="7" stroke-linecap="round"/>
+  <path d="M41.35 54.01L37.9 46.25M32.48 55.99L32.3 47.5M23.53 54.38L26.66 46.48M15.91 49.43L21.85 43.36M10.8 41.91L18.63 38.62M9.0 33.0L17.5 33.0M10.8 24.09L18.63 27.38M15.91 16.57L21.85 22.64M23.53 11.62L26.66 19.52M32.48 10.01L32.3 18.5M41.35 11.99L37.9 19.75" fill="none" stroke="#004b9b" stroke-width="3.6" stroke-linecap="round"/>
+  <g transform="translate(14 0)">
+    <g fill="none" stroke="#004b9b" stroke-width="7.4">
+      <path d="M52 15.700H82M67 15.700V41"/>
+      <path d="M118 15.700H92.700V37.300H118M92.700 26.500H114.500"/>
+      <path d="M129.700 41V15L144.500 33L159.300 15V41"/>
+    </g>
+    <g fill="none" stroke="#004b9b" stroke-width="2.800">
+      <path d="M53.400 49v8.200a3.800 3.800 0 0 0 7.600 0V49"/>
+      <path d="M71 62V49.400h5.400a3.600 3.600 0 0 1 0 7.300H71M76.500 56.700L80.800 62"/>
+      <path d="M99 49.400H89.400V60.600H99M89.400 55H97.500"/>
+      <path d="M105.500 49.400H117.500M111.500 49.400V62"/>
+      <path d="M126.500 49V62"/>
+      <path d="M136.500 62V49.300L147.800 60L159 49.300V62" transform="translate(0 0)"/>
+    </g>
+    <path d="M55 44.800h.1M59.400 44.800h.1M126.450 45h.1" fill="none" stroke="#004b9b" stroke-width="2.800" stroke-linecap="round"/>
+  </g>
+</svg>

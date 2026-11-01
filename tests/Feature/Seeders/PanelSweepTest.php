@@ -158,7 +158,12 @@ function sweepRecords(): array
 }
 
 // Demo görselleri geliştirme ortamının diskine yazılmasın.
-beforeEach(fn () => Storage::fake('local'));
+beforeEach(function () {
+    Storage::fake('local');
+
+    // Örnek veri haftalık kurguludur: pazartesi erken saatte son haftanın adımları ileri tarihli kalıp atlanır.
+    $this->travelTo(now()->startOfWeek()->addDays(2)->setTime(14, 0));
+});
 
 it('her panel sayfası her rolde yetki tablosuna uyar, sorgu sınırını aşmaz ve harici kaynak yüklemez', function () {
     $seeder = app(DemoDataSeeder::class);

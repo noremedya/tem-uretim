@@ -33,6 +33,11 @@ class AppPanelProvider extends PanelProvider
             ->id('app')
             ->path('')
             ->brandName(fn (): string => config('app.name'))
+            // Her firmaya ayrı kurulum: logo .env'den (BRAND_LOGO), boşsa uygulama adı yazı olarak görünür.
+            ->brandLogo(fn (): ?string => filled(config('app.brand_logo')) ? asset(config('app.brand_logo').'.svg') : null)
+            ->darkModeBrandLogo(fn (): ?string => filled(config('app.brand_logo')) ? asset(config('app.brand_logo').'-dark.svg') : null)
+            ->brandLogoHeight('2.75rem')
+            ->favicon(fn (): ?string => filled(config('app.brand_logo')) ? asset(str_replace('-logo', '-icon', config('app.brand_logo')).'.svg') : null)
             ->login(Login::class)
             ->colors([
                 'primary' => Color::Amber,

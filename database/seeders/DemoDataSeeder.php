@@ -139,6 +139,7 @@ class DemoDataSeeder extends Seeder
 
         $this->call([RolesAndPermissionsSeeder::class, UnitSeeder::class]);
 
+        $frozenNow = CarbonImmutable::getTestNow();
         $this->realNow = CarbonImmutable::now();
 
         try {
@@ -150,8 +151,9 @@ class DemoDataSeeder extends Seeder
                 $this->runEvents();
             });
         } finally {
-            Carbon::setTestNow();
-            CarbonImmutable::setTestNow();
+            // Çağıran saati dondurmuşsa (test) o saate dönülür.
+            Carbon::setTestNow($frozenNow);
+            CarbonImmutable::setTestNow($frozenNow);
             Auth::forgetUser();
         }
 

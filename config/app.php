@@ -15,6 +15,9 @@ return [
 
     'name' => env('APP_NAME', 'Laravel'),
 
+    // Panel logosu, uzantısız: public/ altındaki <ad>.svg, <ad>-dark.svg; sekme simgesi -logo yerine -icon. Boşsa yazı görünür.
+    'brand_logo' => env('BRAND_LOGO', 'images/tem-uretim-logo'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment
