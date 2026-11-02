@@ -5,10 +5,46 @@ namespace App\Imports;
 /**
  * Firmanın anlattığı ürün yapısından önceden doldurulmuş başlangıç dosyası (Aşama E): sac şerit genişlikleri, mil
  * çapları, klemens kutuları, pervaneler ve koruma tasları, eksantrik saç, sarflar; 71 tip örnek motor, pres (stator +
- * rotor paketi eş ürün, sac firesi hurdaya) ve mil reçetesi. Firma eksik ölçü/kodları tamamlayıp yükler.
+ * rotor paketi eş ürün, sac firesi hurdaya) ve mil reçetesi; firmanın alüminyum parça listesi ve Etial alaşımları. Firma
+ * eksik ölçü/kodları tamamlayıp yükler.
  */
 final class StarterCatalog
 {
+    /**
+     * Firmanın alüminyum parça listesi: sıra no, ad, alt tür, kalıp göz sayısı, Etial tipi, parça ağırlığı (g). Ağırlık
+     * reçeteye net miktar olarak girer; yolluk/döküm firesi bilinmediği için fire yoktur.
+     */
+    private const ALUMINIUM_PARTS = [
+        [1, 'Pompa Gövdesi', 'Gövde', 1, '160', 620],
+        [2, '90-B-3- Kapak', 'Kapak', 2, '160', 910],
+        [3, '63-B-14- Flanş', 'Flanş', 2, '160', 620],
+        [4, '71-Tip. B.14 kapak', 'Kapak', 2, '160', 720],
+        [5, 'Pompa Flanşı Pervane', 'Flanş', 3, '140/160', 520],
+        [6, '63-AYAK 90 Tip LONG-Ayak', 'Ayak', 8, '160', 1220],
+        [7, 'Hava Perdesi', 'Hava perdesi', 2, '160', 720],
+        [8, '71-Tip B-3- Kapak', 'Kapak', 2, '160', 640],
+        [9, '63-Tip B-3- Kapak', 'Kapak', 2, '160', 470],
+        [10, '80-B-3- Kapak', 'Kapak', 2, '160', 730],
+        [11, 'Burulor düz. Kapak', 'Kapak', 2, '160', 470],
+        [12, 'Burulor Pompalı Kapak', 'Kapak', 2, '160', 540],
+        [13, 'KL. 15- FLAŞ', 'Flanş', 2, '160', 530],
+        [14, '80-B-14 FLANŞ', 'Flanş', 1, '160', 590],
+        [15, 'KL. 18- FLAŞ', 'Flanş', 1, '160', 340],
+        [16, '71- B 5 FLANŞ', 'Flanş', 1, '160', 560],
+        [17, 'Süt Sağma Pompa Flanşı', 'Flanş', 2, '160', 1700],
+        [18, '90 TİP LONG Gövde', 'Gövde', 1, '141', 1360],
+        [19, '90 TİP SMALL Gövde', 'Gövde', 1, '141', 1480],
+        [20, '80TİP Gövde', 'Gövde', 1, '141', 1360],
+        [21, '71TİP Gövde', 'Gövde', 1, '141', 770],
+        [22, '63 TİP Gövde', 'Gövde', 1, '141', 700],
+        [23, '56 TİP Gövde', 'Gövde', 1, '141', 580],
+        [24, 'Süt Sağma Pompa Gövdesi', 'Gövde', 1, '141', 2910],
+        [25, 'Yeni Hava Perdesi KAPAKLARI', 'Kapak', 1, '160', 720],
+        [26, 'Süt Karıştırma + Hayvan Kaşıma Gövde Kapakları', 'Kapak', 2, '160', 1420],
+        [27, 'Vibrasyon motor gövdesi', 'Gövde', 2, '160', 800],
+        [28, '90 TİP B14 FLANŞ', 'Flanş', 2, '170', 1300],
+    ];
+
     /** @return list<string> "Nasıl doldurulur" sayfasına eklenen kod düzeni önerisi */
     public static function guide(): array
     {
@@ -20,6 +56,8 @@ final class StarterCatalog
             '  Örnekler: HM-SAC-050-110 (sac 0,50 mm, 110 mm şerit) · HM-MIL-20 (mil çeliği Ø20) · YM-STP-71-070 (71 tip 70 mm stator paketi) · KOM-KLM-MD-63-71.',
             '  Motor modeli kodu: gövde-güç-kutup ve tip, ör. M71-037-4 (71 tip 0,37 kW 4 kutup trifaze), M71-037-4-MD (monofaze MD).',
             '',
+            'Alüminyum parçaların (YM-ALU-) reçetesi parça ağırlığıyla doludur; yolluk ve döküm firesi girilmedi, biliniyorsa ekleyin.',
+            'Pompa Flanşı Pervane 140 veya 160 ile dökülebilir; reçetede 160 yazılıdır, 140 kullanılan üretimde malzeme elle değiştirilir.',
             'Henüz bilinmeyenler (doldurun): bakır tel çapları, rulman ve kondansatör tipleri, her motor için stator/rotor paket boyları ve sac brüt/fire ağırlıkları.',
             'Vibrasyon motorunda pervane yoktur; koruma tası eksantrik saçları korur.',
         ];
@@ -36,6 +74,7 @@ final class StarterCatalog
         ];
 
         $parts = [];
+        $aluminiumBom = [];
 
         foreach ($sheets as [$width, $for]) {
             $parts[] = self::part("HM-SAC-050-{$width}", 'Silisli sac M470 0,50 x '.ltrim($width, '0')." mm ({$for})", 'Hammadde', 'Silisli sac', 'Kg');
@@ -46,6 +85,11 @@ final class StarterCatalog
         }
 
         $parts[] = self::part('HM-ALU', 'Alüminyum (rotor enjeksiyonu)', 'Hammadde', 'Alüminyum', 'Kg');
+
+        foreach (['140', '141', '160', '170'] as $alloy) {
+            $parts[] = self::part("HM-ALU-ETIAL-{$alloy}", "Alüminyum alaşımı Etial {$alloy}", 'Hammadde', 'Alüminyum', 'Kg');
+        }
+
         $parts[] = self::part('HM-BAKIR', 'Emaye bakır tel', 'Hammadde', 'Bakır tel', 'Kg', 'Kullanılan her tel çapı için ayrı satır açın (ör. HM-BAKIR-063).');
         $parts[] = self::part('HM-HURDA-SAC', 'Sac hurdası (pres firesi)', 'Hammadde', null, 'Kg', 'Pres firesi bu karta girer (reçetede fire kartı).');
 
@@ -71,6 +115,14 @@ final class StarterCatalog
         $parts[] = self::part('YM-RTP-71-070', 'Rotor paketi 71 tip 70 mm', 'Yarı mamul', 'Rotor paketi', 'Adet', 'Stator paketiyle aynı kalıpta çıkar (Eş ürünler).');
         $parts[] = self::part('YM-MIL-71', 'İşlenmiş mil 71 tip', 'Yarı mamul', 'İşlenmiş mil', 'Adet');
 
+        foreach (self::ALUMINIUM_PARTS as [$number, $name, $subtype, $cavities, $alloy, $weight]) {
+            $code = sprintf('YM-ALU-%02d', $number);
+            $parts[] = self::part($code, $name, 'Yarı mamul', $subtype, 'Adet', "Kalıp {$cavities} göz · Etial {$alloy} · Ağırlık {$weight} g");
+            // İki alaşımla dökülebilen parçada reçete sondakini kullanır (Pompa Flanşı Pervane: 160).
+            $component = 'HM-ALU-ETIAL-'.substr($alloy, -3);
+            $aluminiumBom[] = ['parent' => $code, 'component' => $component, 'net' => str_replace('.', ',', (string) ($weight / 1000))];
+        }
+
         return [
             CatalogSheets::UNITS => [
                 ['name' => 'Adet', 'allows_decimal' => 'Hayır'],
@@ -88,6 +140,7 @@ final class StarterCatalog
             CatalogSheets::BOM => [
                 ['parent' => 'YM-STP-71-070', 'component' => 'HM-SAC-050-110', 'gross' => '6,61', 'scrap_quantity' => '2,88', 'scrap_part' => 'HM-HURDA-SAC'],
                 ['parent' => 'YM-MIL-71', 'component' => 'HM-MIL-20', 'gross' => '2,2', 'scrap_quantity' => '0,5'],
+                ...$aluminiumBom,
             ],
             CatalogSheets::CO_PRODUCTS => [
                 ['parent' => 'YM-STP-71-070', 'co' => 'YM-RTP-71-070', 'quantity' => '1'],

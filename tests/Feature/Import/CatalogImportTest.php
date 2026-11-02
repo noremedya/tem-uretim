@@ -19,6 +19,7 @@ use App\Models\User;
 use App\Models\Warehouse;
 use App\Services\CatalogImportService;
 use App\Services\StockService;
+use App\Services\WarehouseService;
 use Filament\Actions\Testing\TestAction;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -195,4 +196,26 @@ it('İçe aktar ekranı: yalnızca yönetici; dosya kontrol edilir ve aktarılı
 
     $this->actingAs(User::factory()->withRoles(Role::Accounting)->create());
     $this->get(CatalogImport::getUrl())->assertForbidden();
+});
+
+it('alüminyum parça listesi 28 kart olarak ALU deposuna, ağırlığıyla reçeteye girer; klemens kutusu komponent kalır', function () {
+    $this->service->import(xlsx(StarterCatalog::rows()), $this->admin);
+
+    $parts = Part::query()->where('code', 'like', 'YM-ALU-%')->orderBy('code')->get();
+    $warehouses = app(WarehouseService::class);
+    $line = fn (string $code) => BomItem::query()->with('component')->whereHas('parent', fn ($q) => $q->where('code', $code))->sole();
+
+    expect($parts)->toHaveCount(28)
+        ->and($parts->map(fn (Part $part) => $warehouses->defaultFor($part)->code)->unique()->values()->all())->toBe(['ALU'])
+        ->and($parts[1]->name)->toBe('90-B-3- Kapak')
+        ->and($parts[1]->description)->toBe('Kalıp 2 göz · Etial 160 · Ağırlık 910 g')
+        ->and($parts[12]->name)->toBe('KL. 15- FLAŞ')
+        ->and($parts[17]->name)->toBe('90 TİP LONG Gövde')
+        ->and($line('YM-ALU-02')->quantity_per_unit)->toBe('0.910')
+        ->and($line('YM-ALU-02')->component->code)->toBe('HM-ALU-ETIAL-160')
+        ->and($line('YM-ALU-05')->component->code)->toBe('HM-ALU-ETIAL-160')
+        ->and($line('YM-ALU-18')->component->code)->toBe('HM-ALU-ETIAL-141')
+        ->and($line('YM-ALU-26')->quantity_per_unit)->toBe('1.420')
+        ->and($line('YM-ALU-28')->component->code)->toBe('HM-ALU-ETIAL-170')
+        ->and(Part::query()->where('code', 'like', 'KOM-KLM-%')->pluck('type')->unique()->values()->all())->toBe([PartType::Component]);
 });
