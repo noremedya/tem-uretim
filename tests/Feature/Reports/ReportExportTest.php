@@ -42,6 +42,24 @@ function readXlsx(string $path): array
     return $sheets;
 }
 
+it('formül gibi başlayan ad ve açıklama Excel\'de metin kalır, hücreye formül yazılmaz', function () {
+    $name = '=HYPERLINK("http://ornek.test","tikla")';
+    $part = Part::factory()->create(['code' => 'HM-FORMUL', 'name' => $name]);
+    app(StockService::class)->stockIn($part, '1', $this->admin, $name);
+
+    $report = app(StockMovementListReport::class);
+    $path = tempnam(sys_get_temp_dir(), 'test').'.xlsx';
+    app(ReportExcelWriter::class)->write($report, $this->filters, $report->rows($this->filters), $path);
+
+    $zip = new ZipArchive;
+    $zip->open($path);
+    $content = $zip->getFromName('xl/worksheets/sheet1.xml').$zip->getFromName('xl/worksheets/sheet2.xml').$zip->getFromName('xl/sharedStrings.xml');
+    $zip->close();
+
+    expect($content)->not->toContain('<f>')
+        ->and(collect(readXlsx($path)['Rapor'])->flatten()->all())->toContain($name);
+});
+
 it('Excel dosyası Türkçe başlıklar, sayı hücreleri ve özet sayfası içerir', function () {
     $report = app(StockMovementListReport::class);
     $path = tempnam(sys_get_temp_dir(), 'test').'.xlsx';
