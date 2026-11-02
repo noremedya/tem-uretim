@@ -39,6 +39,7 @@ class WarehousesTable
             ])
             ->filters([
                 TernaryFilter::make('is_active')->label('Durum')->trueLabel('Aktif')->falseLabel('Pasif')->default(true),
+                TernaryFilter::make('part_id')->label('Ürün depoları')->nullable()->trueLabel('Yalnızca ürün depoları')->falseLabel('Genel depolar')->placeholder('Tümü'),
             ])
             ->recordActions([
                 EditAction::make(),

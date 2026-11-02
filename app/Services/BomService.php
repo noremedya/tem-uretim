@@ -61,6 +61,8 @@ class BomService
             $item->component_part_id = $component->getKey();
             $item->save();
 
+            app(PartWarehouseService::class)->ensure($parent, $component, $item->scrap_part_id);
+
             return $item;
         });
     }
@@ -76,6 +78,8 @@ class BomService
 
             $item->fill($this->values($parent, $component, $quantityPerUnit, $scrapRate, $scrapQuantity, $scrapPart));
             $item->saveExpectingVersion($expectedLockVersion);
+
+            app(PartWarehouseService::class)->ensure($item->scrap_part_id);
 
             return $item;
         });
@@ -138,6 +142,8 @@ class BomService
                 'co_part_id' => $coPart->getKey(),
                 'quantity_per_unit' => $this->positiveQuantity($coPart, $quantityPerUnit),
             ])->save();
+
+            app(PartWarehouseService::class)->ensure($parent, $coPart);
 
             return $coProduct;
         });

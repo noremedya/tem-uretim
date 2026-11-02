@@ -342,12 +342,12 @@ class WorkOrderService
     }
 
     /**
-     * Malzemenin düşüleceği depo: yarı mamul her zaman kendi (varsayılan) deposundan; diğerleri iş emrinin malzeme
-     * deposundan, o boşsa kendi deposundan.
+     * Malzemenin düşüleceği depo: yarı mamul ve ürün deposu olan malzeme her zaman kendi deposundan; diğerleri iş
+     * emrinin malzeme deposundan, o boşsa kendi deposundan.
      */
     public function materialWarehouseId(WorkOrder $workOrder, Part $component): int
     {
-        if ($component->type === PartType::SemiFinished || $workOrder->source_warehouse_id === null) {
+        if ($component->type === PartType::SemiFinished || $workOrder->source_warehouse_id === null || $this->warehouses->hasOwnWarehouse($component)) {
             return $this->warehouses->defaultFor($component)->getKey();
         }
 

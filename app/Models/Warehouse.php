@@ -19,6 +19,7 @@ use Spatie\Activitylog\Support\LogOptions;
  *
  * default_part_types: bu deponun varsayılan depo olduğu ürün türleri (her tür en fazla bir aktif depoda).
  * allows_negative: bu depoda stok eksiye düşebilir mi (mamulde hiçbir zaman; veritabanında da zorlanır).
+ * part_id: yalnızca bu ürüne ait depo (PartWarehouseService açar).
  */
 #[Fillable(['code', 'name', 'allows_negative', 'is_production', 'is_shipping', 'default_part_types'])]
 class Warehouse extends Model

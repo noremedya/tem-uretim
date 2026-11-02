@@ -313,6 +313,8 @@ class CatalogImportService
         }
 
         $warehouse = $this->warehouse($this->required($v, 'warehouse', 'Depo'));
+        // Ürün deposu olan üründe stok her zaman kendi deposuna yazılır.
+        $warehouse = Warehouse::query()->firstWhere('part_id', $part->getKey()) ?? $warehouse;
         $description = filled($v['description'] ?? null) ? (string) $v['description'] : 'Açılış sayımı (Excel)';
 
         $movement = $this->stock->adjustCount($part, $this->required($v, 'quantity', 'Sayılan miktar'), $user, $description, warehouse: $warehouse);

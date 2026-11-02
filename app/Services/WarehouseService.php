@@ -118,6 +118,12 @@ class WarehouseService
         return $subtypeId === null ? null : PartSubtype::query()->whereKey($subtypeId)->value('default_warehouse_id');
     }
 
+    /** Ürüne ait depo var mı? (Ürün deposu ayarıyla açılır; malzeme her zaman oradan düşer.) */
+    public function hasOwnWarehouse(Part $part): bool
+    {
+        return Warehouse::query()->where('part_id', $part->getKey())->exists();
+    }
+
     public function defaultIdForType(PartType $type): ?int
     {
         $this->typeMap ??= Warehouse::query()->where('is_active', true)->orderBy('id')->get(['id', 'default_part_types'])

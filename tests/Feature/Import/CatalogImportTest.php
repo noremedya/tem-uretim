@@ -219,3 +219,18 @@ it('alüminyum parça listesi 28 kart olarak ALU deposuna, ağırlığıyla reç
         ->and($line('YM-ALU-28')->component->code)->toBe('HM-ALU-ETIAL-170')
         ->and(Part::query()->where('code', 'like', 'KOM-KLM-%')->pluck('type')->unique()->values()->all())->toBe([PartType::Component]);
 });
+
+it('ürün deposu açıkken başlangıç dosyası reçetedeki her ürüne depo açar, açılış stoğu ürün deposuna yazılır', function () {
+    config(['stock.part_warehouses' => true]);
+    $rows = StarterCatalog::rows();
+    $rows[CatalogSheets::OPENING] = [['code' => 'HM-ALU-ETIAL-160', 'warehouse' => 'HAM', 'quantity' => '500']];
+
+    $this->service->import(xlsx($rows), $this->admin);
+
+    $alloy = Part::where('code', 'HM-ALU-ETIAL-160')->sole();
+
+    expect(Warehouse::query()->whereNotNull('part_id')->count())->toBeGreaterThan(30)
+        ->and(Warehouse::query()->where('code', 'YM-ALU-02')->exists())->toBeTrue()
+        ->and(StockBalance::query()->where('part_id', $alloy->id)->where('quantity', '>', 0)->sole()->warehouse->code)->toBe('HM-ALU-ETIAL-160')
+        ->and(Part::where('code', 'KOM-KLM-TRF-56-71')->sole()->default_warehouse_id)->toBeNull();
+});
