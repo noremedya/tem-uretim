@@ -4,6 +4,7 @@ namespace App\Filament\Resources\PartSubtypes\Schemas;
 
 use App\Enums\PartType;
 use App\Models\PartSubtype;
+use App\Models\Warehouse;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Component;
@@ -32,6 +33,13 @@ class PartSubtypeForm
                 ->disabled(fn (?PartSubtype $record): bool => $record?->parts()->exists() ?? false)
                 ->helperText(fn (?PartSubtype $record): ?string => ($record?->parts()->exists() ?? false) ? 'Ürünlerde kullanılan alt türün ana türü değiştirilemez.' : null) : null,
             TextInput::make('name')->label('Ad')->required()->maxLength(100)->helperText('Örn. Silisli sac, Rulman, Bobinajlı stator'),
+            $withType ? Select::make('default_warehouse_id')
+                ->label('Varsayılan depo')
+                ->placeholder('Ana türün deposu')
+                ->options(fn (?PartSubtype $record): array => Warehouse::query()
+                    ->where(fn ($q) => $q->where('is_active', true)->orWhere('id', $record?->default_warehouse_id))
+                    ->orderBy('code')->pluck('name', 'id')->all())
+                ->helperText('Kartında depo seçilmemiş ürünler bu depoyu kullanır. Mevcut stok taşınmaz; depolar arasında transfer yapın.') : null,
         ]));
     }
 }

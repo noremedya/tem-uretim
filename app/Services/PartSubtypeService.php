@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\PartType;
 use App\Exceptions\BusinessRuleException;
 use App\Models\PartSubtype;
+use App\Models\Warehouse;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -17,6 +18,7 @@ class PartSubtypeService
     {
         return DB::transaction(function () use ($data): PartSubtype {
             $subtype = new PartSubtype(['type' => $this->type($data['type'] ?? null), 'name' => $data['name'] ?? '']);
+            $this->fillWarehouse($subtype, $data);
             $this->ensureValid($subtype);
             $subtype->save();
 
@@ -34,6 +36,7 @@ class PartSubtypeService
                 'type' => array_key_exists('type', $data) ? $this->type($data['type']) : $subtype->type,
                 'name' => $data['name'] ?? $subtype->name,
             ]);
+            $this->fillWarehouse($subtype, $data);
 
             if ($subtype->isDirty('type') && $subtype->parts()->exists()) {
                 throw new BusinessRuleException('Ürünlerde kullanılan alt türün ana türü değiştirilemez.');
@@ -61,6 +64,21 @@ class PartSubtypeService
         $subtype->save();
 
         return $subtype;
+    }
+
+    private function fillWarehouse(PartSubtype $subtype, array $data): void
+    {
+        if (! array_key_exists('default_warehouse_id', $data)) {
+            return;
+        }
+
+        $id = filled($data['default_warehouse_id']) ? (int) $data['default_warehouse_id'] : null;
+
+        if ($id !== null && $id !== $subtype->getOriginal('default_warehouse_id') && ! Warehouse::query()->whereKey($id)->where('is_active', true)->exists()) {
+            throw new BusinessRuleException('Seçilen depo pasif veya bulunamadı.');
+        }
+
+        $subtype->default_warehouse_id = $id;
     }
 
     private function type(mixed $value): PartType

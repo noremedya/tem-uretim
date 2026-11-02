@@ -22,10 +22,11 @@ class PartSubtypesTable
     public static function configure(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->orderByRaw("array_position(ARRAY['raw_material','component','direct_consumable','indirect_consumable','semi_finished','finished_good']::text[], type::text)")->orderBy('name'))
+            ->modifyQueryUsing(fn (Builder $query) => $query->with('defaultWarehouse')->orderByRaw("array_position(ARRAY['raw_material','component','direct_consumable','indirect_consumable','semi_finished','finished_good']::text[], type::text)")->orderBy('name'))
             ->columns([
                 TextColumn::make('type')->label('Ana tür')->badge(),
                 TextColumn::make('name')->label('Ad')->searchable()->weight('bold'),
+                TextColumn::make('defaultWarehouse.name')->label('Varsayılan depo')->placeholder('Ana türün deposu'),
                 TextColumn::make('parts_count')->label('Ürün sayısı')->counts('parts')->numeric(),
                 IconColumn::make('is_active')->label('Aktif')->boolean(),
             ])

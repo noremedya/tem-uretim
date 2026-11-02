@@ -5,9 +5,11 @@ use App\Enums\StockMovementType;
 use App\Exceptions\BusinessRuleException;
 use App\Exceptions\InsufficientStockException;
 use App\Filament\Pages\StockOperation;
+use App\Filament\Resources\PartSubtypes\Pages\EditPartSubtype;
 use App\Filament\Resources\Warehouses\Pages\CreateWarehouse;
 use App\Filament\Resources\Warehouses\Pages\ListWarehouses;
 use App\Models\Part;
+use App\Models\PartSubtype;
 use App\Models\StockBalance;
 use App\Models\StockMovement;
 use App\Models\Unit;
@@ -15,6 +17,7 @@ use App\Models\User;
 use App\Models\Warehouse;
 use App\Services\MotorModelService;
 use App\Services\PartService;
+use App\Services\PartSubtypeService;
 use App\Services\StockService;
 use App\Services\WarehouseService;
 use Illuminate\Database\QueryException;
@@ -36,8 +39,8 @@ function qty(Part $part, Warehouse $warehouse): string
     return (string) (StockBalance::query()->where('part_id', $part->id)->where('warehouse_id', $warehouse->id)->value('quantity') ?? '0');
 }
 
-it('kurulumda beş depo açılır ve türler varsayılan depolarına eşlenir', function () {
-    expect(Warehouse::query()->orderBy('id')->pluck('code')->all())->toBe(['HAM', 'URT', 'YM', 'MML', 'IADE'])
+it('kurulumda depolar açılır ve türler varsayılan depolarına eşlenir', function () {
+    expect(Warehouse::query()->orderBy('id')->pluck('code')->all())->toBe(['HAM', 'URT', 'YM', 'MML', 'IADE', 'ALU', 'MIL'])
         ->and($this->warehouses->defaultIdForType(PartType::RawMaterial))->toBe($this->raw->id)
         ->and($this->warehouses->defaultIdForType(PartType::IndirectConsumable))->toBe($this->raw->id)
         ->and(Warehouse::find($this->warehouses->defaultIdForType(PartType::SemiFinished))->code)->toBe('YM')
@@ -268,4 +271,56 @@ it('depo ekranını yönetici yönetir, diğer roller yalnızca görür', functi
     $this->actingAs($this->user);
     Livewire::test(ListWarehouses::class)->assertOk()->assertSee('Hammadde deposu');
     $this->get(CreateWarehouse::getUrl())->assertForbidden();
+});
+
+it('alüminyum ve mil alt türleri kendi deposuna atanır, diğer yarı mamuller YM\'de kalır', function () {
+    $depot = fn (string $name) => PartSubtype::query()->with('defaultWarehouse')->where('type', 'semi_finished')->where('name', $name)->sole()->defaultWarehouse?->code;
+
+    expect($depot('Gövde'))->toBe('ALU')
+        ->and($depot('Kapak'))->toBe('ALU')
+        ->and($depot('Enjekte rotor'))->toBe('ALU')
+        ->and($depot('İşlenmiş mil'))->toBe('MIL')
+        ->and($depot('Stator paketi'))->toBeNull()
+        ->and($depot('Mil+rotor'))->toBeNull();
+});
+
+it('varsayılan depo sırası: ürün, alt tür, ana tür; ürün alt türünün deposunda açılır', function () {
+    $service = app(WarehouseService::class);
+    $body = PartSubtype::query()->where('type', 'semi_finished')->where('name', 'Gövde')->sole();
+    $stator = PartSubtype::query()->where('type', 'semi_finished')->where('name', 'Stator paketi')->sole();
+    $code = fn (Part $part): string => $service->defaultFor($part)->code;
+
+    $part = app(PartService::class)->create(['code' => 'YM-G1', 'name' => 'Gövde', 'unit_id' => Unit::factory()->create()->id, 'type' => 'semi_finished', 'subtype_id' => $body->id]);
+
+    expect($code($part))->toBe('ALU')
+        ->and(StockBalance::query()->where('part_id', $part->id)->sole()->warehouse->code)->toBe('ALU')
+        ->and($code(Part::factory()->create(['type' => PartType::SemiFinished, 'subtype_id' => $stator->id])))->toBe('YM')
+        ->and($code(Part::factory()->create(['type' => PartType::SemiFinished, 'subtype_id' => $body->id, 'default_warehouse_id' => Warehouse::query()->where('code', 'MIL')->value('id')])))->toBe('MIL');
+});
+
+it('alt tür deposu servisten değişir, pasif depo seçilemez, alt türe atanmış depo pasifleştirilemez', function () {
+    $service = app(PartSubtypeService::class);
+    $subtype = PartSubtype::query()->where('type', 'semi_finished')->where('name', 'Stator paketi')->sole();
+    $alu = Warehouse::query()->where('code', 'ALU')->sole();
+    $passive = Warehouse::factory()->create(['is_active' => false]);
+
+    expect(fn () => $service->update($subtype, ['default_warehouse_id' => $passive->id], $subtype->lock_version))->toThrow(BusinessRuleException::class, 'pasif');
+
+    expect($service->update($subtype->fresh(), ['default_warehouse_id' => $alu->id], $subtype->fresh()->lock_version)->default_warehouse_id)->toBe($alu->id)
+        ->and(fn () => app(WarehouseService::class)->deactivate($alu))->toThrow(BusinessRuleException::class, 'alt türlerin');
+
+    expect($service->update($subtype->fresh(), ['default_warehouse_id' => null], $subtype->fresh()->lock_version)->default_warehouse_id)->toBeNull();
+});
+
+it('alt tür formu varsayılan depoyu kaydeder', function () {
+    $this->actingAs(User::factory()->admin()->create());
+    $subtype = PartSubtype::query()->where('type', 'semi_finished')->where('name', 'Bobinajlı stator')->sole();
+    $mil = Warehouse::query()->where('code', 'MIL')->sole();
+
+    Livewire::test(EditPartSubtype::class, ['record' => $subtype->getRouteKey()])
+        ->fillForm(['default_warehouse_id' => $mil->id])
+        ->call('save')
+        ->assertHasNoFormErrors();
+
+    expect($subtype->fresh()->default_warehouse_id)->toBe($mil->id);
 });

@@ -9,12 +9,13 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 
 /** Alt tür: 6 sabit ana türün altında kullanıcı tanımlı sınıf (tek seviye). Silinmez, pasifleştirilir. */
-#[Fillable(['type', 'name'])]
+#[Fillable(['type', 'name', 'default_warehouse_id'])]
 class PartSubtype extends Model
 {
     /** @use HasFactory<PartSubtypeFactory> */
@@ -38,6 +39,12 @@ class PartSubtype extends Model
         return "{$this->type->label()} › {$this->name}";
     }
 
+    /** Bu alt türün ürünlerinin varsayılan deposu (kartta depo seçilmemişse). @return BelongsTo<Warehouse, $this> */
+    public function defaultWarehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class, 'default_warehouse_id');
+    }
+
     /** @return HasMany<Part, $this> */
     public function parts(): HasMany
     {
@@ -46,6 +53,6 @@ class PartSubtype extends Model
 
     public function getActivitylogOptions(): LogOptions
     {
-        return LogOptions::defaults()->logOnly(['type', 'name', 'is_active'])->logOnlyDirty()->dontLogEmptyChanges();
+        return LogOptions::defaults()->logOnly(['type', 'name', 'default_warehouse_id', 'is_active'])->logOnlyDirty()->dontLogEmptyChanges();
     }
 }

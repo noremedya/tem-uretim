@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\PartType;
 use App\Exceptions\BusinessRuleException;
 use App\Models\Part;
+use App\Models\PartSubtype;
 use App\Models\StockBalance;
 use App\Models\Warehouse;
 use Illuminate\Support\Arr;
@@ -13,8 +14,9 @@ use Illuminate\Support\Facades\DB;
 /**
  * Depo yönetimi ve ürünün varsayılan deposu. Bakiye burada değişmez; yalnızca StockService değiştirir.
  *
- * Varsayılan depo: ürünün kendi varsayılan deposu (parts.default_warehouse_id), yoksa türünün varsayılan
- * deposu (warehouses.default_part_types). Her tür en fazla bir aktif depoda varsayılandır.
+ * Varsayılan depo: ürünün kendi varsayılan deposu (parts.default_warehouse_id), yoksa alt türünün deposu
+ * (part_subtypes.default_warehouse_id), yoksa türünün varsayılan deposu (warehouses.default_part_types). Her tür en
+ * fazla bir aktif depoda varsayılandır.
  */
 class WarehouseService
 {
@@ -71,6 +73,10 @@ class WarehouseService
                 throw new BusinessRuleException('Bazı ürünlerin varsayılan deposu bu depo; önce ürünlerin varsayılan deposunu değiştirin.');
             }
 
+            if (PartSubtype::query()->where('default_warehouse_id', $warehouse->getKey())->exists()) {
+                throw new BusinessRuleException('Bazı alt türlerin varsayılan deposu bu depo; önce alt türlerin varsayılan deposunu değiştirin.');
+            }
+
             if (StockBalance::query()->where('warehouse_id', $warehouse->getKey())->where('quantity', '<>', 0)->exists()) {
                 throw new BusinessRuleException('Bu depoda stok var; önce başka depoya transfer edin veya sayımla sıfırlayın.');
             }
@@ -104,7 +110,12 @@ class WarehouseService
 
     public function defaultIdFor(Part $part): ?int
     {
-        return $part->default_warehouse_id ?? $this->defaultIdForType($part->type);
+        return $part->default_warehouse_id ?? $this->defaultIdForSubtype($part->subtype_id) ?? $this->defaultIdForType($part->type);
+    }
+
+    private function defaultIdForSubtype(?int $subtypeId): ?int
+    {
+        return $subtypeId === null ? null : PartSubtype::query()->whereKey($subtypeId)->value('default_warehouse_id');
     }
 
     public function defaultIdForType(PartType $type): ?int
