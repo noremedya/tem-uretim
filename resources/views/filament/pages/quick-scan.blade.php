@@ -92,7 +92,7 @@
                 <div class="space-y-2 text-lg">
                     <p class="text-2xl font-semibold">{{ $motor->motorModel->code }} — {{ $motor->motorModel->name }}</p>
                     <p>Durum: <x-filament::badge :color="$motor->status->getColor()" class="inline-flex">{{ $motor->status->getLabel() }}</x-filament::badge>@if ($motor->status === \App\Enums\MotorUnitStatus::InStock) · Depo: {{ $motor->warehouse->name }}@endif</p>
-                    <p>Üretim tarihi: {{ $motor->production_date->format('d.m.Y') }} · İş emri: {{ $motor->workOrder->work_order_number }}</p>
+                    <p>Üretim tarihi: {{ $motor->production_date->format('d.m.Y') }} · İş emri: {{ $motor->workOrder?->work_order_number ?? 'Açılış kaydı' }}</p>
                     @if ($motor->order)
                         <p>Sipariş: {{ $motor->order->order_number }}@if (auth()->user()->canSeeCustomers()) — {{ $motor->order->customer->name }}@endif</p>
                     @endif

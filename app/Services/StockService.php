@@ -6,6 +6,7 @@ use App\Enums\PartType;
 use App\Enums\StockMovementType;
 use App\Exceptions\BusinessRuleException;
 use App\Exceptions\InsufficientStockException;
+use App\Models\MotorUnit;
 use App\Models\Part;
 use App\Models\StockBalance;
 use App\Models\StockMovement;
@@ -164,6 +165,21 @@ class StockService
             throw new BusinessRuleException("{$movement->type->label()} hareketleri elle ters kaydedilemez; iş emri geri alma akışını kullanın.");
         }
 
+        if ($movement->reference_type === 'motor_unit') {
+            throw new BusinessRuleException('Motor hareketleri elle ters kaydedilemez; motor sayfasındaki işlemi kullanın.');
+        }
+
+        return $this->reverseMovement($movement, $user, $description, $idempotencyKey);
+    }
+
+    /** Açılış motorunun girişini ters kaydeder. Yalnızca ProductionService::cancelOpeningMotor çağırır. */
+    public function reverseMotorOpening(StockMovement $movement, User $user, string $description): StockMovement
+    {
+        return $this->reverseMovement($movement, $user, $description);
+    }
+
+    private function reverseMovement(StockMovement $movement, User $user, ?string $description, ?string $idempotencyKey = null): StockMovement
+    {
         $quantity = Quantity::negate((string) $movement->quantity);
 
         return $this->record(
@@ -513,6 +529,18 @@ class StockService
         return $this->single($part, $warehouse, StockMovementType::Shipment, $quantity, $reference, $user, $description);
     }
 
+    /** Açılış motorunun mamul stoğuna girişi (motor başına bir hareket, referans motor). */
+    public function recordMotorOpening(Part $part, Model $motorUnit, User $user, string $description, Warehouse $warehouse): StockMovement
+    {
+        return $this->single($part, $warehouse, StockMovementType::StockIn, $this->positive(1), $motorUnit, $user, $description);
+    }
+
+    /** İade gelen motorun mamul stoğuna dönüşü (motor başına bir hareket, referans motor). */
+    public function recordMotorReturn(Part $part, Model $motorUnit, User $user, string $description, Warehouse $warehouse): StockMovement
+    {
+        return $this->single($part, $warehouse, StockMovementType::Return, $this->positive(1), $motorUnit, $user, $description);
+    }
+
     private function single(Part $part, ?Warehouse $warehouse, StockMovementType $type, string $delta, Model $reference, User $user, ?string $description): StockMovement
     {
         return DB::transaction(function () use ($part, $warehouse, $type, $delta, $reference, $user, $description): StockMovement {
@@ -520,7 +548,7 @@ class StockService
             $balance = $this->lockBalances([[$part->getKey(), $warehouse->getKey()]])->first();
             $part = Part::query()->with('unit')->findOrFail($part->getKey());
             $warehouse = Warehouse::query()->findOrFail($warehouse->getKey());
-            $this->ensureTypeAllowed($part, $type);
+            $this->ensureTypeAllowed($part, $type, $reference);
             $this->ensureWarehouseAllowed($warehouse, $type);
             $this->ensureUnitPrecision($part, $delta);
 
@@ -709,10 +737,18 @@ class StockService
         return "{$partId}:{$warehouseId}";
     }
 
-    private function ensureTypeAllowed(Part $part, StockMovementType $type): void
+    private function ensureTypeAllowed(Part $part, StockMovementType $type, ?Model $reference = null): void
     {
+        // Motor başına giriş ve iade: mamul bakiyesi = stoktaki motor sayısı korunur.
+        $motorMovement = $reference instanceof MotorUnit && in_array($type, [StockMovementType::StockIn, StockMovementType::Return], true);
+
+        // Pasifleştirilen modelin motoru da fiziksel olarak geri dönebilir.
+        if ($motorMovement && $type === StockMovementType::Return) {
+            return;
+        }
+
         // Veritabanında stock_movements_validate_insert trigger'ı da zorlar.
-        if ($part->type === PartType::FinishedGood && ! $type->allowedOnFinishedGood()) {
+        if ($part->type === PartType::FinishedGood && ! $type->allowedOnFinishedGood() && ! $motorMovement) {
             throw new BusinessRuleException("{$part->code} {$part->name} bir mamul kartı. Mamul stoğu elle değiştirilemez; yalnızca üretim ve sevkle değişir.");
         }
 

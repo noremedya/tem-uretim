@@ -31,6 +31,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 
 /**
@@ -81,14 +82,14 @@ class LinesRelationManager extends RelationManager
                 Action::make('addMotors')
                     ->label('Motor ekle')
                     ->icon('heroicon-o-cog-6-tooth')
-                    ->visible(fn (): bool => ! $this->isReadOnly() && $this->invoice()->type() === InvoiceType::SalesInvoice)
-                    ->modalHeading('Sevk edilen motorlardan satır ekle')
+                    ->visible(fn (): bool => ! $this->isReadOnly() && in_array($this->invoice()->type(), [InvoiceType::SalesInvoice, InvoiceType::SalesReturn], true))
+                    ->modalHeading(fn (): string => $this->isSalesReturn() ? 'İade alınan motorlardan satır ekle' : 'Sevk edilen motorlardan satır ekle')
                     ->schema([
                         Select::make('motor_model_id')
                             ->label('Model')
                             ->required()
                             ->live()
-                            ->options(fn (): array => app(InvoiceService::class)->invoiceableMotors($this->invoice())
+                            ->options(fn (): array => $this->selectableMotors()
                                 ->groupBy('motor_model_id')
                                 ->map(fn ($units) => "{$units->first()->motorModel->code} — {$units->first()->motorModel->name} ({$units->count()} motor)")
                                 ->all()),
@@ -97,11 +98,12 @@ class LinesRelationManager extends RelationManager
                             ->required()
                             ->bulkToggleable()
                             ->columns(3)
-                            ->options(fn (Get $get): array => blank($get('motor_model_id')) ? [] : app(InvoiceService::class)
-                                ->invoiceableMotors($this->invoice(), (int) $get('motor_model_id'))
+                            ->options(fn (Get $get): array => blank($get('motor_model_id')) ? [] : $this->selectableMotors((int) $get('motor_model_id'))
                                 ->mapWithKeys(fn (MotorUnit $unit) => [$unit->getKey() => $unit->serial_number])
                                 ->all()),
-                        $this->priceInput(required: false)->helperText('Boş bırakılırsa müşteri veya liste fiyatı kullanılır (fatura para birimindeyse).'),
+                        $this->priceInput(required: false)->helperText(fn (): string => $this->isSalesReturn()
+                            ? 'Boş bırakılırsa fiyat, iskonto ve KDV satış faturasından gelir.'
+                            : 'Boş bırakılırsa müşteri veya liste fiyatı kullanılır (fatura para birimindeyse).'),
                         $this->rateInput('discount_rate', 'İskonto (%)', '0')->datalist(['15', '20', '30']),
                         $this->vatInput(),
                     ])
@@ -141,6 +143,19 @@ class LinesRelationManager extends RelationManager
                         return true;
                     })),
             ]);
+    }
+
+    private function isSalesReturn(): bool
+    {
+        return $this->invoice()->type() === InvoiceType::SalesReturn;
+    }
+
+    /** @return Collection<int, MotorUnit> */
+    private function selectableMotors(?int $modelId = null): Collection
+    {
+        $service = app(InvoiceService::class);
+
+        return $this->isSalesReturn() ? $service->returnableMotors($this->invoice(), $modelId) : $service->invoiceableMotors($this->invoice(), $modelId);
     }
 
     private function invoice(): Invoice

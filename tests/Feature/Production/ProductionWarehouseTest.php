@@ -171,7 +171,7 @@ describe('motorlar', function () {
         expect(fn () => DB::transaction(fn () => DB::table('stock_movements')->insert([
             'part_id' => $this->finished->id, 'warehouse_id' => $this->mml->id, 'type' => 'transfer', 'quantity' => '-1',
             'balance_before' => '3', 'balance_after' => '2', 'transfer_id' => (string) Str::uuid(), 'user_id' => $this->depo->id,
-        ])))->toThrow(QueryException::class, 'motor transferiyle');
+        ])))->toThrow(QueryException::class, 'motor transferi');
     });
 
     it('motor bulunduğu depodan sevk edilir', function () {

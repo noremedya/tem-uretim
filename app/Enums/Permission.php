@@ -33,6 +33,8 @@ enum Permission: string
     case MotorUnitsView = 'motor_units.view';
     // Üretilen motorların sevki (yönetici, operatör, depo).
     case MotorUnitsShip = 'motor_units.ship';
+    case MotorUnitsOpening = 'motor_units.opening';
+    case MotorUnitsReturn = 'motor_units.return';
 
     case PartsView = 'parts.view';
     case PartsManage = 'parts.manage';
@@ -71,6 +73,8 @@ enum Permission: string
             self::WorkOrdersChangeStatusAny => 'İş emri durum değiştirme (tümü)',
             self::MotorUnitsView => 'Üretilen motorları görüntüleme',
             self::MotorUnitsShip => 'Motor sevki',
+            self::MotorUnitsOpening => 'Açılış motoru girme',
+            self::MotorUnitsReturn => 'Motor iadesi alma',
             self::PartsView => 'Stok kartı görüntüleme',
             self::PartsManage => 'Stok kartı yönetimi',
             self::StockMove => 'Stok giriş/çıkış/sayım',

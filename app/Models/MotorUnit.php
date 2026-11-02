@@ -7,11 +7,13 @@ use App\Exceptions\BusinessRuleException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 
 /**
- * Üretilen motor. İş emri tamamlanınca ProductionService oluşturur; silinmez (burada ve veritabanında trigger ile).
+ * Motor. İş emri tamamlanınca veya açılış kaydıyla ProductionService oluşturur (açılışta iş emri yoktur); silinmez
+ * (burada ve veritabanında trigger ile).
  */
 class MotorUnit extends Model
 {
@@ -70,6 +72,18 @@ class MotorUnit extends Model
     public function shippedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'shipped_by_user_id');
+    }
+
+    /** Sistem öncesinden stokta olan motor: üretim sayılarına girmez. */
+    public function isOpening(): bool
+    {
+        return $this->work_order_id === null;
+    }
+
+    /** @return HasMany<MotorUnitReturn, $this> */
+    public function returns(): HasMany
+    {
+        return $this->hasMany(MotorUnitReturn::class);
     }
 
     /** Motorun yer aldığı fatura satırları (iptal edilmiş faturalar dahil). @return BelongsToMany<InvoiceLine, $this> */

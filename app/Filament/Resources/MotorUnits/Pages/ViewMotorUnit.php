@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\MotorUnits\Pages;
 
+use App\Filament\Resources\MotorUnits\Actions\MotorStockActions;
 use App\Filament\Resources\MotorUnits\Actions\ShipMotorUnitsAction;
 use App\Filament\Resources\MotorUnits\Actions\TransferMotorUnitsAction;
 use App\Filament\Resources\MotorUnits\MotorUnitResource;
@@ -20,6 +21,8 @@ class ViewMotorUnit extends ViewRecord
             LabelActions::motor(),
             ShipMotorUnitsAction::single(),
             TransferMotorUnitsAction::single(),
+            MotorStockActions::receiveReturn(),
+            MotorStockActions::cancelOpening(),
         ];
     }
 }

@@ -36,6 +36,7 @@ class DailyProductionChart extends ChartWidget
 
         $counts = MotorUnit::query()
             ->where('status', '!=', MotorUnitStatus::Voided->value)
+            ->whereNotNull('work_order_id')
             ->whereDate('production_date', '>=', $from)
             ->selectRaw('production_date::date AS day, count(*) AS total')
             ->groupBy('day')

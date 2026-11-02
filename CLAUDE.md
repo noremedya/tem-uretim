@@ -134,8 +134,13 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 
 **Mamul ve yarı mamul**
 - Motor modeli oluşturulunca mamul kartı otomatik açılır: kod ve ad modelinkiyle aynı, birim "Adet", tür `finished_good`. Model kodu/adı değişince kart da değişir; model pasifleşince kart pasifleşir.
-- Mamul kartında elle hareket yoktur: yalnızca `production_output`, `shipment`, geri almadaki `correction` ve motor seçimiyle `transfer` (servis + veritabanı trigger'ı). Kural: **her depoda mamul bakiyesi = o modelin o depodaki `in_stock` motor sayısı**; `stock:reconcile` bunu da kontrol eder.
+- Mamul kartında elle hareket yoktur: yalnızca `production_output`, `shipment`, geri almadaki `correction`, motor seçimiyle `transfer` (servis + veritabanı trigger'ı). Açılış motoru ve motor iadesinde motor başına `stock_in` ve `return` de vardır. Kural: **her depoda mamul bakiyesi = o modelin o depodaki `in_stock` motor sayısı**; `stock:reconcile` bunu da kontrol eder.
 - Yarı mamulde lot/seri takibi yoktur; yarı mamul satılmaz (sipariş kalemi yalnızca motor modeline bağlıdır).
+
+**Açılış motoru ve iade** (karar 2026-11-02)
+- **Açılış motoru** (yalnızca yönetici, `motor_units.opening`; Üretilen motorlar › "Açılış motoru"): sistem öncesinden stokta olan motorlar. Model, depo, üretim tarihi; seri numaraları satır satır elle (etiketindeki numara) ve/veya adet girilip sistemin ürettiği numarayla. Motor başına mamul kartına `stock_in` (referans motor), iş emri boş; üretim sayılarına girmez (panel, grafik, üretim raporu). Tek işlem, en fazla 500; seri no büyük/küçük harf önemsiz tekildir. Yanlış kayıt, sevk edilmemiş ve giriş deposundaysa "Açılış kaydını iptal et" ile iptal edilir (açıklama zorunlu, giriş ters kaydedilir, motor `voided`, seri no tekrar kullanılmaz).
+- **Motor iadesi** (yönetici ve depo, `motor_units.return`; motor sayfası › "İade al"): sevk edilmiş motor seçilen depoda yeniden `in_stock` olur, mamul kartına `return` (referans motor) yazılır, açıklama zorunlu. Eski sevk bilgisi `motor_unit_returns`'te kalır (değiştirilemez, silinemez). Arızalı motor için kurulumda `IADE` deposu açılır; sevk edilebilir olması depoya değil kullanıcıya bağlıdır. Pasif modelin motoru da iade alınır. Motor hareketleri elle ters kaydedilemez. İade gelmiş motorun iş emri geri alınamaz.
+- **Fatura:** stok iadesi ile iade faturası ayrı işlemdir. Satış iadesine yalnızca stok iadesi alınmış, o carinin kesilmiş satışındaki motor eklenir (orijinal fatura seçiliyse yalnızca ondaki); fiyat, iskonto ve KDV boşsa satış satırından gelir; iade stok ve motor durumunu değiştirmez. Faturalı motor iade faturası kesilmeden yeniden faturalanamaz (servis + trigger). İade gelen motorun sipariş bağı kalır ama başka müşteriye faturalanabilir. İadesi olan satış, motor yeniden faturalanmışsa iade iptal edilemez.
 
 **Sevk** (yönetici ve depo, yetki `motor_units.ship`): stoktaki motorlar seçilip sevk edilir (isteğe bağlı sevk notu); motor `shipped` olur, mamul kartından motor başına bir `shipment` hareketiyle düşülür. Seçilenlerden biri stokta değilse hiçbiri sevk edilmez. Pasifleştirilen modelin stoktaki motorları da sevk edilebilir (pasif parçada yalnızca sayım kuralının istisnası; mamulde sayım olmadığından stok başka türlü çıkamaz). E-irsaliye bağlantısı Aşama 6'da eklenir.
 
@@ -169,7 +174,6 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - Direkt sarf reçeteye girer ve üretimde otomatik düşer; endirekt sarf reçeteye girmez.
 - Fire: reçetede her malzeme için standart fire oranı; operatör tamamlamada gerçekleşen fireyi girebilir. Fire, üretim sarfından ayrı bir hareket tipiyle kaydedilir ve muhasebe aktarımına yansır.
 - Ayrıntılı kurallar: yukarıdaki "İş emri", "Reçete", "Mamul ve yarı mamul", "Sevk".
-- Açık soru: fabrikada sistem öncesinden stokta bitmiş motor varsa açılış kaydı nasıl yapılacak (mamulde elle giriş kapalı).
 
 **Cari, döviz ve fiyat** (Aşama 5a)
 - Cari hesap = `customers` kaydı; müşteri ve/veya tedarikçi işaretlidir (en az biri, check constraint). Siparişe yalnızca müşteri işaretli aktif cari seçilir (servis + trigger).
@@ -190,7 +194,7 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - Hesaplama (satır): brüt = miktar × birim fiyat; iskonto = brüt × oran; net = brüt − iskonto; KDV = net × KDV oranı; toplam = net + KDV. Her tutar kuruşa yuvarlanır (yarım yukarı); fatura toplamları satırların toplamıdır.
 - **Satış faturası** satırları sevk edilmiş motorlardan oluşur (model başına satır, seri numaraları satıra bağlı); birim fiyat önerisi etkin fiyattan (aynı para birimindeyse). Elle satır (nakliye, hizmet) eklenebilir. Bir motor iptal edilmemiş tek bir satış faturasında yer alır; fatura iptal edilirse motor tekrar faturalanabilir. Motorun müşterisi (siparişi varsa) fatura carisiyle aynı olmalı.
 - **Alış faturası** satırı bir parçaya aittir ve aynı parçanın, henüz faturaya bağlanmamış stok girişlerine bağlanır; bağlı girişlerin toplamı satır miktarına eşit olmalı. Bağlanacak giriş seçilmezse fatura kesilirken satır miktarı kadar stok girişi oluşur (referans fatura). Alış faturası iptal edilirse kesimde oluşan girişler ters kaydedilir (stok yetmezse iptal reddedilir); önceden var olan girişlerin bağı çözülür.
-- **İadeler** 5b'de yalnızca tutar düzeltmesidir (stok ve motor durumu değişmez); orijinal faturaya bağlanabilir. Satış iadesinde motorun fiziksel olarak stoğa dönüşü açık sorudur.
+- **İadeler** yalnızca tutar düzeltmesidir (stok ve motor durumu değişmez); orijinal faturaya bağlanabilir. Motorun stoğa dönüşü "Açılış motoru ve iade" akışıyla ayrıca yapılır.
 - Yetki: yönetici ve muhasebe tüm faturaları yönetir; depo alış faturalarını salt okunur görür.
 - İskonto satır bazında tek oran: %15, %20, %30 hazır seçenek, başka oran da girilebilir; art arda iskonto yok. KDV varsayılan %20, satırda değiştirilebilir; KDV satır bazında hesaplanıp toplanır, tutarlar kuruş hassasiyetinde (bcmath).
 - Tahsilat ve ödeme: nakit (kasa), banka hesapları, çek/senet. Kasa ve banka hesaplarının bakiyesi ve hareket listesi tutulur. Cari hareketleri değiştirilemez; düzeltme ters kayıtla.
@@ -263,6 +267,8 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 | Üretim partileri | ✓ | | | |
 | Üretilen motorlar | ✓ | görüntüleme | görüntüleme | görüntüleme |
 | Sevk | ✓ | ✓ | ✓ | |
+| Açılış motoru | ✓ | | | |
+| Motor iadesi alma | ✓ | | ✓ | |
 | Fiyatlar, döviz kurları | ✓ | | | ✓ |
 | Faturalar, tahsilat/ödeme, kasa/banka, Luca aktarımı (Aşama 5b–5d) | ✓ | | | ✓ |
 | Raporlar ve Excel | ✓ | | | |

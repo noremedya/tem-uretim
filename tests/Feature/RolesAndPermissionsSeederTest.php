@@ -46,7 +46,7 @@ it('yetki tablosunu (CLAUDE.md bölüm 6) uygular', function () {
         ])
         // Depo: aynı görünürlük; stok işlemi ve sevk yapar, iş emri durumu değiştirmez.
         ->and(Role::Warehouse->permissions())->toEqualCanonicalizing([
-            Permission::MotorModelsBuild, Permission::WorkOrdersView, Permission::WorkOrdersViewAll, Permission::MotorUnitsView, Permission::MotorUnitsShip,
+            Permission::MotorModelsBuild, Permission::WorkOrdersView, Permission::WorkOrdersViewAll, Permission::MotorUnitsView, Permission::MotorUnitsShip, Permission::MotorUnitsReturn,
             Permission::PartsView, Permission::StockMove, Permission::StockMovementsView,
         ]);
 

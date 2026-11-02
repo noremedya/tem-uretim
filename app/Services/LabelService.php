@@ -42,7 +42,7 @@ class LabelService
                     'lines' => array_values(array_filter([
                         implode(' · ', $ratings) ?: null,
                         implode(' · ', array_filter([$model->protection_class, $model->efficiency_class])) ?: null,
-                        'Üretim: '.$unit->production_date->format('m.Y').' · İE: '.$unit->workOrder->work_order_number
+                        'Üretim: '.$unit->production_date->format('m.Y').' · '.($unit->workOrder !== null ? "İE: {$unit->workOrder->work_order_number}" : 'Açılış kaydı')
                             .($unit->productionBatch ? ' · Parti: '.$unit->productionBatch->batch_number : ''),
                     ])),
                 ];

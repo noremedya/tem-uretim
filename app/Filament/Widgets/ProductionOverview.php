@@ -34,6 +34,7 @@ class ProductionOverview extends StatsOverviewWidget
     {
         $motors = fn (CarbonImmutable $from) => MotorUnit::query()
             ->where('status', '!=', MotorUnitStatus::Voided->value)
+            ->whereNotNull('work_order_id')
             ->whereDate('production_date', '>=', $from)
             ->count();
 

@@ -98,8 +98,8 @@ class InvoiceService
         return DB::transaction(function () use ($invoice, $units, $unitPrice, $discountRate, $vatRate): InvoiceLine {
             $invoice = $this->lockDraft($invoice);
 
-            if ($invoice->type() !== InvoiceType::SalesInvoice) {
-                throw new BusinessRuleException('Motor satırı yalnızca satış faturasına eklenir.');
+            if (! in_array($invoice->type(), [InvoiceType::SalesInvoice, InvoiceType::SalesReturn], true)) {
+                throw new BusinessRuleException('Motor satırı yalnızca satış faturasına ve satış iadesine eklenir.');
             }
 
             $ids = collect($units)->map(fn ($u) => $u instanceof MotorUnit ? $u->getKey() : (int) $u)->unique()->values();
@@ -114,11 +114,25 @@ class InvoiceService
             }
 
             foreach ($motors as $motor) {
-                $this->ensureInvoiceableMotor($motor, $invoice);
+                $this->ensureMotorAllowed($motor, $invoice);
             }
 
             /** @var MotorModel $model */
             $model = $motors->first()->motorModel;
+
+            // İadede tutarlar satış satırından gelir; fiyat elle girilirse iade o fiyatla kesilir.
+            if ($invoice->type() === InvoiceType::SalesReturn && ($unitPrice === null || $unitPrice === '')) {
+                $sold = $motors->map(fn (MotorUnit $motor) => $this->saleLineOf($motor));
+                $first = $sold->first();
+                $same = $sold->every(fn (?InvoiceLine $l) => $l !== null && $l->invoice->currency === $invoice->currency
+                    && (string) $l->unit_price === (string) $first->unit_price && (string) $l->discount_rate === (string) $first->discount_rate && (string) $l->vat_rate === (string) $first->vat_rate);
+
+                if (! $same) {
+                    throw new BusinessRuleException('Seçilen motorların satış fiyatı veya para birimi farklı; birim fiyatı girin ya da ayrı satırlara ekleyin.');
+                }
+
+                [$unitPrice, $discountRate, $vatRate] = [(string) $first->unit_price, (string) $first->discount_rate, (string) $first->vat_rate];
+            }
 
             if ($unitPrice === null || $unitPrice === '') {
                 $price = $this->prices->priceFor($model, $invoice->customer_id, $invoice->invoice_date);
@@ -249,7 +263,7 @@ class InvoiceService
 
             foreach ($lines as $line) {
                 foreach ($line->motorUnits as $motor) {
-                    $this->ensureInvoiceableMotor($motor, $invoice, $line);
+                    $this->ensureMotorAllowed($motor, $invoice, $line);
                 }
 
                 if ($type === InvoiceType::PurchaseInvoice) {
@@ -323,6 +337,8 @@ class InvoiceService
                 }
             }
 
+            $this->ensureMotorLinksAllowCancel($locked);
+
             $this->ledger->reverseFor($locked, $actor, "Fatura iptali ({$locked->displayNumber()}): {$reason}");
 
             $locked->status = InvoiceStatus::Cancelled;
@@ -376,13 +392,33 @@ class InvoiceService
     public function invoiceableMotors(Invoice $invoice, ?int $motorModelId = null): Collection
     {
         return MotorUnit::query()
-            ->with('motorModel')
+            ->with(['motorModel', 'invoiceLines.invoice'])
             ->where('status', MotorUnitStatus::Shipped->value)
             ->when($motorModelId, fn ($q) => $q->where('motor_model_id', $motorModelId))
-            ->where(fn ($q) => $q->whereNull('order_id')->orWhereHas('order', fn ($o) => $o->where('customer_id', $invoice->customer_id)))
-            ->whereDoesntHave('invoiceLines', fn ($l) => $l->whereHas('invoice', fn ($i) => $i->where('status', '!=', InvoiceStatus::Cancelled->value)))
+            // Sipariş bağı yalnızca ilk satışı bağlar: iade gelen motor başka müşteriye satılabilir.
+            ->where(fn ($q) => $q->whereNull('order_id')->orWhereHas('returns')->orWhereHas('order', fn ($o) => $o->where('customer_id', $invoice->customer_id)))
             ->orderBy('serial_number')
-            ->get();
+            ->get()
+            ->reject(fn (MotorUnit $motor) => $this->isOnOpenSale($motor))
+            ->values();
+    }
+
+    /**
+     * Satış iadesine eklenebilecek motorlar: stok iadesi alınmış, bu carinin kesilmiş satışında olup henüz iade faturası
+     * olmayan motorlar (iade orijinal faturaya bağlıysa yalnızca o faturadakiler).
+     *
+     * @return Collection<int, MotorUnit>
+     */
+    public function returnableMotors(Invoice $invoice, ?int $motorModelId = null): Collection
+    {
+        return MotorUnit::query()
+            ->with(['motorModel', 'invoiceLines.invoice', 'returns'])
+            ->whereHas('returns')
+            ->when($motorModelId, fn ($q) => $q->where('motor_model_id', $motorModelId))
+            ->orderBy('serial_number')
+            ->get()
+            ->filter(fn (MotorUnit $motor) => $this->returnProblem($motor, $invoice) === null)
+            ->values();
     }
 
     /**
@@ -397,6 +433,7 @@ class InvoiceService
             ->with('warehouse')
             ->where('part_id', $partId)
             ->where('type', StockMovementType::StockIn->value)
+            ->where(fn ($q) => $q->whereNull('reference_type')->orWhere('reference_type', '!=', 'motor_unit'))
             ->whereDoesntHave('correction')
             ->whereNotExists(fn ($q) => $q->selectRaw('1')
                 ->from('invoice_line_stock_movements as l')
@@ -838,23 +875,101 @@ class InvoiceService
         $line->stockMovements()->sync($ids);
     }
 
+    private function ensureMotorAllowed(MotorUnit $motor, Invoice $invoice, ?InvoiceLine $line = null): void
+    {
+        if ($invoice->type() === InvoiceType::SalesReturn) {
+            $problem = $this->returnProblem($motor, $invoice, $line);
+
+            if ($problem !== null) {
+                throw new BusinessRuleException("{$motor->serial_number}: {$problem}");
+            }
+
+            return;
+        }
+
+        $this->ensureInvoiceableMotor($motor, $invoice, $line);
+    }
+
     private function ensureInvoiceableMotor(MotorUnit $motor, Invoice $invoice, ?InvoiceLine $line = null): void
     {
         if ($motor->status !== MotorUnitStatus::Shipped) {
             throw new BusinessRuleException("{$motor->serial_number} sevk edilmemiş; yalnızca sevk edilen motor faturalanır.");
         }
 
-        if ($motor->order !== null && $motor->order->customer_id !== $invoice->customer_id) {
+        if ($motor->order !== null && $motor->order->customer_id !== $invoice->customer_id && ! $motor->returns()->exists()) {
             throw new BusinessRuleException("{$motor->serial_number} başka bir müşterinin siparişine ait.");
         }
 
-        $taken = $motor->invoiceLines()
-            ->when($line, fn ($q) => $q->whereKeyNot($line->getKey()))
-            ->whereHas('invoice', fn ($q) => $q->where('status', '!=', InvoiceStatus::Cancelled->value))
-            ->exists();
+        if ($this->isOnOpenSale($motor, $line)) {
+            throw new BusinessRuleException("{$motor->serial_number} başka bir faturada zaten var; iade geldiyse önce iade faturasını kesin.");
+        }
+    }
 
-        if ($taken) {
-            throw new BusinessRuleException("{$motor->serial_number} başka bir faturada zaten var.");
+    /** Motor iptal edilmemiş bir satış faturasında mı? Kesilmiş iade faturası o satışı kapatır. */
+    private function isOnOpenSale(MotorUnit $motor, ?InvoiceLine $except = null): bool
+    {
+        $lines = $motor->invoiceLines()->with('invoice')->get()
+            ->reject(fn (InvoiceLine $l) => $l->getKey() === $except?->getKey() || $l->invoice->status === InvoiceStatus::Cancelled);
+
+        $sales = $lines->filter(fn (InvoiceLine $l) => $l->invoice->kind === InvoiceKind::Normal)->count();
+        $returns = $lines->filter(fn (InvoiceLine $l) => $l->invoice->kind === InvoiceKind::Return && $l->invoice->status === InvoiceStatus::Issued)->count();
+
+        return $sales > $returns;
+    }
+
+    /** Motorun iadesi kesilmemiş son satış satırı. */
+    private function saleLineOf(MotorUnit $motor): ?InvoiceLine
+    {
+        return $motor->invoiceLines()->with('invoice')->orderByDesc('invoice_lines.id')->get()
+            ->first(fn (InvoiceLine $l) => $l->invoice->kind === InvoiceKind::Normal && $l->invoice->status === InvoiceStatus::Issued);
+    }
+
+    /** İade faturasına eklenemezse nedeni; eklenebilirse null. */
+    private function returnProblem(MotorUnit $motor, Invoice $invoice, ?InvoiceLine $except = null): ?string
+    {
+        $lines = $motor->invoiceLines()->with('invoice')->get()
+            ->reject(fn (InvoiceLine $l) => $l->getKey() === $except?->getKey() || $l->invoice->status === InvoiceStatus::Cancelled);
+
+        $issuedSales = $lines->filter(fn (InvoiceLine $l) => $l->invoice->kind === InvoiceKind::Normal && $l->invoice->status === InvoiceStatus::Issued)->count();
+        $returnInvoices = $lines->filter(fn (InvoiceLine $l) => $l->invoice->kind === InvoiceKind::Return)->count();
+
+        if ($motor->returns()->count() <= $returnInvoices) {
+            return 'stok iadesi alınmamış; önce motor sayfasından iadeyi alın.';
+        }
+
+        if ($issuedSales <= $returnInvoices) {
+            return 'kesilmiş açık satış faturası yok.';
+        }
+
+        $sale = $this->saleLineOf($motor);
+
+        if ($sale->invoice->customer_id !== $invoice->customer_id) {
+            return 'bu carinin satış faturasında değil.';
+        }
+
+        if ($invoice->original_invoice_id !== null && $sale->invoice_id !== $invoice->original_invoice_id) {
+            return 'iadenin bağlı olduğu orijinal faturada değil.';
+        }
+
+        return null;
+    }
+
+    /** Satışın iadesi varken satış, motor yeniden faturalanmışken iade iptal edilemez: hesap çiftlenir. */
+    private function ensureMotorLinksAllowCancel(Invoice $invoice): void
+    {
+        $lines = $invoice->lines()->with('motorUnits')->get();
+
+        foreach ($lines->flatMap->motorUnits as $motor) {
+            $others = $motor->invoiceLines()->with('invoice')->get()
+                ->reject(fn (InvoiceLine $l) => $l->invoice_id === $invoice->getKey() || $l->invoice->status === InvoiceStatus::Cancelled);
+
+            if ($invoice->kind === InvoiceKind::Normal && $others->contains(fn (InvoiceLine $l) => $l->invoice->kind === InvoiceKind::Return && $l->invoice_id > $invoice->getKey())) {
+                throw new BusinessRuleException("{$motor->serial_number} için iade faturası var; önce iade faturasını iptal edin.");
+            }
+
+            if ($invoice->kind === InvoiceKind::Return && $others->contains(fn (InvoiceLine $l) => $l->invoice->kind === InvoiceKind::Normal && $l->invoice_id > $invoice->getKey())) {
+                throw new BusinessRuleException("{$motor->serial_number} yeniden faturalanmış; önce o faturayı iptal edin.");
+            }
         }
     }
 

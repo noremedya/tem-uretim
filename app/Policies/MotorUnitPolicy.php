@@ -9,7 +9,7 @@ use App\Models\User;
 
 /**
  * Üretilen motorlar: tüm roller görüntüler; yönetici, operatör ve depo sevk eder (CLAUDE.md bölüm 6).
- * Motor kayıtları elle oluşturulmaz, değiştirilmez, silinmez.
+ * Motor kaydı açılış akışı dışında elle oluşturulmaz, değiştirilmez, silinmez; iadeyi yönetici ve depo alır.
  */
 class MotorUnitPolicy
 {
@@ -31,6 +31,21 @@ class MotorUnitPolicy
     public function shipAny(User $actor): bool
     {
         return $actor->can(Permission::MotorUnitsShip);
+    }
+
+    public function registerOpening(User $actor): bool
+    {
+        return $actor->can(Permission::MotorUnitsOpening);
+    }
+
+    public function cancelOpening(User $actor, MotorUnit $unit): bool
+    {
+        return $actor->can(Permission::MotorUnitsOpening) && $unit->isOpening() && $unit->status === MotorUnitStatus::InStock;
+    }
+
+    public function receiveReturn(User $actor, MotorUnit $unit): bool
+    {
+        return $actor->can(Permission::MotorUnitsReturn) && $unit->status === MotorUnitStatus::Shipped;
     }
 
     public function create(User $actor): bool

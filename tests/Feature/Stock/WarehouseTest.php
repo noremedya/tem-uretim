@@ -36,8 +36,8 @@ function qty(Part $part, Warehouse $warehouse): string
     return (string) (StockBalance::query()->where('part_id', $part->id)->where('warehouse_id', $warehouse->id)->value('quantity') ?? '0');
 }
 
-it('kurulumda dört depo açılır ve türler varsayılan depolarına eşlenir', function () {
-    expect(Warehouse::query()->orderBy('id')->pluck('code')->all())->toBe(['HAM', 'URT', 'YM', 'MML'])
+it('kurulumda beş depo açılır ve türler varsayılan depolarına eşlenir', function () {
+    expect(Warehouse::query()->orderBy('id')->pluck('code')->all())->toBe(['HAM', 'URT', 'YM', 'MML', 'IADE'])
         ->and($this->warehouses->defaultIdForType(PartType::RawMaterial))->toBe($this->raw->id)
         ->and($this->warehouses->defaultIdForType(PartType::IndirectConsumable))->toBe($this->raw->id)
         ->and(Warehouse::find($this->warehouses->defaultIdForType(PartType::SemiFinished))->code)->toBe('YM')

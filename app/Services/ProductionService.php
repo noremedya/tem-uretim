@@ -9,13 +9,16 @@ use App\Enums\StockMovementType;
 use App\Enums\WorkOrderStatus;
 use App\Exceptions\BusinessRuleException;
 use App\Exceptions\InsufficientStockException;
+use App\Models\MotorModel;
 use App\Models\MotorUnit;
+use App\Models\MotorUnitReturn;
 use App\Models\Part;
 use App\Models\StockMovement;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WorkOrder;
 use App\Support\Quantity;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -24,6 +27,8 @@ use Illuminate\Support\Facades\DB;
  */
 class ProductionService
 {
+    public const MAX_OPENING_MOTORS = 500;
+
     public function __construct(
         private readonly StockService $stock,
         private readonly NumberSequenceService $numbers,
@@ -123,6 +128,13 @@ class ProductionService
 
             if ($notInStock->isNotEmpty()) {
                 throw new BusinessRuleException('Sevk edilmiş motor var, üretim geri alınamaz: '.$notInStock->pluck('serial_number')->implode(', '));
+            }
+
+            // İade gelen motor bir kez müşteriye gitmiştir; sevk ve iade kayıtları üretimi geri almaya izin vermez.
+            $returned = $locked->motorUnits()->whereHas('returns')->pluck('serial_number');
+
+            if ($returned->isNotEmpty()) {
+                throw new BusinessRuleException('İade gelmiş motor var, üretim geri alınamaz: '.$returned->implode(', '));
             }
 
             // Üretimden giriş çıktı deposunda ters kaydedilir: motorlar orada olmalı.
@@ -253,6 +265,183 @@ class ProductionService
             }
 
             return $locked;
+        });
+    }
+
+    /**
+     * Sistem öncesinden stokta olan motorlar (yalnızca yönetici): verilen seri numaraları olduğu gibi, $generate kadar
+     * motor sistemin ürettiği numarayla açılır; her motor için mamul kartına bir giriş yazılır. Biri reddedilirse
+     * hiçbiri açılmaz.
+     *
+     * @param  list<string>  $serials
+     * @return Collection<int, MotorUnit>
+     */
+    public function registerOpeningMotors(MotorModel $model, Warehouse $warehouse, array $serials, int $generate, mixed $productionDate, User $actor, ?string $note = null): Collection
+    {
+        if (! $actor->is_active || ! $actor->can(Permission::MotorUnitsOpening)) {
+            throw new BusinessRuleException('Açılış motoru girme yetkiniz yok.');
+        }
+
+        $serials = array_values(array_filter(array_map(fn (string $serial): string => trim($serial), $serials), fn (string $serial): bool => $serial !== ''));
+        $lowered = array_map(fn (string $serial): string => mb_strtolower($serial), $serials);
+
+        if ($generate < 0 || count($serials) + $generate === 0) {
+            throw new BusinessRuleException('Seri numarası veya üretilecek adet girin.');
+        }
+
+        if (count($serials) + $generate > self::MAX_OPENING_MOTORS) {
+            throw new BusinessRuleException('Tek seferde en fazla '.self::MAX_OPENING_MOTORS.' motor girilebilir.');
+        }
+
+        if (count(array_unique($lowered)) !== count($lowered)) {
+            throw new BusinessRuleException('Listede aynı seri numarası birden fazla var.');
+        }
+
+        foreach ($serials as $serial) {
+            if (mb_strlen($serial) > 100) {
+                throw new BusinessRuleException("Seri numarası çok uzun: {$serial}");
+            }
+        }
+
+        $date = filled($productionDate) ? CarbonImmutable::parse($productionDate)->startOfDay() : CarbonImmutable::today();
+
+        if ($date->gt(today())) {
+            throw new BusinessRuleException('Üretim tarihi ileri bir tarih olamaz.');
+        }
+
+        $note = filled($note) ? trim($note) : null;
+
+        return DB::transaction(function () use ($model, $warehouse, $serials, $lowered, $generate, $date, $actor, $note): Collection {
+            $model = MotorModel::query()->with('finishedPart')->lockForUpdate()->findOrFail($model->getKey());
+
+            if (! $model->is_active) {
+                throw new BusinessRuleException("{$model->code} pasif; açılış motoru girilemez.");
+            }
+
+            $taken = MotorUnit::query()->whereIn(DB::raw('lower(serial_number)'), $lowered)->pluck('serial_number');
+
+            if ($taken->isNotEmpty()) {
+                throw new BusinessRuleException('Bu seri numaraları zaten kayıtlı: '.$taken->implode(', '));
+            }
+
+            for ($i = 0; $i < $generate; $i++) {
+                $serials[] = $this->numbers->next('serial_number', now(), ['MODEL_KODU' => $model->code]);
+            }
+
+            return collect($serials)->map(function (string $serial) use ($model, $warehouse, $date, $actor, $note): MotorUnit {
+                $unit = new MotorUnit;
+                $unit->forceFill([
+                    'serial_number' => $serial,
+                    'motor_model_id' => $model->getKey(),
+                    'warehouse_id' => $warehouse->getKey(),
+                    'production_date' => $date,
+                    'status' => MotorUnitStatus::InStock,
+                    'notes' => $note,
+                ])->save();
+
+                $this->stock->recordMotorOpening($model->finishedPart, $unit, $actor, "Açılış motoru: {$serial}", $warehouse);
+
+                return $unit;
+            });
+        });
+    }
+
+    /**
+     * Yanlış girilen açılış motorunu iptal eder (yalnızca yönetici, açıklama zorunlu): motor hiç sevk edilmemiş ve
+     * giriş deposunda olmalı. Giriş ters kaydedilir, motor iptal edilir; seri no tekrar kullanılmaz.
+     */
+    public function cancelOpeningMotor(MotorUnit $unit, User $actor, ?string $reason): MotorUnit
+    {
+        $reason = trim((string) $reason);
+
+        if (! $actor->is_active || ! $actor->can(Permission::MotorUnitsOpening)) {
+            throw new BusinessRuleException('Açılış motorunu iptal etme yetkiniz yok.');
+        }
+
+        if ($reason === '') {
+            throw new BusinessRuleException('İptal açıklaması zorunludur.');
+        }
+
+        return DB::transaction(function () use ($unit, $actor, $reason): MotorUnit {
+            $locked = MotorUnit::query()->lockForUpdate()->findOrFail($unit->getKey());
+            $opening = StockMovement::query()
+                ->where('reference_type', $locked->getMorphClass())
+                ->where('reference_id', $locked->getKey())
+                ->where('type', StockMovementType::StockIn->value)
+                ->first();
+
+            if (! $locked->isOpening() || $locked->status !== MotorUnitStatus::InStock || $opening === null) {
+                throw new BusinessRuleException('Yalnızca stoktaki açılış motoru iptal edilebilir.');
+            }
+
+            $moved = StockMovement::query()->where('reference_type', $locked->getMorphClass())->where('reference_id', $locked->getKey())
+                ->where('type', StockMovementType::Shipment->value)->exists();
+
+            if ($moved) {
+                throw new BusinessRuleException('Sevk edilmiş motorun açılış kaydı iptal edilemez.');
+            }
+
+            if ($locked->warehouse_id !== $opening->warehouse_id) {
+                throw new BusinessRuleException('Motor başka depoya aktarılmış; önce giriş deposuna geri aktarın.');
+            }
+
+            $this->stock->reverseMotorOpening($opening, $actor, "Açılış iptali ({$locked->serial_number}): {$reason}");
+
+            $locked->status = MotorUnitStatus::Voided;
+            $locked->save();
+            $unit->setRawAttributes($locked->getAttributes(), sync: true);
+
+            return $unit;
+        });
+    }
+
+    /**
+     * İade gelen motoru stoğa alır (yönetici ve depo, açıklama zorunlu): motor sevk edilmiş olmalı; seçilen depoda
+     * yeniden stokta görünür, mamul kartına iade hareketi yazılır, sevk bilgisi iade kaydında saklanır. İade faturası ayrı
+     * işlemdir; faturalı motor, iade faturası kesilmeden yeniden faturalanamaz (InvoiceService).
+     */
+    public function receiveReturn(MotorUnit $unit, Warehouse $warehouse, User $actor, ?string $reason): MotorUnit
+    {
+        $reason = trim((string) $reason);
+
+        if (! $actor->is_active || ! $actor->can(Permission::MotorUnitsReturn)) {
+            throw new BusinessRuleException('Motor iadesi alma yetkiniz yok.');
+        }
+
+        if ($reason === '') {
+            throw new BusinessRuleException('İade açıklaması zorunludur.');
+        }
+
+        return DB::transaction(function () use ($unit, $warehouse, $actor, $reason): MotorUnit {
+            $locked = MotorUnit::query()->with('motorModel.finishedPart')->lockForUpdate()->findOrFail($unit->getKey());
+
+            if ($locked->status !== MotorUnitStatus::Shipped) {
+                throw new BusinessRuleException("{$locked->serial_number} sevk edilmemiş; yalnızca sevk edilen motorun iadesi alınır.");
+            }
+
+            $movement = $this->stock->recordMotorReturn($locked->motorModel->finishedPart, $locked, $actor, "Motor iadesi {$locked->serial_number}: {$reason}", $warehouse);
+
+            $return = new MotorUnitReturn;
+            $return->forceFill([
+                'motor_unit_id' => $locked->getKey(),
+                'warehouse_id' => $warehouse->getKey(),
+                'stock_movement_id' => $movement->getKey(),
+                'shipped_at' => $locked->shipped_at,
+                'shipped_by_user_id' => $locked->shipped_by_user_id,
+                'description' => $reason,
+                'user_id' => $actor->getKey(),
+            ])->save();
+
+            $locked->forceFill([
+                'status' => MotorUnitStatus::InStock,
+                'warehouse_id' => $warehouse->getKey(),
+                'shipped_at' => null,
+                'shipped_by_user_id' => null,
+            ])->save();
+
+            $unit->setRawAttributes($locked->getAttributes(), sync: true);
+
+            return $unit;
         });
     }
 
