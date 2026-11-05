@@ -34,7 +34,7 @@ it('mamul iş emri oluşturur: numara, model, malzeme listesi ve geçmiş', func
     $wo = $this->f->motorWorkOrder($this->admin, 10, ['assigned_user_id' => $this->operator->id, 'planned_start' => today()]);
 
     expect($wo)
-        ->work_order_number->toBe('IE-'.now()->year.'-00001')
+        ->work_order_number->toBe('URT-'.now()->format('my').'-1002000')
         ->status->toBe(WorkOrderStatus::Planned)
         ->motor_model_id->toBe($this->f->model->id)
         ->quantity->toBe('10.000')
@@ -230,10 +230,21 @@ it('malzeme durumu eksikleri gösterir (fire dahil)', function () {
         ->and($status[$this->f->bearing->id]['missing'])->toBe('20.000');
 });
 
-it('parti bağlanabilir', function () {
-    $batch = ProductionBatch::factory()->create();
+it('her iş emri kendi partisiyle açılır: lot no = iş emri no (URT öneki olmadan)', function () {
+    $other = ProductionBatch::factory()->create();
+    $first = $this->f->motorWorkOrder($this->admin, 1, ['production_batch_id' => $other->id]);
+    $second = $this->f->motorWorkOrder($this->admin, 1);
+    $suffix = now()->format('my');
 
-    expect($this->f->motorWorkOrder($this->admin, 1, ['production_batch_id' => $batch->id])->production_batch_id)->toBe($batch->id);
+    expect($first->productionBatch)->batch_number->toBe("{$suffix}-1002000")->date->isToday()->toBeTrue()
+        ->and($first->work_order_number)->toBe("URT-{$suffix}-1002000")
+        ->and($first->production_batch_id)->not->toBe($other->id)
+        ->and($second->productionBatch->batch_number)->toBe("{$suffix}-1002001")
+        ->and($second->work_order_number)->toBe("URT-{$suffix}-1002001");
+
+    // Parti sonradan değiştirilemez.
+    $this->service->update($second, ['production_batch_id' => $other->id], $second->lock_version);
+    expect($second->refresh()->production_batch_id)->not->toBe($other->id);
 });
 
 describe('sipariş kalemi', function () {

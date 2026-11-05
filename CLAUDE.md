@@ -83,8 +83,10 @@ Tablo adları, kolon adları ve enum değerleri İngilizce; arayüz etiketleri T
 - **orders**: order_number (unique, otomatik), customer_reference (müşteri sipariş no, isteğe bağlı, aranabilir), customer_id, order_date, due_date (zorunlu, >= order_date), status (enum: open, partial, completed, cancelled — açık, kısmi, tamamlandı, iptal), cancellation_reason (iptalde zorunlu), notes, lock_version
 - **order_items**: order_id, motor_model_id, quantity (tam sayı, > 0); (order_id, motor_model_id) unique
 - **number_sequences** (numara sayaçları): name, scope, last_value; (name, scope) unique — bkz. bölüm 5 "Numara üretimi"
-- **production_batches** (parti): batch_number (unique, elle girilir), date, notes, lock_version
-- **work_orders**: work_order_number (unique, otomatik), product_part_id (üretilen kart: yarı mamul veya mamul), motor_model_id (nullable; mamulde dolu), order_item_id (nullable; yalnızca mamulde, kalemin modeli aynı olmalı), quantity (> 0; birimin küsurat kuralına uyar), production_batch_id (nullable), source_warehouse_id (nullable — malzeme deposu), target_warehouse_id (çıktı deposu), status (enum: planned, in_progress, completed, cancelled — planlandı, üretimde, tamamlandı, iptal), assigned_user_id (nullable; aktif saha operatörü), planned_start (tarih, isteğe bağlı), planned_end (tarih, zorunlu, >= planned_start), started_at, completed_at, cancellation_reason (iptalde zorunlu), notes, lock_version
+- **production_batches** (parti/lot): batch_number (unique, otomatik — iş emri açılırken `{AA}{YY}-{SIRA:7}`, ör. 1126-1002000; sıra 1.002.000'den başlar, tarihle sıfırlanmaz), date (açılış günü), notes (yalnızca bu değişir), lock_version. Elle açılmaz; her iş emrinin kendi partisi vardır (karar 2026-11-05).
+- **motor_designs** (tasarımlar, deneme reçetesi): code (unique, büyük harf), name, description, is_active, lock_version. Stoktan düşmez, iş emri açılamaz, motor modeline bağlı değildir; silinmez, pasifleştirilir.
+- **motor_design_items**: motor_design_id, part_id (nullable; mamul ve endirekt sarf olamaz) veya description + unit_id (kartı olmayan deneme bileşeni; check constraint: biri), quantity (> 0), notes; (motor_design_id, part_id) unique. Serbestçe eklenir, değiştirilir, silinir (pasif tasarımda değişmez).
+- **work_orders**: work_order_number (unique, otomatik; `URT-` + parti no, ör. URT-1126-1002000), product_part_id (üretilen kart: yarı mamul veya mamul), motor_model_id (nullable; mamulde dolu), order_item_id (nullable; yalnızca mamulde, kalemin modeli aynı olmalı), quantity (> 0; birimin küsurat kuralına uyar), production_batch_id (otomatik, değişmez; eski kayıtlarda boş olabilir), source_warehouse_id (nullable — malzeme deposu), target_warehouse_id (çıktı deposu), status (enum: planned, in_progress, completed, cancelled — planlandı, üretimde, tamamlandı, iptal), assigned_user_id (nullable; aktif saha operatörü), planned_start (tarih, isteğe bağlı), planned_end (tarih, zorunlu, >= planned_start), started_at, completed_at, cancellation_reason (iptalde zorunlu), notes, lock_version
 - **work_order_materials** (iş emrinin malzeme listesi; oluşturulurken reçeteden kopyalanır): work_order_id, part_id, warehouse_id (düşüleceği depo), scrap_quantity_per_unit ve scrap_part_id (reçeteden), quantity_per_unit, scrap_rate, required_quantity (adet × birim başına), planned_scrap (standart fire), actual_scrap (tamamlamada girilen fire, nullable); (work_order_id, part_id) unique
 - **work_order_status_histories**: work_order_id, from_status (oluşturmada null), to_status, user_id, description, created_at. Update/delete yok (veritabanı trigger'ı ile de engellenir).
 - **motor_units** (üretilen motor): serial_number (unique), motor_model_id, work_order_id, production_batch_id, order_id (nullable), warehouse_id (bulunduğu depo), production_date, status (enum: in_stock, shipped, voided — stokta, sevk edildi, iptal edildi), shipped_at, shipped_by_user_id, notes. Silinmez; seri no tekrar kullanılmaz.
@@ -102,7 +104,7 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - Her geçiş `work_order_status_histories`'e yazılır.
 
 **İş emri**
-- Bir stok kartı üretir: yarı mamul veya mamul. Mamul iş emri siparişin aynı modeldeki kalemine bağlanabilir. Numara: `IE-{YIL}-{SIRA:5}`.
+- Bir stok kartı üretir: yarı mamul veya mamul. Mamul iş emri siparişin aynı modeldeki kalemine bağlanabilir. Numara: `URT-{PARTI_NO}` (ör. URT-1126-1002000); `IE` verim sınıfıyla (IE1–IE4) karıştığı için kullanılmaz. Lot (parti) numarası iş emri numarasıyla aynıdır: iş emri açılırken partisi otomatik oluşur (ay/yıl = açılış tarihi; sıra 1.002.000'den kesintisiz). Parti elle açılmaz ve değiştirilmez.
 - **Malzeme listesi** oluşturulurken reçeteden `work_order_materials`'a kopyalanır; reçete sonradan değişse de açık iş emri etkilenmez. `planned` iş emrinde "reçeteyi yenile" ile güncel reçete yeniden kopyalanır. Reçetesi olmayan karta iş emri açılamaz.
 - **Atama:** atanan operatör isteğe bağlıdır ve sonradan atanabilir; yalnızca aktif saha operatörleri atanabilir. Atanmamış iş emrini yalnızca yönetici başlatır ve tamamlar.
 - **Tarihler:** planlanan bitiş zorunlu (gecikme buna göre hesaplanır), planlanan başlangıç isteğe bağlı.
@@ -112,7 +114,7 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - Reçetesinde pasif bileşen olan karta iş emri açılamaz (pasif parça hareket görmez).
 - Adet yönetici tarafından `planned` ve `in_progress` iken değiştirilebilir (malzeme ihtiyacı yeniden hesaplanır). **Kısmi tamamlama yoktur**: az üretildiyse önce adet düşürülür.
 - **Yetersiz malzeme uyarısı:** iş emri ekranında her malzeme için ihtiyaç (fire dahil), mevcut ve eksik gösterilir. Uyarıdır; oluşturma ve başlatmayı engellemez, başka iş emirlerinin ihtiyacını hesaba katmaz.
-- **Eksiği tamamla** (Malzemeler sekmesi; kod/ada tıklama veya satır butonu): yalnızca planlı/üretimdeki iş emrinde ve eksiği olan satırda. Hammadde, komponent, sarf → stok girişi (stok yetkisi; miktar eksik kadar dolu, tam sayılı birimde yukarı yuvarlı; açıklama boşsa "<iş emri no> eksiği"; pencere başına çift gönderim anahtarı). Yarı mamul → "iş emri aç" (iş emri yönetimi yetkisi; adet eksik kadar, parti bu iş emrinden, planlanan bitiş bu iş emrinin planlanan başlangıcı veya bugün) veya "dışarıdan (fason) stok girişi" (stok yetkisi). Depo yarı mamulde yalnızca fason girişi yapar; operatöre buton çıkmaz.
+- **Eksiği tamamla** (Malzemeler sekmesi; kod/ada tıklama veya satır butonu): yalnızca planlı/üretimdeki iş emrinde ve eksiği olan satırda. Hammadde, komponent, sarf → stok girişi (stok yetkisi; miktar eksik kadar dolu, tam sayılı birimde yukarı yuvarlı; açıklama boşsa "<iş emri no> eksiği"; pencere başına çift gönderim anahtarı). Yarı mamul → "iş emri aç" (iş emri yönetimi yetkisi; adet eksik kadar, kendi partisiyle, planlanan bitiş bu iş emrinin planlanan başlangıcı veya bugün) veya "dışarıdan (fason) stok girişi" (stok yetkisi). Depo yarı mamulde yalnızca fason girişi yapar; operatöre buton çıkmaz.
 
 **İş emri tamamlanınca (tek transaction):**
 1. Operatör her malzeme için gerçekleşen fireyi girer (varsayılan: standart fire). Net ihtiyaç (`adet × birim başına`) `production_consumption`, fire `production_scrap` hareketiyle düşülür.
@@ -131,6 +133,7 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - **Hazır reçete şablonları** (`bom_templates`, `bom_template_lines`; Üretim › Reçete şablonları; yetki reçeteyle aynı): bir ürün türü (mamul veya yarı mamul) için satır listesi; her satır bileşen veya eş ürün, hangi tür ve isteğe bağlı alt türden ürün seçileceği, varsayılan miktar ve fire (oran veya brüt/fire). Reçeteler ekranında **"Şablondan başlat"**: her satıra yalnızca uyan ürünler listelenir (tür + alt tür); ürün seçilmeyen satır ve reçetede zaten olan bileşen atlanır; boş miktar girilmeden eklenmez; tek işlem (bir satır reddedilirse hiçbiri eklenmez), satırlar BomService ile eklenir. Kurulumda örnek şablonlar: Trifaze asenkron motor (Tem Motor B3 montaj parça listesi, çizim numaraları 01–15; ön/arka rulman ayrı satır, gövde miktarı girilir), Monofaze MD (+ daimi kondansatör), Monofaze MSD (+ start ve daimi kondansatör, merkezkaç anahtarı), Vibrasyon motoru (pervanesiz, eksantrik saç), Stator paketi (pres; sac brüt 6,61/fire 2,88 örnek, rotor paketi eş ürün), Bobinajlı stator, Enjekte rotor, İşlenmiş mil (brüt 2,2/fire 0,5 örnek), Mil+rotor, TP serisi bor yağı pompası (Tem Motor montaj bağlantı listesi, çizim numaraları 01–20 ve 22 keçe; çizimde numarası olmayan O-ring; salyangoz kapak, flanşlar ve borular hammaddeden (kg) üretilen yarı mamul — şablonları Pompa salyangoz kapağı, Pompa flanşı, Pompa borusu; pompa pervanesi dışarıdan gelen yarı mamul (adet, fason stok girişi); vida/pul/O-ring adetleri girilir). Bilinmeyen miktarlar boştur. Firmanın sitesinde (temmotor.com) yalnızca bu iki montaj çizimi var; MD/MSD B3 çizimini kullanır, vibrasyon ve diğer tipler çizimsizdir. Aynı ürünü seçen satırlar (ör. ön ve arka rulman aynı tip) tek reçete satırında toplanır (fireleri farklıysa reddedilir). Şablonun montaj çizimi (`drawing`, `config/assembly_drawings.php`; görsel `public/images/montaj`, firmanın kendi sitesinden) ve satırın çizimdeki parça numarası (`drawing_number`) "Motor oluştur" ekranında kullanılır.
 - **Motor oluştur** (`/motor-olustur`, Üretim menüsü; Motor modelleri listesinde ilk seçenek "Bileşen seçerek oluştur"; **tüm roller**, yetki `motor_models.build`): motor tipi (aktif mamul şablonu) ve motor bilgileri (kod, ad, alt tür, faz, kW, devir, kutup, gerilim, gövde ölçüsü, montaj şekli) girilir; montaj çiziminde her numara ürün seçildiyse yeşil, seçilmediyse kırmızı işaretlenir (tıklayınca satıra gider). Her satır: ürün görseli, açıklama (seçim listelerinde de ürün görseli) (ürün seçimi, adıyla aranır — ör. rulman çeşidi), miktar, birim (ürünün biriminden: adet, gram, kg…). Kaydedince motor modeli, mamul kartı ve reçetesi tek işlemde oluşur (`MotorBuilderService`); hiç bileşen seçilmezse veya bir satır reddedilirse model de oluşmaz. Mevcut model ve reçetenin değiştirilmesi yine motor modeli yönetme yetkisindedir. Yeni motor tipi şablon + çizim (`config/assembly_drawings.php`) olarak eklenir.
 - Döngü yasaktır (A, B'yi içerir; B, A'yı içeremez — dolaylı dahil); kontrol kilit altında yapılır.
+- **Tasarımlar** (Üretim › Tasarımlar, `MotorDesignService`; karar 2026-11-05): deneme reçetesi — kod, ad, açıklama ve bileşen satırları (tanımlı ürün veya kartı olmayan deneme bileşeni: ad + birim). Stoktan düşmez, iş emri açılamaz, motor modeline bağlı değildir; bileşenler serbestçe eklenir, değiştirilir, kaldırılır. Yetki motor modeliyle aynı (yönetici yönetir, muhasebe görür).
 
 **Mamul ve yarı mamul**
 - Motor modeli oluşturulunca mamul kartı otomatik açılır: kod ve ad modelinkiyle aynı, birim "Adet", tür `finished_good`. Model kodu/adı değişince kart da değişir; model pasifleşince kart pasifleşir.
@@ -222,11 +225,12 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - Gümrük beyannamesi (no, tarih; ileri tarih olamaz) kesilmiş ihracat/ihraç kayıtlı faturaya sonradan girilir ve denetim izine yazılır; kesilmiş fatura kilidi yalnızca bu iki alanı serbest bırakır (trigger). İhraç kayıtlı satışta son gün fatura tarihi + 3 ay (`accounting.registered_export_months`); beyannamesi gelmeyenler ve süresi geçenler fatura listesinde filtrelenir, finans özetinde sayılır.
 - Kur türü değişmedi (fatura tarihi kuru); ihracatta fatura mı beyanname tarihi kuru mu — mali müşavirle teyit edilecek. Uyumsoft ihracat profiliyle gönderim Aşama 6'da.
 
-**Numara üretimi** (`NumberSequenceService`): sipariş no, iş emri no ve seri no aynı servisle üretilir.
+**Numara üretimi** (`NumberSequenceService`): sipariş no, parti no (iş emri no bundan türer) ve seri no aynı servisle üretilir.
 - Numara, yapılandırılabilir bir şablondan üretilir (`config/numbering.php`). Belirteçler: `{YIL}` (4 hane), `{YY}`, `{AA}` (ay), `{SIRA:n}` (n haneli sıra) ve çağıranın verdiği bağlam değerleri (ör. `{MODEL_KODU}`).
 - Sayaç kapsamı, şablonun sıra dışındaki kısmıdır: `SIP-{YIL}-{SIRA:5}` için kapsam `SIP-2026-` olduğundan sıra her yıl başında kendiliğinden sıfırlanır.
 - Sayaç `number_sequences` tablosunda tek atomik sorguyla artırılır (`INSERT ... ON CONFLICT DO UPDATE ... RETURNING`); satır kilidi çağıranın transaction'ı bitene kadar tutulur. Böylece eşzamanlı işlemlerde çakışma olmaz, geri alınan işlem numara tüketmez.
 - Sipariş no: `SIP-{YIL}-{SIRA:5}` (ör. SIP-2026-00001).
+- **Sürekli sıra:** şablon dizi olarak `continuous => true` ve `start` alabilir; tarih belirteçleri sayacı sıfırlamaz (kapsam şablonun kendisidir). Parti no: `{AA}{YY}-{SIRA:7}`, başlangıç 1.002.000.
 
 **Müşteri**
 - Pasif müşteriye yeni sipariş açılamaz (siparişin müşterisi pasif bir müşteriyle değiştirilemez); mevcut siparişleri görünür kalır.
@@ -243,7 +247,7 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - `completed` ve `cancelled` siparişler düzenlenemez. `partial` siparişte yalnızca termin, müşteri sipariş no ve notlar değişebilir (müşteri ve kalemler değişmez).
 - Pasif motor modeli yeni kaleme eklenemez; mevcut kalemler korunur.
 
-**Denetim izi:** users, units, brands, part_subtypes, warehouses, parts (depo bazlı kritik seviye dahil), motor_models, bom_items, bom_co_products, bom_templates, customers, orders, order_items, production_batches, work_orders, motor_units, exchange_rates, prices, invoices, invoice_lines, cash_accounts, payments, cheques değişiklikleri activitylog ile kaydedilir. Yönetici için görüntüleme ekranı olsun.
+**Denetim izi:** users, units, brands, part_subtypes, warehouses, parts (depo bazlı kritik seviye dahil), motor_models, motor_designs, motor_design_items, bom_items, bom_co_products, bom_templates, customers, orders, order_items, production_batches, work_orders, motor_units, exchange_rates, prices, invoices, invoice_lines, cash_accounts, payments, cheques değişiklikleri activitylog ile kaydedilir. Yönetici için görüntüleme ekranı olsun.
 - Kayıtlar **kalıcıdır**; otomatik silinmez (`activitylog:clean` zamanlanmaz).
 - Kullanıcı girişleri de yazılır: başarılı giriş, başarısız giriş (denenen kullanıcı adı) ve çıkış; zaman ve IP ile (log adı `auth`; şifre hiçbir zaman yazılmaz).
 - Ekran: tarih, kullanıcı, kayıt türü ve kaydı, işlem; filtreler (kayıt türü, kullanıcı, işlem, tarih); detayda değişen alanlar eski → yeni, Türkçe alan adları, enum etiketleri ve bağlı kayıtların adlarıyla. Yönetici, kayıt sayfalarındaki "Geçmiş" butonuyla o kaydın denetim izini açar.
@@ -254,6 +258,7 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 |---|---|---|---|---|
 | Kullanıcı yönetimi | ✓ | | | |
 | Motor modeli, reçete | ✓ | | | görüntüleme |
+| Tasarımlar (deneme reçetesi) | ✓ | | | görüntüleme |
 | Motor oluştur (bileşen seçerek yeni motor) | ✓ | ✓ | ✓ | ✓ |
 | Cari hesaplar (müşteri, tedarikçi) | ✓ | | | ✓ |
 | Sipariş | ✓ | | | görüntüleme |
@@ -265,7 +270,7 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 | Stok giriş/çıkış/sayım | ✓ | | ✓ | |
 | Stok hareketleri listesi | ✓ | ✓ | ✓ | |
 | Reçete | ✓ (motor modeli yetkisiyle) | | | görüntüleme |
-| Üretim partileri | ✓ | | | |
+| Üretim partileri (otomatik; yalnızca not) | ✓ | | | |
 | Üretilen motorlar | ✓ | görüntüleme | görüntüleme | görüntüleme |
 | Sevk | ✓ | ✓ | ✓ | |
 | Açılış motoru | ✓ | | | |

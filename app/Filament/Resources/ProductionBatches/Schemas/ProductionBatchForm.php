@@ -16,15 +16,15 @@ class ProductionBatchForm
             Section::make()
                 ->columns(2)
                 ->schema([
+                    // Parti no ve tarih iş emri açılırken otomatik verilir; değişmez.
                     TextInput::make('batch_number')
                         ->label('Parti no')
-                        ->required()
-                        ->maxLength(50)
-                        ->unique(ignoreRecord: true),
+                        ->disabled()
+                        ->dehydrated(false),
                     DatePicker::make('date')
                         ->label('Tarih')
-                        ->required()
-                        ->default(today())
+                        ->disabled()
+                        ->dehydrated(false)
                         ->native(false)
                         ->displayFormat('d.m.Y'),
                     Textarea::make('notes')->label('Notlar')->rows(3)->columnSpanFull(),

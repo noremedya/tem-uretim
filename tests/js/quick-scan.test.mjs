@@ -22,7 +22,7 @@ test('farklı kod hemen kabul edilir; boş okuma kabul edilmez', () => {
 
     assert.equal(accept('HM-SAC'), true)
     now += 100
-    assert.equal(accept('IE-2026-00001'), true)
+    assert.equal(accept('URT-1126-1002000'), true)
     assert.equal(accept('   '), false)
     assert.equal(accept(null), false)
 })

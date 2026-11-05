@@ -61,11 +61,6 @@ class WorkOrderForm
                         ->visible(fn (Get $get): bool => Part::query()->whereKey($get('product_part_id'))->where('type', PartType::FinishedGood->value)->exists())
                         ->disabled(fn (?WorkOrder $record): bool => $record !== null && $record->status !== WorkOrderStatus::Planned)
                         ->helperText('Yalnızca açık veya kısmi siparişlerin aynı modeldeki kalemleri. Kalem kotası aşılamaz.'),
-                    Select::make('production_batch_id')
-                        ->label('Parti')
-                        ->relationship('productionBatch', 'batch_number')
-                        ->searchable()
-                        ->preload(),
                 ]),
             Section::make('Depolar')
                 ->columns(2)

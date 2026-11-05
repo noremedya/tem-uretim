@@ -87,3 +87,12 @@ it('sayaç değeri veritabanında pozitif olmak zorundadır', function () {
     expect(fn () => DB::table('number_sequences')->insert(['name' => 'x', 'scope' => 'x', 'last_value' => 0]))
         ->toThrow(QueryException::class);
 });
+
+it('parti no ay/yıl ve 1.002.000\'den başlayan, tarihle sıfırlanmayan sırayla üretilir', function () {
+    $service = app(NumberSequenceService::class);
+
+    expect($service->next('production_batch', Carbon::parse('2026-11-05')))->toBe('1126-1002000')
+        ->and($service->next('production_batch', Carbon::parse('2026-11-20')))->toBe('1126-1002001')
+        ->and($service->next('production_batch', Carbon::parse('2026-12-01')))->toBe('1226-1002002')
+        ->and($service->next('production_batch', Carbon::parse('2027-01-02')))->toBe('0127-1002003');
+});

@@ -25,7 +25,6 @@ use App\Models\MotorUnit;
 use App\Models\Order;
 use App\Models\Part;
 use App\Models\PartSubtype;
-use App\Models\ProductionBatch;
 use App\Models\StockMovement;
 use App\Models\Unit;
 use App\Models\User;
@@ -38,12 +37,12 @@ use App\Services\CustomerService;
 use App\Services\ExchangeRateService;
 use App\Services\InvoiceService;
 use App\Services\LedgerService;
+use App\Services\MotorDesignService;
 use App\Services\MotorModelService;
 use App\Services\OrderService;
 use App\Services\PartService;
 use App\Services\PaymentService;
 use App\Services\PriceService;
-use App\Services\ProductionBatchService;
 use App\Services\ProductionService;
 use App\Services\StockService;
 use App\Services\UserService;
@@ -163,6 +162,20 @@ class DemoDataSeeder extends Seeder
 
     // --- Ana veriler (120 gün önce, sistem geçişi) ----------------------------------------------------------
 
+    /** Tasarım (deneme reçetesi): stoktan düşmez; bir bileşenin henüz ürün kartı yok. */
+    private function createDesign(): void
+    {
+        $service = app(MotorDesignService::class);
+        $design = $service->create([
+            'code' => 'TSR-71-IE3', 'name' => '71 tip IE3 deneme', 'description' => 'Daha uzun paket ve yeni fanla verim denemesi.',
+        ]);
+
+        $service->addItem($design, ['part_id' => $this->parts['KOM-RUL-6202']->getKey(), 'quantity' => '2']);
+        $service->addItem($design, ['part_id' => $this->parts['KOM-KLEMENSBLOK']->getKey(), 'quantity' => '1']);
+        $service->addItem($design, ['part_id' => $this->parts['DS-VERNIK']->getKey(), 'quantity' => '0,25', 'notes' => 'Daldırma süresi uzatıldı']);
+        $service->addItem($design, ['description' => 'Yeni tip fan (numune)', 'unit_id' => $this->units['Adet']->getKey(), 'quantity' => '1', 'notes' => 'Tedarikçi numunesi']);
+    }
+
     private function createMasterData(CarbonImmutable $start): void
     {
         $this->createUsers();
@@ -173,6 +186,7 @@ class DemoDataSeeder extends Seeder
             $this->createParts();
             $this->createModelsAndBoms();
             $this->createCustomers();
+            $this->createDesign();
         });
         $this->as('yonetici', fn () => $this->attachImages());
         $this->as('yonetici', fn () => $this->assignBrands());
@@ -613,10 +627,6 @@ class DemoDataSeeder extends Seeder
      */
     private function planWeek(CarbonImmutable $monday, array $orderCustomers, bool $isLast, int $index): void
     {
-        $batch = $this->as('yonetici', fn () => app(ProductionBatchService::class)->create([
-            'batch_number' => 'P-'.$monday->format('o').'-'.$monday->format('W'), 'date' => $monday, 'notes' => 'Haftalık üretim partisi',
-        ]));
-
         $orders = [];
         $demand = [];
 
@@ -663,7 +673,7 @@ class DemoDataSeeder extends Seeder
         foreach ($demand as $frame => $quantity) {
             foreach ($semiOrder as $step => $prefix) {
                 $part = $this->parts["{$prefix}-{$frame}"];
-                $workOrder = $this->createWorkOrder($part, $prefix === 'YM-KAPAK' ? $quantity * 2 : $quantity, 'operator2', $batch, $monday->addDay(), $monday->addDays(2));
+                $workOrder = $this->createWorkOrder($part, $prefix === 'YM-KAPAK' ? $quantity * 2 : $quantity, 'operator2', $monday->addDay(), $monday->addDays(2));
                 $startAt = $monday->addDay()->setTime($hour, 0)->addMinutes($step * 20);
                 $doneAt = $monday->addDay()->setTime(12 + $step, 0);
                 $this->schedule($startAt, fn () => $this->start($workOrder, 'operator2'));
@@ -679,7 +689,7 @@ class DemoDataSeeder extends Seeder
                 $frame = array_search($item->motor_model_id, array_map(fn ($m) => $m->getKey(), $this->models), true);
                 $late = $index % 4 === 1;
                 $plannedEnd = $isLast ? $monday->addDays(8) : $monday->addDays($late ? 2 : 3);
-                $workOrder = $this->createWorkOrder($this->models[$frame]->finishedPart, $item->quantity, 'operator1', $batch, $monday->addDays(2), $plannedEnd, $item->getKey());
+                $workOrder = $this->createWorkOrder($this->models[$frame]->finishedPart, $item->quantity, 'operator1', $monday->addDays(2), $plannedEnd, $item->getKey());
                 $workOrders[] = $workOrder;
 
                 $this->schedule($monday->addDays(2)->setTime(8, 0), fn () => $this->start($workOrder, 'operator1'));
@@ -692,7 +702,7 @@ class DemoDataSeeder extends Seeder
 
         if ($stockRun !== null) {
             [$frame, $quantity] = $stockRun;
-            $workOrder = $this->createWorkOrder($this->models[$frame]->finishedPart, $quantity, 'operator1', $batch, $monday->addDays(2), $monday->addDays(4));
+            $workOrder = $this->createWorkOrder($this->models[$frame]->finishedPart, $quantity, 'operator1', $monday->addDays(2), $monday->addDays(4));
             $this->schedule($monday->addDays(2)->setTime(9, 0), fn () => $this->start($workOrder, 'operator1'));
             $this->schedule($monday->addDays(3)->setTime(11, 0), fn () => $this->complete($workOrder, 'operator1'));
 
@@ -707,32 +717,32 @@ class DemoDataSeeder extends Seeder
 
         if ($overdue) {
             // Planlanan bitişi geçmiş, hâlâ üretimde: dashboard'da "gecikmiş".
-            $workOrder = $this->createWorkOrder($this->models['90S']->finishedPart, 5, 'operator1', $batch, $monday->addDays(2), $monday->addDays(4), notes: 'Stok için; kapak dökümü bekleniyor');
+            $workOrder = $this->createWorkOrder($this->models['90S']->finishedPart, 5, 'operator1', $monday->addDays(2), $monday->addDays(4), notes: 'Stok için; kapak dökümü bekleniyor');
             $this->schedule($monday->addDays(3)->setTime(8, 0), fn () => $this->start($workOrder, 'operator1'));
         }
 
         if ($index === 2) {
             // İptal edilen iş emri örneği.
-            $workOrder = $this->createWorkOrder($this->models['80']->finishedPart, 8, 'operator1', $batch, $monday->addDays(2), $monday->addDays(4));
+            $workOrder = $this->createWorkOrder($this->models['80']->finishedPart, 8, 'operator1', $monday->addDays(2), $monday->addDays(4));
             $this->schedule($monday->setTime(15, 0), fn () => $this->as('yonetici', fn () => app(WorkOrderService::class)->cancel($workOrder->fresh(), $this->users['yonetici'], 'Stok üretimi ertelendi')));
         }
 
         if ($isLast) {
             // Gelecek haftanın planı: atanmamış ve atanmış planlı iş emirleri.
-            $this->createWorkOrder($this->models['71']->finishedPart, 20, 'operator1', null, $monday->addWeek(), $monday->addWeek()->addDays(3));
-            $this->createWorkOrder($this->models['80']->finishedPart, 10, null, null, $monday->addWeek()->addDays(2), $monday->addWeek()->addDays(4));
+            $this->createWorkOrder($this->models['71']->finishedPart, 20, 'operator1', $monday->addWeek(), $monday->addWeek()->addDays(3));
+            $this->createWorkOrder($this->models['80']->finishedPart, 10, null, $monday->addWeek()->addDays(2), $monday->addWeek()->addDays(4));
         }
 
         // Haftalık alış faturaları (depo girişlerine bağlanır).
         $this->schedule($monday->addDays(4)->setTime(15, 0), fn () => $this->invoicePurchases($monday));
     }
 
-    private function createWorkOrder(Part $product, int $quantity, ?string $operator, ?ProductionBatch $batch, CarbonImmutable $plannedStart, CarbonImmutable $plannedEnd, ?int $orderItemId = null, ?string $notes = null): WorkOrder
+    private function createWorkOrder(Part $product, int $quantity, ?string $operator, CarbonImmutable $plannedStart, CarbonImmutable $plannedEnd, ?int $orderItemId = null, ?string $notes = null): WorkOrder
     {
         return $this->as('yonetici', fn () => app(WorkOrderService::class)->create([
             'product_part_id' => $product->getKey(), 'quantity' => $quantity, 'order_item_id' => $orderItemId,
             'assigned_user_id' => $operator ? $this->users[$operator]->getKey() : null,
-            'production_batch_id' => $batch?->getKey(), 'planned_start' => $plannedStart, 'planned_end' => $plannedEnd, 'notes' => $notes,
+            'planned_start' => $plannedStart, 'planned_end' => $plannedEnd, 'notes' => $notes,
         ], $this->users['yonetici']));
     }
 

@@ -1,7 +1,7 @@
 <?php
 
 use App\Enums\WorkOrderStatus;
-use App\Filament\Resources\ProductionBatches\Pages\CreateProductionBatch;
+use App\Filament\Resources\ProductionBatches\Pages\EditProductionBatch;
 use App\Filament\Resources\ProductionBatches\ProductionBatchResource;
 use App\Filament\Resources\WorkOrders\Pages\CreateWorkOrder;
 use App\Filament\Resources\WorkOrders\Pages\EditWorkOrder;
@@ -11,7 +11,6 @@ use App\Filament\Resources\WorkOrders\RelationManagers\MaterialsRelationManager;
 use App\Filament\Resources\WorkOrders\RelationManagers\StatusHistoriesRelationManager;
 use App\Filament\Resources\WorkOrders\WorkOrderResource;
 use App\Models\Order;
-use App\Models\ProductionBatch;
 use App\Models\User;
 use App\Models\WorkOrder;
 use App\Services\WorkOrderService;
@@ -219,20 +218,22 @@ it('liste: gecikenler filtresi ve sayfalar açılır', function () {
     $this->get(WorkOrderResource::getUrl('edit', ['record' => $late]))->assertOk();
 });
 
-it('üretim partisini yönetici oluşturur; operatör oluşturamaz', function () {
+it('parti elle açılmaz; yönetici yalnızca notunu değiştirir, operatör ve depo göremez', function () {
     $this->actingAs($this->admin);
+    $batch = $this->f->motorWorkOrder($this->admin, 1)->productionBatch;
+    $number = $batch->batch_number;
 
-    Livewire::test(CreateProductionBatch::class)
-        ->fillForm(['batch_number' => ' PRT-2026-01 ', 'date' => today()->toDateString()])
-        ->call('create')
+    expect(ProductionBatchResource::canCreate())->toBeFalse();
+
+    Livewire::test(EditProductionBatch::class, ['record' => $batch->getRouteKey()])
+        ->fillForm(['batch_number' => 'X-1', 'notes' => 'Deneme notu'])
+        ->call('save')
         ->assertHasNoFormErrors();
 
-    expect(ProductionBatch::sole()->batch_number)->toBe('PRT-2026-01');
+    expect($batch->refresh())->batch_number->toBe($number)->notes->toBe('Deneme notu');
 
-    // Partiler yalnızca yöneticiye açık.
     foreach ([$this->operator, $this->warehouse] as $user) {
         $this->actingAs($user);
         $this->get(ProductionBatchResource::getUrl('index'))->assertForbidden();
-        $this->get(ProductionBatchResource::getUrl('create'))->assertForbidden();
     }
 });

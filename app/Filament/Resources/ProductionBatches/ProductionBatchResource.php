@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\ProductionBatches;
 
-use App\Filament\Resources\ProductionBatches\Pages\CreateProductionBatch;
 use App\Filament\Resources\ProductionBatches\Pages\EditProductionBatch;
 use App\Filament\Resources\ProductionBatches\Pages\ListProductionBatches;
 use App\Filament\Resources\ProductionBatches\Schemas\ProductionBatchForm;
@@ -47,7 +46,6 @@ class ProductionBatchResource extends Resource
     {
         return [
             'index' => ListProductionBatches::route('/'),
-            'create' => CreateProductionBatch::route('/create'),
             'edit' => EditProductionBatch::route('/{record}/edit'),
         ];
     }

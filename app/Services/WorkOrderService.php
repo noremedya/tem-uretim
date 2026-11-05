@@ -26,18 +26,22 @@ use Illuminate\Support\Facades\DB;
  */
 class WorkOrderService
 {
-    private const EDITABLE_FIELDS = ['assigned_user_id', 'planned_start', 'planned_end', 'production_batch_id', 'notes'];
+    private const EDITABLE_FIELDS = ['assigned_user_id', 'planned_start', 'planned_end', 'notes'];
 
     public function __construct(
         private readonly NumberSequenceService $numbers,
         private readonly WarehouseService $warehouses,
+        private readonly ProductionBatchService $batches,
     ) {}
 
     /**
      * Depolar: source_warehouse_id verilmezse üretim deposu (yoksa boş = her malzeme kendi deposundan), açıkça boş
      * verilirse her malzeme kendi deposundan; target_warehouse_id verilmezse üretilen ürünün varsayılan deposu.
      *
-     * @param  array{product_part_id: int, quantity: mixed, order_item_id?: ?int, assigned_user_id?: ?int, planned_start?: mixed, planned_end: mixed, production_batch_id?: ?int, notes?: ?string, source_warehouse_id?: ?int, target_warehouse_id?: ?int}  $data
+     * Her iş emri kendi partisiyle açılır: parti (lot) no otomatik üretilir, iş emri no onun önüne ek gelmiş hâlidir
+     * (ör. parti 1126-1002000, iş emri URT-1126-1002000).
+     *
+     * @param  array{product_part_id: int, quantity: mixed, order_item_id?: ?int, assigned_user_id?: ?int, planned_start?: mixed, planned_end: mixed, notes?: ?string, source_warehouse_id?: ?int, target_warehouse_id?: ?int}  $data
      */
     public function create(array $data, User $actor): WorkOrder
     {
@@ -75,7 +79,9 @@ class WorkOrderService
                 $this->ensureOrderItemQuota($workOrder);
             }
 
-            $workOrder->work_order_number = $this->numbers->next('work_order');
+            $batch = $this->batches->createAutomatic($this->numbers->next('production_batch'));
+            $workOrder->production_batch_id = $batch->getKey();
+            $workOrder->work_order_number = strtr((string) config('numbering.work_order'), ['{PARTI_NO}' => $batch->batch_number]);
             $workOrder->save();
 
             $this->copyMaterials($workOrder, $product);
@@ -86,7 +92,7 @@ class WorkOrderService
     }
 
     /**
-     * Açık iş emrinin atama, tarih, parti, not ve adet bilgilerini değiştirir. Sipariş kalemi yalnızca
+     * Açık iş emrinin atama, tarih, not ve adet bilgilerini değiştirir. Sipariş kalemi yalnızca
      * planlandı durumunda değişir. Adet değişince malzeme ihtiyacı yeniden hesaplanır.
      *
      * @param  int  $expectedLockVersion  Düzenlemenin başladığı andaki lock_version.
@@ -490,7 +496,7 @@ class WorkOrderService
 
     private function normalize(array $data): array
     {
-        foreach (['assigned_user_id', 'production_batch_id', 'order_item_id', 'source_warehouse_id', 'target_warehouse_id'] as $field) {
+        foreach (['assigned_user_id', 'order_item_id', 'source_warehouse_id', 'target_warehouse_id'] as $field) {
             if (array_key_exists($field, $data)) {
                 $data[$field] = filled($data[$field]) ? (int) $data[$field] : null;
             }

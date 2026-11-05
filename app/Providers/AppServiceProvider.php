@@ -14,6 +14,8 @@ use App\Models\Customer;
 use App\Models\ExchangeRate;
 use App\Models\Invoice;
 use App\Models\InvoiceLine;
+use App\Models\MotorDesign;
+use App\Models\MotorDesignItem;
 use App\Models\MotorModel;
 use App\Models\MotorUnit;
 use App\Models\Order;
@@ -73,6 +75,8 @@ class AppServiceProvider extends ServiceProvider
             'bom_item' => BomItem::class,
             'bom_co_product' => BomCoProduct::class,
             'bom_template' => BomTemplate::class,
+            'motor_design' => MotorDesign::class,
+            'motor_design_item' => MotorDesignItem::class,
             'customer' => Customer::class,
             'order' => Order::class,
             'order_item' => OrderItem::class,

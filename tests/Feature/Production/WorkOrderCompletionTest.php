@@ -11,7 +11,6 @@ use App\Models\MotorModel;
 use App\Models\MotorUnit;
 use App\Models\Order;
 use App\Models\Part;
-use App\Models\ProductionBatch;
 use App\Models\StockMovement;
 use App\Models\User;
 use App\Models\WorkOrderStatusHistory;
@@ -39,8 +38,8 @@ function balance(Part $part): string
 }
 
 it('mamul iş emri tamamlanınca sarf, fire, mamul girişi ve seri numaralı motorlar oluşur', function () {
-    $batch = ProductionBatch::factory()->create();
-    $wo = $this->f->startedMotorWorkOrder($this->admin, 10, ['assigned_user_id' => $this->operator->id, 'production_batch_id' => $batch->id]);
+    $wo = $this->f->startedMotorWorkOrder($this->admin, 10, ['assigned_user_id' => $this->operator->id]);
+    $batch = $wo->productionBatch;
 
     $this->production->complete($wo, $this->operator);
 

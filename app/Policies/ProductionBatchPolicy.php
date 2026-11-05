@@ -21,9 +21,10 @@ class ProductionBatchPolicy
         return $actor->can(Permission::WorkOrdersManage);
     }
 
+    // Parti elle açılmaz: her iş emri kendi partisiyle otomatik açılır.
     public function create(User $actor): bool
     {
-        return $actor->can(Permission::WorkOrdersManage);
+        return false;
     }
 
     public function update(User $actor, ProductionBatch $batch): bool

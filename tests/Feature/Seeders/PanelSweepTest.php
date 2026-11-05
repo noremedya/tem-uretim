@@ -9,6 +9,7 @@ use App\Models\CashAccount;
 use App\Models\Customer;
 use App\Models\ExchangeRate;
 use App\Models\Invoice;
+use App\Models\MotorDesign;
 use App\Models\MotorModel;
 use App\Models\MotorUnit;
 use App\Models\Order;
@@ -85,6 +86,10 @@ function sweepExpectations(): array
         'parts/{record}/edit' => ['yonetici'],
         'stock-movements' => ['yonetici', 'operator1', 'depo'],
         // Motor modeli, sipariş ve parti operatör ve depoya kapalı.
+        'motor-designs' => ['yonetici', 'muhasebe'],
+        'motor-designs/create' => ['yonetici'],
+        'motor-designs/{record}' => ['yonetici', 'muhasebe'],
+        'motor-designs/{record}/edit' => ['yonetici'],
         'motor-models' => ['yonetici', 'muhasebe'],
         'motor-models/create' => ['yonetici'],
         'motor-models/{record}' => ['yonetici', 'muhasebe'],
@@ -99,7 +104,6 @@ function sweepExpectations(): array
         'orders/{record}' => ['yonetici', 'muhasebe'],
         'orders/{record}/edit' => ['yonetici'],
         'production-batches' => ['yonetici'],
-        'production-batches/create' => ['yonetici'],
         'production-batches/{record}/edit' => ['yonetici'],
         'work-orders' => ['yonetici', 'operator1', 'depo'],
         'work-orders/create' => ['yonetici'],
@@ -143,6 +147,7 @@ function sweepRecords(): array
         'bom-templates' => BomTemplate::query()->value('id'),
         'units' => Unit::query()->value('id'),
         'parts' => Part::query()->where('code', DemoDataSeeder::MARKER_PART)->value('id'),
+        'motor-designs' => MotorDesign::query()->value('id'),
         'motor-models' => MotorModel::query()->where('is_active', true)->value('id'),
         'customers' => Customer::query()->value('id'),
         'orders' => Order::query()->where('status', OrderStatus::Open->value)->value('id'),

@@ -18,7 +18,7 @@ final class AuditPresenter
 {
     public const SUBJECT_LABELS = [
         'user' => 'Kullanıcı', 'unit' => 'Birim', 'brand' => 'Marka', 'part_subtype' => 'Alt tür', 'warehouse' => 'Depo', 'part' => 'Ürün', 'motor_model' => 'Motor modeli',
-        'bom_item' => 'Reçete satırı', 'bom_co_product' => 'Eş ürün', 'bom_template' => 'Reçete şablonu', 'customer' => 'Cari hesap', 'order' => 'Sipariş', 'order_item' => 'Sipariş kalemi',
+        'bom_item' => 'Reçete satırı', 'bom_co_product' => 'Eş ürün', 'bom_template' => 'Reçete şablonu', 'motor_design' => 'Tasarım', 'motor_design_item' => 'Tasarım bileşeni', 'customer' => 'Cari hesap', 'order' => 'Sipariş', 'order_item' => 'Sipariş kalemi',
         'production_batch' => 'Üretim partisi', 'work_order' => 'İş emri', 'motor_unit' => 'Motor', 'exchange_rate' => 'Döviz kuru',
         'price' => 'Fiyat', 'invoice' => 'Fatura', 'invoice_line' => 'Fatura satırı', 'cash_account' => 'Kasa/banka hesabı',
         'payment' => 'Tahsilat/ödeme', 'cheque' => 'Çek/senet',
@@ -64,7 +64,7 @@ final class AuditPresenter
         'product_type' => 'Ürün türü', 'subtype_id' => 'Alt tür', 'scrap_quantity_per_unit' => 'Birim başına fire', 'scrap_part_id' => 'Fire kartı', 'co_part_id' => 'Eş ürün', 'warehouse_id' => 'Depo', 'default_warehouse_id' => 'Varsayılan depo', 'source_warehouse_id' => 'Malzeme deposu',
         'target_warehouse_id' => 'Çıktı deposu', 'allows_negative' => 'Eksiye düşebilir',
         'is_production' => 'Üretim deposu', 'is_shipping' => 'Sevkiyat deposu', 'default_part_types' => 'Varsayılan türler',
-        'customs_declaration_number' => 'Gümrük beyannamesi no', 'customs_declaration_date' => 'Gümrük beyannamesi tarihi',
+        'motor_design_id' => 'Tasarım', 'customs_declaration_number' => 'Gümrük beyannamesi no', 'customs_declaration_date' => 'Gümrük beyannamesi tarihi',
     ];
 
     /** Alan => [model sınıfı, gösterim alanı] */
@@ -79,6 +79,7 @@ final class AuditPresenter
         'shipped_by_user_id' => [Models\User::class, 'name'], 'user_id' => [Models\User::class, 'name'],
         'cash_account_id' => [Models\CashAccount::class, 'name'], 'cheque_id' => [Models\Cheque::class, 'number'],
         'original_invoice_id' => [Models\Invoice::class, 'invoice_number'], 'invoice_id' => [Models\Invoice::class, 'invoice_number'],
+        'motor_design_id' => [Models\MotorDesign::class, 'code'],
     ];
 
     /** Kayıt türü => [alan => enum] (aynı alan adı farklı kayıtta farklı enum olabilir). */
@@ -104,7 +105,7 @@ final class AuditPresenter
     private const SUBJECT_TITLES = [
         'user' => 'username', 'unit' => 'name', 'brand' => 'name', 'part_subtype' => 'name', 'warehouse' => 'name', 'part' => 'code', 'motor_model' => 'code', 'customer' => 'name',
         'order' => 'order_number', 'production_batch' => 'batch_number', 'work_order' => 'work_order_number',
-        'motor_unit' => 'serial_number', 'cash_account' => 'name', 'cheque' => 'number',
+        'motor_unit' => 'serial_number', 'cash_account' => 'name', 'cheque' => 'number', 'motor_design' => 'code',
     ];
 
     public static function subjectType(?string $type): string

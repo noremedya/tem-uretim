@@ -13,7 +13,7 @@ use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 
 /**
- * Üretim partisi. Parti numarası elle girilir.
+ * Üretim partisi (lot). Numarası iş emri açılırken otomatik verilir; iş emri no = önek + parti no.
  */
 #[Fillable(['batch_number', 'date', 'notes'])]
 class ProductionBatch extends Model

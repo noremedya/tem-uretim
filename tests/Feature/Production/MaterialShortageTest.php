@@ -4,7 +4,6 @@ use App\Enums\StockMovementType;
 use App\Enums\WorkOrderStatus;
 use App\Filament\Resources\WorkOrders\Pages\ViewWorkOrder;
 use App\Filament\Resources\WorkOrders\RelationManagers\MaterialsRelationManager;
-use App\Models\ProductionBatch;
 use App\Models\StockMovement;
 use App\Models\User;
 use App\Models\WorkOrder;
@@ -24,8 +23,7 @@ beforeEach(function () {
     $this->warehouse = User::factory()->warehouse()->create();
     $this->operator = User::factory()->operator()->create();
     $this->f = ProductionFixtures::create();
-    $this->batch = ProductionBatch::factory()->create();
-    $this->wo = $this->f->motorWorkOrder($this->admin, 10, ['assigned_user_id' => $this->operator->id, 'production_batch_id' => $this->batch->id, 'planned_start' => today()->addDay()]);
+    $this->wo = $this->f->motorWorkOrder($this->admin, 10, ['assigned_user_id' => $this->operator->id, 'planned_start' => today()->addDay()]);
 });
 
 function materialsOf(WorkOrder $wo)
@@ -72,7 +70,7 @@ it('küsuratlı birimde eksik fire dahil hesaplanır ve girilen miktar kullanıl
         ->and(StockMovement::query()->where('part_id', $this->f->varnish->id)->value('description'))->toBe('Acil alım');
 });
 
-it('eksik yarı mamul için yönetici iş emri açar: adet eksik kadar, parti ve not bu iş emrinden', function () {
+it('eksik yarı mamul için yönetici iş emri açar: adet eksik kadar, not bu iş emrinden, kendi partisiyle', function () {
     $this->actingAs($this->admin);
     $stator = materialFor($this->wo, $this->f->stator->id);
 
@@ -84,7 +82,7 @@ it('eksik yarı mamul için yönetici iş emri açar: adet eksik kadar, parti ve
 
     $created = WorkOrder::query()->where('product_part_id', $this->f->stator->id)->sole();
     expect($created)->status->toBe(WorkOrderStatus::Planned)->quantity->toBe('10.000')
-        ->production_batch_id->toBe($this->batch->id)
+        ->production_batch_id->not->toBe($this->wo->production_batch_id)
         ->notes->toBe("{$this->wo->work_order_number} için eksik yarı mamul")
         ->and(StockMovement::query()->where('part_id', $this->f->stator->id)->exists())->toBeFalse();
 });

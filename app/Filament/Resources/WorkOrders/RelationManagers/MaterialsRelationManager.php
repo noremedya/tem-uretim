@@ -276,7 +276,6 @@ class MaterialsRelationManager extends RelationManager
             'product_part_id' => $product->getKey(),
             'quantity' => $quantity,
             'planned_end' => $data['planned_end'],
-            'production_batch_id' => $owner->production_batch_id,
             'notes' => "{$owner->work_order_number} için eksik yarı mamul",
         ], Auth::user());
 

@@ -7,13 +7,18 @@ use App\Models\ProductionBatch;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Üretim partileri. Parti elle açılmaz: her iş emri açılırken kendi partisi otomatik oluşur (WorkOrderService);
+ * sonradan yalnızca notu değişir.
+ */
 class ProductionBatchService
 {
-    private const FIELDS = ['batch_number', 'date', 'notes'];
+    private const FIELDS = ['notes'];
 
-    public function create(array $data): ProductionBatch
+    /** İş emriyle birlikte, aynı transaction içinde çağrılır. */
+    public function createAutomatic(string $batchNumber): ProductionBatch
     {
-        $batch = new ProductionBatch(Arr::only($this->normalize($data), self::FIELDS));
+        $batch = new ProductionBatch(['batch_number' => $batchNumber, 'date' => today()]);
         $this->ensureValid($batch);
         $batch->save();
 

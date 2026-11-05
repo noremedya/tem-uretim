@@ -15,7 +15,6 @@ use App\Models\User;
 use App\Models\WorkOrder;
 use App\Services\StatementService;
 use Database\Seeders\DemoDataSeeder;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -30,6 +29,7 @@ beforeEach(function () {
 });
 
 it('demo veri servislerle, kurallara uygun ve tutarlı yüklenir', function () {
+    $frozen = now()->toImmutable();
     app(DemoDataSeeder::class)->run();
 
     // Her rolden kullanıcı, ortak demo şifresiyle; biri pasif.
@@ -60,10 +60,10 @@ it('demo veri servislerle, kurallara uygun ve tutarlı yüklenir', function () {
         ->and(Payment::query()->distinct()->count('method'))->toBeGreaterThanOrEqual(4)
         ->and(Cheque::query()->distinct()->pluck('status')->map->value->all())->toContain(ChequeStatus::Portfolio->value, ChequeStatus::Endorsed->value, ChequeStatus::Paid->value);
 
-    // Denetim izinde işlemi yapan kullanıcı görünür; saat ve oturum seeder sonunda geri alınır.
+    // Denetim izinde işlemi yapan kullanıcı görünür; saat (testin dondurduğu an) ve oturum seeder sonunda geri alınır.
     expect(Activity::query()->whereNotNull('causer_id')->count())->toBeGreaterThan(Activity::query()->whereNull('causer_id')->count())
         ->and(Auth::check())->toBeFalse()
-        ->and(now()->diffInMinutes(Carbon::createFromTimestamp(time())))->toBeLessThan(1);
+        ->and(now()->equalTo($frozen))->toBeTrue();
 
     // Hareket toplamları bakiyelerle, mamul bakiyeleri stoktaki motor sayısıyla tutarlı.
     $this->artisan('stock:reconcile')->expectsOutputToContain('tutarlı')->assertSuccessful();
