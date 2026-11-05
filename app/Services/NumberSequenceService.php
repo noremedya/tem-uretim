@@ -73,6 +73,7 @@ class NumberSequenceService
             '{YIL}' => $date->format('Y'),
             '{YY}' => $date->format('y'),
             '{AA}' => $date->format('m'),
+            '{GG}' => $date->format('d'),
         ];
 
         foreach ($context as $key => $value) {

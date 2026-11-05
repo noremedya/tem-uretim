@@ -86,10 +86,11 @@ Tablo adları, kolon adları ve enum değerleri İngilizce; arayüz etiketleri T
 - **production_batches** (parti/lot): batch_number (unique, otomatik — iş emri açılırken `{AA}{YY}-{SIRA:7}`, ör. 1126-1002000; sıra 1.002.000'den başlar, tarihle sıfırlanmaz), date (açılış günü), notes (yalnızca bu değişir), lock_version. Elle açılmaz; her iş emrinin kendi partisi vardır (karar 2026-11-05).
 - **motor_designs** (tasarımlar, deneme reçetesi): code (unique, büyük harf), name, description, is_active, lock_version. Stoktan düşmez, iş emri açılamaz, motor modeline bağlı değildir; silinmez, pasifleştirilir.
 - **motor_design_items**: motor_design_id, part_id (nullable; mamul ve endirekt sarf olamaz) veya description + unit_id (kartı olmayan deneme bileşeni; check constraint: biri), quantity (> 0), notes; (motor_design_id, part_id) unique. Serbestçe eklenir, değiştirilir, silinir (pasif tasarımda değişmez).
-- **work_orders**: work_order_number (unique, otomatik; `URT-` + parti no, ör. URT-1126-1002000), product_part_id (üretilen kart: yarı mamul veya mamul), motor_model_id (nullable; mamulde dolu), order_item_id (nullable; yalnızca mamulde, kalemin modeli aynı olmalı), quantity (> 0; birimin küsurat kuralına uyar), production_batch_id (otomatik, değişmez; eski kayıtlarda boş olabilir), source_warehouse_id (nullable — malzeme deposu), target_warehouse_id (çıktı deposu), status (enum: planned, in_progress, completed, cancelled — planlandı, üretimde, tamamlandı, iptal), assigned_user_id (nullable; aktif saha operatörü), planned_start (tarih, isteğe bağlı), planned_end (tarih, zorunlu, >= planned_start), started_at, completed_at, cancellation_reason (iptalde zorunlu), notes, lock_version
+- **work_orders**: work_order_number (unique, otomatik; `URT-` + parti no, ör. URT-1126-1002000), product_part_id (üretilen kart: yarı mamul veya mamul), motor_model_id (nullable; mamulde dolu), order_item_id (nullable; yalnızca mamulde, kalemin modeli aynı olmalı), quantity (> 0; birimin küsurat kuralına uyar), production_batch_id (otomatik, değişmez; eski kayıtlarda boş olabilir), produced_quantity (geri alınmamış üretim kayıtlarının toplamı; 0 ≤ üretilen ≤ adet), source_warehouse_id (nullable — malzeme deposu), target_warehouse_id (çıktı deposu), status (enum: planned, in_progress, completed, cancelled — planlandı, üretimde, tamamlandı, iptal), assigned_user_id (nullable; aktif saha operatörü), planned_start (tarih, isteğe bağlı), planned_end (tarih, zorunlu, >= planned_start), started_at, completed_at, cancellation_reason (iptalde zorunlu), notes, lock_version
 - **work_order_materials** (iş emrinin malzeme listesi; oluşturulurken reçeteden kopyalanır): work_order_id, part_id, warehouse_id (düşüleceği depo), scrap_quantity_per_unit ve scrap_part_id (reçeteden), quantity_per_unit, scrap_rate, required_quantity (adet × birim başına), planned_scrap (standart fire), actual_scrap (tamamlamada girilen fire, nullable); (work_order_id, part_id) unique
+- **work_order_productions** (üretim kayıtları, kısım kısım tamamlama): work_order_id, quantity (> 0), user_id, created_at, reversed_at, reversed_by_user_id, reversal_reason (geri alınınca üçü birlikte). Silinmez, değiştirilemez; yalnızca bir kez geri alındı işaretlenir (trigger). **work_order_production_movements**: work_order_production_id, stock_movement_id (unique) — kaydın stok hareketleri (değiştirilemez).
 - **work_order_status_histories**: work_order_id, from_status (oluşturmada null), to_status, user_id, description, created_at. Update/delete yok (veritabanı trigger'ı ile de engellenir).
-- **motor_units** (üretilen motor): serial_number (unique), motor_model_id, work_order_id, production_batch_id, order_id (nullable), warehouse_id (bulunduğu depo), production_date, status (enum: in_stock, shipped, voided — stokta, sevk edildi, iptal edildi), shipped_at, shipped_by_user_id, notes. Silinmez; seri no tekrar kullanılmaz.
+- **motor_units** (üretilen motor): serial_number (unique), motor_model_id, work_order_id, work_order_production_id (nullable — motoru üreten kayıt), production_batch_id, order_id (nullable), warehouse_id (bulunduğu depo), production_date, status (enum: in_stock, shipped, voided — stokta, sevk edildi, iptal edildi), shipped_at, shipped_by_user_id, notes. Silinmez; seri no tekrar kullanılmaz.
 
 Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara index ekle.
 
@@ -97,10 +98,11 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 
 **İş emri durum geçişleri**
 - planlandi → uretimde (atanan operatör veya yönetici)
-- uretimde → tamamlandi (atanan operatör veya yönetici)
+- uretimde → tamamlandi (atanan operatör veya yönetici; kalan adedin son üretim kaydıyla kendiliğinden)
 - planlandi → iptal (yönetici)
 - uretimde → planlandi (yalnızca yönetici, açıklama zorunlu)
 - tamamlandi → uretimde yalnızca **geri alma** akışıyla (aşağıda); iptal son durumdur
+- Üretim kaydı olan iş emri planlamaya geri alınamaz (önce kayıtlar geri alınır).
 - Her geçiş `work_order_status_histories`'e yazılır.
 
 **İş emri**
@@ -112,18 +114,18 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - **Sipariş kalemi kotası:** bir kaleme birden fazla iş emri bağlanabilir; iptal edilmemiş iş emirlerinin toplam adedi kalem adedini aşamaz (kalem satırı kilitlenerek kontrol edilir). Fazla üretim siparişe bağlanmadan yapılır. İptal edilmemiş iş emri olan kalem silinemez, miktarı bu iş emirlerinin toplamının altına inemez. Yalnızca `open`/`partial` siparişin kalemine iş emri bağlanır.
 - **Standart fire** = ihtiyaç × oran / 100; tam sayılı birimde yukarı yuvarlanır (ör. 4 civata × %2 → 1). Operatör tamamlamada gerçek fireyi girer.
 - Reçetesinde pasif bileşen olan karta iş emri açılamaz (pasif parça hareket görmez).
-- Adet yönetici tarafından `planned` ve `in_progress` iken değiştirilebilir (malzeme ihtiyacı yeniden hesaplanır). **Kısmi tamamlama yoktur**: az üretildiyse önce adet düşürülür.
-- **Yetersiz malzeme uyarısı:** iş emri ekranında her malzeme için ihtiyaç (fire dahil), mevcut ve eksik gösterilir. Uyarıdır; oluşturma ve başlatmayı engellemez, başka iş emirlerinin ihtiyacını hesaba katmaz.
+- Adet yönetici tarafından `planned` ve `in_progress` iken değiştirilebilir (malzeme ihtiyacı yeniden hesaplanır). Adet üretilenin altına inemez; üretilene eşitlenirse iş emri tamamlanır (geçmişe "Adet üretilen kadar düşürüldü").
+- **Yetersiz malzeme uyarısı:** iş emri ekranında her malzeme için kalan ihtiyaç (fire dahil; üretilmiş kısım düşülür), mevcut ve eksik gösterilir. Uyarıdır; oluşturma ve başlatmayı engellemez, başka iş emirlerinin ihtiyacını hesaba katmaz.
 - **Eksiği tamamla** (Malzemeler sekmesi; kod/ada tıklama veya satır butonu): yalnızca planlı/üretimdeki iş emrinde ve eksiği olan satırda. Hammadde, komponent, sarf → stok girişi (stok yetkisi; miktar eksik kadar dolu, tam sayılı birimde yukarı yuvarlı; açıklama boşsa "<iş emri no> eksiği"; pencere başına çift gönderim anahtarı). Yarı mamul → "iş emri aç" (iş emri yönetimi yetkisi; adet eksik kadar, kendi partisiyle, planlanan bitiş bu iş emrinin planlanan başlangıcı veya bugün) veya "dışarıdan (fason) stok girişi" (stok yetkisi). Depo yarı mamulde yalnızca fason girişi yapar; operatöre buton çıkmaz.
 
-**İş emri tamamlanınca (tek transaction):**
-1. Operatör her malzeme için gerçekleşen fireyi girer (varsayılan: standart fire). Net ihtiyaç (`adet × birim başına`) `production_consumption`, fire `production_scrap` hareketiyle düşülür.
+**Üretim kaydı — kısım kısım tamamlama** (karar 2026-11-05; `work_order_productions`): üretimdeki iş emrinde ürettikçe "Üretim kaydı" girilir (adet varsayılan kalan; kalanı aşamaz, birimin küsurat kuralına uyar). Bir iş emrinde birden fazla motor üretildiğinden her motorun üretim günü seri numarasından (metal etiketteki tip numarası) okunur. Üretilen toplam (`work_orders.produced_quantity`) adede ulaşınca iş emri tamamlanır. Yarı mamul iş emrinde de aynıdır. Kaydın sarfı, standart firesi ve eş ürünü birikimli hesaplanır (`önce/sonra` farkı; tam sayılı birimde yukarı): kayıtların toplamı iş emrinin tamamının ihtiyacına eşittir. `actual_scrap` kayıtların gerçekleşen firelerinin toplamıdır. Her kayıt (tek transaction):
+1. Operatör bu kaydın her malzemesi için gerçekleşen fireyi girer (varsayılan: o adedin standart firesi). Net ihtiyaç `production_consumption`, fire `production_scrap` hareketiyle düşülür; hareketler kayda bağlanır (`work_order_production_movements`).
 2. Herhangi bir malzeme yetersizse (yarı mamul dahil) işlem tamamen iptal edilir; hangi malzemeden ne kadar eksik olduğu kullanıcıya listelenir. Eksik yarı mamul otomatik üretilmez.
 3. Üretilen kart `production_output` hareketiyle stoğa girer.
-4. Mamulde `adet` kadar `motor_units` kaydı oluşturulur. Seri no formatı yapılandırılabilir (varsayılan: `{MODEL_KODU}-{YY}{AA}-{SIRA:5}`; sıra model ve ay bazında sıfırlanır), sıra numarası çakışmasız üretilir (`NumberSequenceService`, bkz. "Numara üretimi").
+4. Mamulde kaydın adedi kadar `motor_units` kaydı bugünün üretim tarihiyle oluşturulur (`work_order_production_id`). Seri no formatı yapılandırılabilir (varsayılan: `{MODEL_KODU}-{YY}{AA}{GG}-{SIRA:5}`, ör. TM-71-261105-00001; sıra model ve gün bazında sıfırlanır; açılış motorunda sistemin ürettiği numara üretim tarihini alır), sıra numarası çakışmasız üretilir (`NumberSequenceService`, bkz. "Numara üretimi").
 5. İş emri siparişe bağlıysa motorlar siparişe bağlanır, sipariş durumu yeniden hesaplanır (hiç motor yoksa açık, eksik kalem varsa kısmi, tüm kalemler kadar motor üretildiyse tamamlandı; iptal edilmiş motorlar sayılmaz). Sipariş bu arada iptal edildiyse motorlar siparişe bağlanmaz.
 
-**İş emri geri alma** (yalnızca yönetici, açıklama zorunlu, tek transaction): yalnızca tamamlanmış iş emri; motorların hepsi stokta olmalı (sevk edilmiş motor varsa reddedilir). Sarf, fire ve üretimden giriş hareketleri ters kaydedilir (`correction`); üretilen yarı mamul bu arada tüketildiyse ters kayıt stoğu eksiye düşüreceği için reddedilir. Motorlar `voided` olur, iş emri `in_progress`'e döner, sipariş durumu yeniden hesaplanır.
+**Üretim kaydını geri alma** (yalnızca yönetici, açıklama zorunlu, tek transaction): **son** geri alınmamış üretim kaydı geri alınır (daha eskiler sırayla, tekrar çağrılarak); üretimde veya tamamlanmış iş emrinde. Kaydın motorlarının hepsi stokta ve çıktı deposunda olmalı (sevk edilmiş veya iade gelmiş motor varsa reddedilir). Kaydın sarf, fire ve üretimden giriş hareketleri ters kaydedilir (`correction`); üretilen yarı mamul bu arada tüketildiyse ters kayıt stoğu eksiye düşüreceği için reddedilir. Motorlar `voided` olur, kayıt geri alındı işaretlenir (kim, ne zaman, açıklama; kayıt silinmez ve değiştirilemez — trigger), üretilen adet ve gerçekleşen fire düşülür, tamamlanmış iş emri `in_progress`'e döner, sipariş durumu yeniden hesaplanır. Mevcut tamamlanmış iş emirleri migration'la tek kayda aktarıldı.
 
 **Reçete**
 - Üst kart yarı mamul veya mamul; bileşen endirekt sarf veya mamul olamaz. Direkt sarf reçeteye girer.
@@ -307,13 +309,13 @@ Yetkiler Laravel Policy'leriyle uygulanır; Filament menüsü de yetkiye göre g
   - "Kamera ile okut" butonu (telefon/tablet)
   - Okunan değer parça barkoduysa → parça kartı (bakiye) ve hızlı stok giriş/çıkış formu (stok hareketi yetkisi olanlara; sayım tam stok işlemi sayfasındadır)
   - Seri no ise → motor detay kartı; stoktaki motor için yönetici ve depoya "Sevk et"
-  - İş emri numarası ise → yetkiye göre "Başlat" ve "Tamamla" (fire giriş penceresiyle, standart fireyle dolu); diğer işlemler için iş emri sayfasına bağlantı. Operatör tüm iş emirlerini görür; "Başlat"/"Tamamla" yalnızca kendine atananda çıkar. Tüm iş emirlerini görme yetkisi olmayan bir rol başkasına atanmış iş emri okutursa bilgi gösterilmez, "Bu iş emri size atanmamış." mesajı çıkar
+  - İş emri numarası ise → yetkiye göre "Başlat" ve "Üretim kaydı" (adet ve fire giriş penceresiyle, kalan adet ve standart fireyle dolu); diğer işlemler için iş emri sayfasına bağlantı. Operatör tüm iş emirlerini görür; "Başlat"/"Üretim kaydı" yalnızca kendine atananda çıkar. Tüm iş emirlerini görme yetkisi olmayan bir rol başkasına atanmış iş emri okutursa bilgi gösterilmez, "Bu iş emri size atanmamış." mesajı çıkar
   - Aynı kodun 2 saniye içinde tekrar okunması yok sayılır
   - Okuma sonrası odak otomatik olarak okuma alanına döner
 - **Etiket yazdırma** (Aşama 12): seri no ve iş emri için QR etiketli, tarayıcıdan yazdırılabilir sayfa
   - QR sunucuda SVG olarak üretilir (`chillerlan/php-qrcode`, `App\Support\QrCode`) ve yalnızca kodu taşır (seri no / iş emri no); Hızlı İşlem doğrudan okur. Takip etiketidir; motorun yasal plakası (CE vb.) değildir.
   - Sayfalar panel dışıdır (`/etiket/motorlar?ids=…` veya `?work_order=…`, `/etiket/is-emri/{id}?copies=n`), oturum ister, pasif kullanıcıyı çıkışa zorlar; açılınca yazdırma penceresi gelir. Düzenler `config/labels.php`: termal 100×50 mm (sayfa başına bir) ve A4 3×8 (70×37 mm); sayfada seçilir. Tek seferde en fazla 500 etiket.
-  - Butonlar: motor detayı ve motor listesi (toplu), iş emri detayı (iş emri etiketi; tamamlanmış mamul iş emrinde "Motor etiketleri"). Yetki: kaydı görebilen etiketini de alır (operatör yalnızca kendi iş emri).
+  - Butonlar: motor detayı ve motor listesi (toplu), iş emri detayı (iş emri etiketi; üretim kaydı olan mamul iş emrinde "Motor etiketleri"). Yetki: kaydı görebilen etiketini de alır (operatör yalnızca kendi iş emri).
   - İçerik: firma adı (TEM MOTOR, logo yok), kod, model/kart adı, motor etiketinde kW · d/dk · V · Hz, IP · verim sınıfı, üretim ay/yılı, iş emri ve parti; iş emri etiketinde adet, planlanan bitiş, sipariş ve müşteri, parti, operatör.
 
 ## 8. Raporlar
@@ -401,7 +403,7 @@ Pest ile en az şu durumlar test edilmeli:
 - Stok girişi/çıkışı bakiye ve hareket kaydını doğru oluşturur
 - Negatif stoğa izin verilmez (servis ve veritabanı seviyesinde)
 - Stok hareketi güncellenemez/silinemez
-- İş emri tamamlanınca reçeteye göre sarf, motor kayıtları ve seri no'lar doğru oluşur
+- İş emri tamamlanınca (ve kısım kısım üretim kaydında) reçeteye göre sarf, motor kayıtları ve seri no'lar doğru oluşur
 - Malzeme yetersizse hiçbir şey değişmez (transaction geri alınır)
 - İzinsiz durum geçişleri reddedilir
 - Seri no'lar benzersizdir; aynı anda iki tamamlamada çakışma olmaz

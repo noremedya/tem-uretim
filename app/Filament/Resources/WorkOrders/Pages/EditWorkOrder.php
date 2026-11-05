@@ -9,6 +9,7 @@ use App\Services\WorkOrderService;
 use Filament\Actions\ViewAction;
 use Filament\Resources\Pages\EditRecord;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Auth;
 
 class EditWorkOrder extends EditRecord
 {
@@ -28,7 +29,7 @@ class EditWorkOrder extends EditRecord
     {
         return $this->withBusinessRules(
             function () use ($record, $data): Model {
-                $record = app(WorkOrderService::class)->update($record, $data, $this->lockVersion);
+                $record = app(WorkOrderService::class)->update($record, $data, $this->lockVersion, Auth::user());
                 $this->lockVersion = $record->lock_version;
 
                 return $record;

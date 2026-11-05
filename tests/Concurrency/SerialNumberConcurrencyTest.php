@@ -20,7 +20,7 @@ afterEach(fn () => freshDatabase());
 it('aynı anda tamamlanan iş emirlerinin seri numaraları çakışmaz', function () {
     $admin = User::factory()->admin()->create();
     $f = ProductionFixtures::create()->stockUp($admin);
-    $prefix = 'TM-71-'.now()->format('ym');
+    $prefix = 'TM-71-'.now()->format('ymd');
 
     // Sayaç satırı oluşsun (ilk tamamlama: 00001–00002).
     app(ProductionService::class)->complete($f->startedMotorWorkOrder($admin, 2), $admin);

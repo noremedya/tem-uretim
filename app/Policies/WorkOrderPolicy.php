@@ -52,16 +52,18 @@ class WorkOrderPolicy
             && $this->transitions()->canTransition($actor, $workOrder, WorkOrderStatus::Completed);
     }
 
-    /** Tamamlanmış iş emrini geri alma (yalnızca yönetici). */
+    /** Son üretim kaydını geri alma (yalnızca yönetici; üretimde veya tamamlanmış, en az bir kayıt varken). */
     public function reverse(User $actor, WorkOrder $workOrder): bool
     {
-        return $workOrder->status === WorkOrderStatus::Completed
-            && $this->transitions()->canTransition($actor, $workOrder, WorkOrderStatus::InProgress);
+        return in_array($workOrder->status, [WorkOrderStatus::InProgress, WorkOrderStatus::Completed], true)
+            && $workOrder->hasProduction()
+            && $actor->is_active
+            && $actor->can(Permission::WorkOrdersManage);
     }
 
     public function revertToPlanned(User $actor, WorkOrder $workOrder): bool
     {
-        return $workOrder->status === WorkOrderStatus::InProgress
+        return $workOrder->status === WorkOrderStatus::InProgress && ! $workOrder->hasProduction()
             && $this->transitions()->canTransition($actor, $workOrder, WorkOrderStatus::Planned);
     }
 

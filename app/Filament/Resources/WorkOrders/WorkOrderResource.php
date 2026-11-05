@@ -7,6 +7,7 @@ use App\Filament\Resources\WorkOrders\Pages\EditWorkOrder;
 use App\Filament\Resources\WorkOrders\Pages\ListWorkOrders;
 use App\Filament\Resources\WorkOrders\Pages\ViewWorkOrder;
 use App\Filament\Resources\WorkOrders\RelationManagers\MaterialsRelationManager;
+use App\Filament\Resources\WorkOrders\RelationManagers\ProductionsRelationManager;
 use App\Filament\Resources\WorkOrders\RelationManagers\StatusHistoriesRelationManager;
 use App\Filament\Resources\WorkOrders\Schemas\WorkOrderForm;
 use App\Filament\Resources\WorkOrders\Schemas\WorkOrderInfolist;
@@ -64,6 +65,7 @@ class WorkOrderResource extends Resource
     {
         return [
             MaterialsRelationManager::class,
+            ProductionsRelationManager::class,
             StatusHistoriesRelationManager::class,
         ];
     }

@@ -719,6 +719,8 @@ class DemoDataSeeder extends Seeder
             // Planlanan bitişi geçmiş, hâlâ üretimde: dashboard'da "gecikmiş".
             $workOrder = $this->createWorkOrder($this->models['90S']->finishedPart, 5, 'operator1', $monday->addDays(2), $monday->addDays(4), notes: 'Stok için; kapak dökümü bekleniyor');
             $this->schedule($monday->addDays(3)->setTime(8, 0), fn () => $this->start($workOrder, 'operator1'));
+            // Kısım kısım üretim: kapağı olan 2 motor kaydedildi, kalanı bekliyor.
+            $this->schedule($monday->addDays(3)->setTime(16, 0), fn () => $this->recordPartial($workOrder, 'operator1', '2'));
         }
 
         if ($index === 2) {
@@ -773,6 +775,18 @@ class DemoDataSeeder extends Seeder
 
         $this->ensureMaterials($workOrder, $scraps);
         $this->as($operator, fn () => app(ProductionService::class)->complete($workOrder, $this->users[$operator], $scraps));
+    }
+
+    private function recordPartial(WorkOrder $workOrder, string $operator, string $quantity): void
+    {
+        $workOrder = $workOrder->fresh(['materials.part.unit', 'materials.part.stockBalances', 'materials.warehouse']);
+
+        if ($workOrder->status !== WorkOrderStatus::InProgress) {
+            return;
+        }
+
+        $this->ensureMaterials($workOrder, []);
+        $this->as($operator, fn () => app(ProductionService::class)->recordProduction($workOrder, $this->users[$operator], $quantity));
     }
 
     /**

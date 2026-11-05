@@ -57,7 +57,7 @@ it('mamul iş emri tamamlanınca sarf, fire, mamul girişi ve seri numaralı mot
         ->part_id->toBe($this->f->model->finished_part_id)->quantity->toBe('10.000');
 
     $units = MotorUnit::orderBy('id')->get();
-    $prefix = 'TM-71-'.now()->format('y').now()->format('m');
+    $prefix = 'TM-71-'.now()->format('ymd');
     expect($units)->toHaveCount(10)
         ->and($units->first()->serial_number)->toBe("{$prefix}-00001")
         ->and($units->last()->serial_number)->toBe("{$prefix}-00010")

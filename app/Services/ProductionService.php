@@ -17,13 +17,14 @@ use App\Models\StockMovement;
 use App\Models\User;
 use App\Models\Warehouse;
 use App\Models\WorkOrder;
+use App\Models\WorkOrderProduction;
 use App\Support\Quantity;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Üretim akışları (CLAUDE.md bölüm 5): iş emri tamamlama ve motor sevki. Geri alma Aşama 4d'dedir.
+ * Üretim akışları (CLAUDE.md bölüm 5): üretim kaydı (kısım kısım tamamlama), geri alma, motor sevki, açılış ve iade.
  */
 class ProductionService
 {
@@ -38,18 +39,32 @@ class ProductionService
     ) {}
 
     /**
-     * İş emrini tamamlar (tek transaction): net sarf ve fire düşülür, ürün stoğa girer, mamulde adet kadar
-     * seri numaralı motor kaydı oluşur, siparişe bağlıysa sipariş durumu yeniden hesaplanır.
-     * Herhangi bir malzeme yetersizse hiçbir şey değişmez.
+     * Kalan adedin tamamı için üretim kaydı girer; iş emri tamamlanır (bkz. recordProduction).
      *
      * @param  array<int, string|int|float|null>  $actualScraps  part_id => gerçekleşen fire (verilmezse standart fire)
      */
     public function complete(WorkOrder $workOrder, User $actor, array $actualScraps = []): WorkOrder
     {
-        return DB::transaction(function () use ($workOrder, $actor, $actualScraps): WorkOrder {
-            // Satır kilidi: aynı iş emri iki kez tamamlanamaz; durum kilit altında okunur.
+        return $this->recordProduction($workOrder, $actor, null, $actualScraps);
+    }
+
+    /**
+     * Üretim kaydı (kısım kısım üretim, tek transaction): üretimdeki iş emrinde $quantity adet (boşsa kalan adet)
+     * için net sarf ve fire düşülür, ürün ve eş ürünler stoğa girer, mamulde o kadar motor bugünün tarihi ve seri
+     * numarasıyla oluşur, siparişe bağlıysa sipariş durumu yeniden hesaplanır. Üretilen toplam adede ulaşınca iş emri
+     * tamamlanır. Herhangi bir malzeme yetersizse hiçbir şey değişmez.
+     *
+     * Kaydın sarfı ve standart firesi birikimli hesaplanır (önce/sonra farkı): kayıtların toplamı iş emrinin
+     * tamamının ihtiyacına eşittir; tam sayılı birimde yukarı yuvarlanır.
+     *
+     * @param  array<int, string|int|float|null>  $actualScraps  part_id => bu kaydın gerçekleşen firesi (verilmezse standart)
+     */
+    public function recordProduction(WorkOrder $workOrder, User $actor, mixed $quantity = null, array $actualScraps = []): WorkOrder
+    {
+        return DB::transaction(function () use ($workOrder, $actor, $quantity, $actualScraps): WorkOrder {
+            // Satır kilidi: aynı iş emrine aynı anda iki kayıt girilemez; durum ve üretilen kilit altında okunur.
             $locked = WorkOrder::query()
-                ->with(['materials.part.unit', 'outputs', 'product.unit', 'motorModel', 'orderItem.order', 'targetWarehouse'])
+                ->with(['materials.part.unit', 'outputs.part.unit', 'product.unit', 'motorModel', 'orderItem.order', 'targetWarehouse'])
                 ->lockForUpdate()
                 ->findOrFail($workOrder->getKey());
 
@@ -59,16 +74,32 @@ class ProductionService
                 throw new BusinessRuleException('Bu iş emrinde bu işlemi yapma yetkiniz yok.');
             }
 
+            $quantity = $this->productionQuantity($locked, $quantity);
+            $before = (string) $locked->produced_quantity;
+            $after = Quantity::add($before, $quantity);
+
             $lines = [];
             // Eş ürünler çıktı deposuna; fire kartı (hurda) seçilmiş satırların gerçekleşen firesi o karta (kendi deposuna).
-            $extraOutputs = $locked->outputs->map(fn ($output) => ['part_id' => $output->part_id, 'quantity' => (string) $output->quantity])->all();
-            foreach ($locked->materials as $material) {
-                $scrap = $this->scrap($actualScraps[$material->part_id] ?? null, (string) $material->planned_scrap, $material->part);
+            $extraOutputs = [];
+            foreach ($locked->outputs as $output) {
+                $whole = ! $output->part->unit->allows_decimal;
+                $portion = Quantity::sub($this->cumulative($after, (string) $output->quantity_per_unit, $whole), $this->cumulative($before, (string) $output->quantity_per_unit, $whole));
 
-                $material->actual_scrap = $scrap;
+                if (Quantity::compare($portion, '0') > 0) {
+                    $extraOutputs[] = ['part_id' => $output->part_id, 'quantity' => $portion];
+                }
+            }
+
+            foreach ($locked->materials as $material) {
+                $whole = ! $material->part->unit->allows_decimal;
+                $consumption = Quantity::sub($material->netFor($after, $whole), $material->netFor($before, $whole));
+                $planned = Quantity::sub($material->standardScrapFor($after, $whole), $material->standardScrapFor($before, $whole));
+                $scrap = $this->scrap($actualScraps[$material->part_id] ?? null, $planned, $material->part);
+
+                $material->actual_scrap = Quantity::add((string) ($material->actual_scrap ?? '0'), $scrap);
                 $material->save();
 
-                $lines[] = ['part_id' => $material->part_id, 'warehouse_id' => $material->warehouse_id, 'consumption' => (string) $material->required_quantity, 'scrap' => $scrap];
+                $lines[] = ['part_id' => $material->part_id, 'warehouse_id' => $material->warehouse_id, 'consumption' => $consumption, 'scrap' => $scrap];
 
                 if ($material->scrap_part_id !== null && Quantity::compare($scrap, '0') > 0) {
                     $extraOutputs[] = [
@@ -79,16 +110,31 @@ class ProductionService
                 }
             }
 
-            $this->stock->recordProduction($lines, $locked->product, (string) $locked->quantity, $locked, $actor, $locked->work_order_number, $locked->targetWarehouse, $extraOutputs);
+            $production = new WorkOrderProduction;
+            $production->forceFill([
+                'work_order_id' => $locked->getKey(),
+                'quantity' => $quantity,
+                'user_id' => $actor->getKey(),
+                'created_at' => now(),
+            ])->save();
+
+            $movements = $this->stock->recordProduction($lines, $locked->product, $quantity, $locked, $actor, $locked->work_order_number, $locked->targetWarehouse, $extraOutputs);
+            $production->movements()->attach($movements->pluck('id')->all());
 
             if ($locked->motor_model_id !== null) {
-                $this->createMotorUnits($locked);
+                $this->createMotorUnits($locked, $production);
             }
 
-            $locked->status = WorkOrderStatus::Completed;
-            $locked->completed_at = now();
-            $locked->save();
-            $this->workOrders->recordHistory($locked, WorkOrderStatus::InProgress, WorkOrderStatus::Completed, $actor);
+            $locked->produced_quantity = $after;
+
+            if (Quantity::compare($after, (string) $locked->quantity) === 0) {
+                $locked->status = WorkOrderStatus::Completed;
+                $locked->completed_at = now();
+                $locked->save();
+                $this->workOrders->recordHistory($locked, WorkOrderStatus::InProgress, WorkOrderStatus::Completed, $actor);
+            } else {
+                $locked->save();
+            }
 
             if ($locked->orderItem !== null) {
                 $this->orders->recalculateStatus($locked->orderItem->order);
@@ -101,9 +147,10 @@ class ProductionService
     }
 
     /**
-     * Tamamlanmış iş emrini geri alır (yalnızca yönetici, açıklama zorunlu, tek transaction): motorların hepsi
-     * stokta olmalı; sarf, fire ve üretimden giriş ters kaydedilir; motorlar iptal edilir (silinmez, seri no
-     * tekrar kullanılmaz); iş emri üretimde durumuna döner; sipariş durumu yeniden hesaplanır.
+     * Son üretim kaydını geri alır (yalnızca yönetici, açıklama zorunlu, tek transaction): kaydın motorları stokta ve
+     * çıktı deposunda olmalı; kaydın sarf, fire ve üretimden giriş hareketleri ters kaydedilir; motorları iptal edilir
+     * (silinmez, seri no tekrar kullanılmaz); tamamlanmış iş emri üretimde durumuna döner; sipariş durumu yeniden
+     * hesaplanır. Daha eski kayıtlar sırayla, tekrar çağrılarak geri alınır.
      */
     public function reverse(WorkOrder $workOrder, User $actor, ?string $reason): WorkOrder
     {
@@ -116,14 +163,16 @@ class ProductionService
         return DB::transaction(function () use ($workOrder, $actor, $reason): WorkOrder {
             $locked = WorkOrder::query()->with('orderItem.order')->lockForUpdate()->findOrFail($workOrder->getKey());
 
-            $locked->status->ensureCanTransitionTo(WorkOrderStatus::InProgress);
-
-            if ($locked->status !== WorkOrderStatus::Completed || ! $this->workOrders->canTransition($actor, $locked, WorkOrderStatus::InProgress)) {
-                throw new BusinessRuleException('Tamamlanmış iş emrini yalnızca yönetici geri alabilir.');
+            if (! in_array($locked->status, [WorkOrderStatus::InProgress, WorkOrderStatus::Completed], true)
+                || ! $actor->is_active || ! $actor->can(Permission::WorkOrdersManage)) {
+                throw new BusinessRuleException('Üretim kaydını yalnızca yönetici, üretimde veya tamamlanmış iş emrinde geri alabilir.');
             }
 
+            $production = $locked->productions()->whereNull('reversed_at')->orderByDesc('id')->lockForUpdate()->first()
+                ?? throw new BusinessRuleException('Geri alınacak üretim kaydı yok.');
+
             // Motorlar kilitlenir: aynı anda sevk edilemezler.
-            $units = $locked->motorUnits()->where('status', '!=', MotorUnitStatus::Voided->value)->orderBy('id')->lockForUpdate()->get();
+            $units = $production->motorUnits()->where('status', '!=', MotorUnitStatus::Voided->value)->orderBy('id')->lockForUpdate()->get();
             $notInStock = $units->filter(fn (MotorUnit $unit) => $unit->status !== MotorUnitStatus::InStock);
 
             if ($notInStock->isNotEmpty()) {
@@ -131,7 +180,7 @@ class ProductionService
             }
 
             // İade gelen motor bir kez müşteriye gitmiştir; sevk ve iade kayıtları üretimi geri almaya izin vermez.
-            $returned = $locked->motorUnits()->whereHas('returns')->pluck('serial_number');
+            $returned = $production->motorUnits()->whereHas('returns')->pluck('serial_number');
 
             if ($returned->isNotEmpty()) {
                 throw new BusinessRuleException('İade gelmiş motor var, üretim geri alınamaz: '.$returned->implode(', '));
@@ -144,14 +193,7 @@ class ProductionService
                 throw new BusinessRuleException('Bazı motorlar başka depoya aktarılmış; önce iş emrinin çıktı deposuna geri aktarın: '.$moved->pluck('serial_number')->implode(', '));
             }
 
-            // Son tamamlamanın henüz ters kaydedilmemiş üretim hareketleri.
-            $movements = StockMovement::query()
-                ->where('reference_type', $locked->getMorphClass())
-                ->where('reference_id', $locked->getKey())
-                ->whereIn('type', [StockMovementType::ProductionConsumption->value, StockMovementType::ProductionScrap->value, StockMovementType::ProductionOutput->value])
-                ->whereDoesntHave('correction')
-                ->orderBy('id')
-                ->get();
+            $movements = $production->movements()->whereDoesntHave('correction')->orderBy('stock_movements.id')->get();
 
             try {
                 $this->stock->reverseProduction($movements, $locked, $actor, "Geri alma ({$locked->work_order_number}): {$reason}");
@@ -164,12 +206,30 @@ class ProductionService
                 $unit->save();
             }
 
-            $locked->materials()->update(['actual_scrap' => null]);
+            // Kaydın gerçekleşen firesi malzeme satırlarından düşülür.
+            $scraps = $movements->where('type', StockMovementType::ProductionScrap)->groupBy('part_id')
+                ->map(fn ($group) => $group->reduce(fn (string $sum, StockMovement $m) => Quantity::add($sum, Quantity::negate((string) $m->quantity)), '0'));
+            $remainingProduced = Quantity::sub((string) $locked->produced_quantity, (string) $production->quantity);
 
-            $locked->status = WorkOrderStatus::InProgress;
-            $locked->completed_at = null;
-            $locked->save();
-            $this->workOrders->recordHistory($locked, WorkOrderStatus::Completed, WorkOrderStatus::InProgress, $actor, $reason);
+            foreach ($locked->materials()->get() as $material) {
+                $material->actual_scrap = Quantity::isZero($remainingProduced)
+                    ? null
+                    : Quantity::sub((string) ($material->actual_scrap ?? '0'), $scraps[$material->part_id] ?? '0');
+                $material->save();
+            }
+
+            $production->forceFill(['reversed_at' => now(), 'reversed_by_user_id' => $actor->getKey(), 'reversal_reason' => $reason])->save();
+
+            $locked->produced_quantity = $remainingProduced;
+
+            if ($locked->status === WorkOrderStatus::Completed) {
+                $locked->status = WorkOrderStatus::InProgress;
+                $locked->completed_at = null;
+                $locked->save();
+                $this->workOrders->recordHistory($locked, WorkOrderStatus::Completed, WorkOrderStatus::InProgress, $actor, $reason);
+            } else {
+                $locked->save();
+            }
 
             if ($locked->orderItem !== null) {
                 $this->orders->recalculateStatus($locked->orderItem->order);
@@ -325,7 +385,7 @@ class ProductionService
             }
 
             for ($i = 0; $i < $generate; $i++) {
-                $serials[] = $this->numbers->next('serial_number', now(), ['MODEL_KODU' => $model->code]);
+                $serials[] = $this->numbers->next('serial_number', $date, ['MODEL_KODU' => $model->code]);
             }
 
             return collect($serials)->map(function (string $serial) use ($model, $warehouse, $date, $actor, $note): MotorUnit {
@@ -445,18 +505,19 @@ class ProductionService
         });
     }
 
-    private function createMotorUnits(WorkOrder $workOrder): void
+    private function createMotorUnits(WorkOrder $workOrder, WorkOrderProduction $production): void
     {
         $order = $workOrder->orderItem?->order;
         // İptal edilmiş siparişe motor bağlanmaz.
         $orderId = $order !== null && $order->status !== OrderStatus::Cancelled ? $order->getKey() : null;
 
-        for ($i = 0; $i < (int) $workOrder->quantity; $i++) {
+        for ($i = 0; $i < (int) $production->quantity; $i++) {
             $unit = new MotorUnit;
             $unit->forceFill([
                 'serial_number' => $this->numbers->next('serial_number', now(), ['MODEL_KODU' => $workOrder->motorModel->code]),
                 'motor_model_id' => $workOrder->motor_model_id,
                 'work_order_id' => $workOrder->getKey(),
+                'work_order_production_id' => $production->getKey(),
                 'production_batch_id' => $workOrder->production_batch_id,
                 'order_id' => $orderId,
                 'warehouse_id' => $workOrder->target_warehouse_id,
@@ -464,6 +525,41 @@ class ProductionService
                 'status' => MotorUnitStatus::InStock,
             ])->save();
         }
+    }
+
+    /** Kaydın adedi: boşsa kalan adet; pozitif, kalan adedi aşamaz, ürün biriminin küsurat kuralına uyar. */
+    private function productionQuantity(WorkOrder $workOrder, mixed $quantity): string
+    {
+        $remaining = $workOrder->remainingQuantity();
+        $unit = $workOrder->product->unit;
+
+        if ($quantity === null || $quantity === '') {
+            return $remaining;
+        }
+
+        $quantity = Quantity::parse($quantity);
+
+        if (Quantity::compare($quantity, '0') <= 0) {
+            throw new BusinessRuleException('Üretilen adet sıfırdan büyük olmalıdır.');
+        }
+
+        if (! $unit->allows_decimal && ! Quantity::isWhole($quantity)) {
+            throw new BusinessRuleException("Üretilen miktar tam sayı olmalıdır (birim: {$unit->name}).");
+        }
+
+        if (Quantity::compare($quantity, $remaining) > 0) {
+            throw new BusinessRuleException(sprintf('Kalan %s; en fazla bu kadar üretim kaydı girilebilir.', Quantity::format($remaining, $unit->name)));
+        }
+
+        return $quantity;
+    }
+
+    /** $produced adet için birikimli miktar (birim başına × adet; tam sayılı birimde yukarı). */
+    private function cumulative(string $produced, string $perUnit, bool $wholeUnit): string
+    {
+        $total = Quantity::mul($produced, $perUnit);
+
+        return $wholeUnit ? Quantity::ceil($total, 0) : $total;
     }
 
     private function scrap(mixed $value, string $planned, Part $part): string

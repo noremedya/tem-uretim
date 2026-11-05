@@ -19,6 +19,7 @@ use App\Models\WorkOrderStatusHistory;
 use App\Support\Quantity;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -93,15 +94,16 @@ class WorkOrderService
 
     /**
      * Açık iş emrinin atama, tarih, not ve adet bilgilerini değiştirir. Sipariş kalemi yalnızca
-     * planlandı durumunda değişir. Adet değişince malzeme ihtiyacı yeniden hesaplanır.
+     * planlandı durumunda değişir. Adet değişince malzeme ihtiyacı yeniden hesaplanır. Adet üretilenin altına
+     * inemez; üretilene eşitlenirse iş emri tamamlanır (kısım kısım üretim, $actor geçmişe yazılır).
      *
      * @param  int  $expectedLockVersion  Düzenlemenin başladığı andaki lock_version.
      */
-    public function update(WorkOrder $workOrder, array $data, int $expectedLockVersion): WorkOrder
+    public function update(WorkOrder $workOrder, array $data, int $expectedLockVersion, ?User $actor = null): WorkOrder
     {
         $data = $this->normalize($data);
 
-        return DB::transaction(function () use ($workOrder, $data, $expectedLockVersion): WorkOrder {
+        return DB::transaction(function () use ($workOrder, $data, $expectedLockVersion, $actor): WorkOrder {
             if (! $workOrder->status->isOpen()) {
                 throw new BusinessRuleException("{$workOrder->status->label()} durumundaki iş emri düzenlenemez.");
             }
@@ -109,7 +111,15 @@ class WorkOrderService
             $workOrder->forceFill(Arr::only($data, self::EDITABLE_FIELDS));
 
             if (array_key_exists('quantity', $data)) {
-                $workOrder->quantity = $this->quantity($workOrder->product()->with('unit')->firstOrFail(), $data['quantity']);
+                $product = $workOrder->product()->with('unit')->firstOrFail();
+                $workOrder->quantity = $this->quantity($product, $data['quantity']);
+
+                if (Quantity::compare((string) $workOrder->quantity, (string) $workOrder->produced_quantity) < 0) {
+                    throw new BusinessRuleException(sprintf(
+                        'Bu iş emrinde %s üretildi; adet bundan az olamaz (önce üretim kaydını geri alın).',
+                        Quantity::format((string) $workOrder->produced_quantity, $product->unit->name),
+                    ));
+                }
             }
 
             foreach (['source_warehouse_id', 'target_warehouse_id'] as $field) {
@@ -150,6 +160,16 @@ class WorkOrderService
 
             if ($quantityChanged) {
                 $this->recalculateMaterials($workOrder);
+
+                // Az üretildiyse adet üretilene düşürülür: kalan kalmadığından iş emri tamamlanır.
+                if ($workOrder->status === WorkOrderStatus::InProgress && $workOrder->hasProduction()
+                    && Quantity::compare((string) $workOrder->quantity, (string) $workOrder->produced_quantity) === 0) {
+                    $actor ??= Auth::user() ?? throw new BusinessRuleException('İşlemi yapan kullanıcı belirsiz.');
+                    $workOrder->status = WorkOrderStatus::Completed;
+                    $workOrder->completed_at = now();
+                    $workOrder->save();
+                    $this->recordHistory($workOrder, WorkOrderStatus::InProgress, WorkOrderStatus::Completed, $actor, 'Adet üretilen kadar düşürüldü');
+                }
             }
 
             if ($sourceChanged) {
@@ -233,6 +253,7 @@ class WorkOrderService
     public function materialStatus(WorkOrder $workOrder): array
     {
         return $workOrder->materials()->with(['part.unit', 'part.stockBalances'])->orderBy('id')->get()
+            ->each(fn (WorkOrderMaterial $material) => $material->setRelation('workOrder', $workOrder))
             ->map(function (WorkOrderMaterial $material): array {
                 $required = $material->totalRequirement();
                 $available = $material->available();
@@ -269,6 +290,10 @@ class WorkOrderService
 
             if (! $this->canTransition($actor, $locked, $to)) {
                 throw new BusinessRuleException('Bu iş emrinde bu işlemi yapma yetkiniz yok.');
+            }
+
+            if ($to === WorkOrderStatus::Planned && $locked->hasProduction()) {
+                throw new BusinessRuleException('Üretim kaydı olan iş emri planlamaya geri alınamaz; önce üretim kayıtlarını geri alın.');
             }
 
             $locked->status = $to;

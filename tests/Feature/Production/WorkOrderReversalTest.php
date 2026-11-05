@@ -63,7 +63,7 @@ it('geri alınan iş emri tekrar tamamlanınca yeni seri numaraları verilir', f
     $this->production->reverse($wo, $this->admin, 'Test hatası');
     $this->production->complete($wo->fresh(), $this->admin);
 
-    $prefix = 'TM-71-'.now()->format('ym');
+    $prefix = 'TM-71-'.now()->format('ymd');
     expect(MotorUnit::where('status', MotorUnitStatus::InStock)->pluck('serial_number')->sort()->values()->all())
         ->toBe(["{$prefix}-00003", "{$prefix}-00004"])
         ->and(stockOf($this->f->model->finishedPart))->toBe('2.000');
@@ -139,7 +139,7 @@ it('ters kaydı elle yapılamaz; geri alma aksiyonu yalnızca yöneticiye görü
     $this->actingAs($this->admin);
     Livewire::test(ViewWorkOrder::class, ['record' => $wo->getRouteKey()])
         ->callAction('reverse', data: ['reason' => 'Ekrandan geri alma'])
-        ->assertNotified('Üretim geri alındı');
+        ->assertNotified('Üretim kaydı geri alındı');
 
     expect($wo->fresh()->status)->toBe(WorkOrderStatus::InProgress);
 });

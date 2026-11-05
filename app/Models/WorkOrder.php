@@ -26,6 +26,7 @@ class WorkOrder extends Model
         return [
             'status' => WorkOrderStatus::class,
             'quantity' => 'decimal:3',
+            'produced_quantity' => 'decimal:3',
             'planned_start' => 'date',
             'planned_end' => 'date',
             'started_at' => 'datetime',
@@ -108,6 +109,23 @@ class WorkOrder extends Model
         return $this->hasMany(MotorUnit::class);
     }
 
+    /** @return HasMany<WorkOrderProduction, $this> */
+    public function productions(): HasMany
+    {
+        return $this->hasMany(WorkOrderProduction::class);
+    }
+
+    /** Henüz üretilmemiş adet (kısım kısım üretim). */
+    public function remainingQuantity(): string
+    {
+        return bcsub((string) $this->quantity, (string) $this->produced_quantity, 3);
+    }
+
+    public function hasProduction(): bool
+    {
+        return bccomp((string) $this->produced_quantity, '0', 3) > 0;
+    }
+
     public function isAssignedTo(User $user): bool
     {
         return $this->assigned_user_id !== null && $this->assigned_user_id === $user->getKey();
@@ -143,7 +161,7 @@ class WorkOrder extends Model
     {
         return LogOptions::defaults()
             ->logOnly([
-                'work_order_number', 'product_part_id', 'motor_model_id', 'order_item_id', 'quantity',
+                'work_order_number', 'product_part_id', 'motor_model_id', 'order_item_id', 'quantity', 'produced_quantity',
                 'production_batch_id', 'status', 'assigned_user_id', 'planned_start', 'planned_end',
                 'started_at', 'completed_at', 'cancellation_reason', 'notes', 'source_warehouse_id', 'target_warehouse_id',
             ])

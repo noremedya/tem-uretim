@@ -48,6 +48,10 @@ class WorkOrderInfolist
                     TextEntry::make('quantity')
                         ->label('Adet')
                         ->formatStateUsing(fn ($state, WorkOrder $record): string => Quantity::format($state, $record->product->unit->name)),
+                    TextEntry::make('produced_quantity')
+                        ->label('Üretilen')
+                        ->formatStateUsing(fn ($state, WorkOrder $record): string => Quantity::format($state, $record->product->unit->name)
+                            .($record->status->isOpen() && $record->hasProduction() ? ' · kalan '.Quantity::format($record->remainingQuantity()) : '')),
                     TextEntry::make('orderItem.order.order_number')
                         ->label('Sipariş')
                         ->placeholder('Siparişe bağlı değil')

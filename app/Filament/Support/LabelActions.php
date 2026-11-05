@@ -2,7 +2,6 @@
 
 namespace App\Filament\Support;
 
-use App\Enums\WorkOrderStatus;
 use App\Models\MotorUnit;
 use App\Models\WorkOrder;
 use Filament\Actions\Action;
@@ -52,7 +51,7 @@ class LabelActions
             ->label('Motor etiketleri')
             ->icon('heroicon-o-qr-code')
             ->color('gray')
-            ->visible(fn (WorkOrder $record): bool => $record->status === WorkOrderStatus::Completed && $record->motor_model_id !== null)
+            ->visible(fn (WorkOrder $record): bool => $record->motor_model_id !== null && $record->hasProduction())
             ->url(fn (WorkOrder $record): string => route('labels.motors', ['work_order' => $record->getKey()]))
             ->openUrlInNewTab();
     }

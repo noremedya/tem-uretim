@@ -66,7 +66,7 @@ class MaterialsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->with(['part.unit', 'part.stockBalances.warehouse', 'warehouse', 'scrapPart']))
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['workOrder', 'part.unit', 'part.stockBalances.warehouse', 'warehouse', 'scrapPart']))
             ->defaultSort('id')
             ->paginated(false)
             ->columns([

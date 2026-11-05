@@ -32,7 +32,10 @@ class WorkOrdersTable
                 TextColumn::make('quantity')
                     ->label('Adet')
                     ->alignEnd()
-                    ->formatStateUsing(fn ($state, WorkOrder $record): string => Quantity::format($state, $record->product->unit->name)),
+                    ->formatStateUsing(fn ($state, WorkOrder $record): string => Quantity::format($state, $record->product->unit->name))
+                    ->description(fn (WorkOrder $record): ?string => $record->status->isOpen() && $record->hasProduction()
+                        ? 'Üretilen '.Quantity::format((string) $record->produced_quantity)
+                        : null),
                 TextColumn::make('status')->label('Durum')->badge(),
                 TextColumn::make('assignedUser.name')->label('Operatör')->placeholder('Atanmadı'),
                 TextColumn::make('planned_end')
