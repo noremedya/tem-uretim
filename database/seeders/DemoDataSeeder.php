@@ -186,7 +186,9 @@ class DemoDataSeeder extends Seeder
             $this->createParts();
             $this->createModelsAndBoms();
             $this->createCustomers();
-            $this->createDesign();
+            if (config('features.motor_designs')) {
+                $this->createDesign();
+            }
         });
         $this->as('yonetici', fn () => $this->attachImages());
         $this->as('yonetici', fn () => $this->assignBrands());

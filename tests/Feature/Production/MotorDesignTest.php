@@ -24,6 +24,8 @@ use Tests\Support\ProductionFixtures;
  */
 
 beforeEach(function () {
+    // Modül gizli (config/features.php); davranışı açıkken test edilir.
+    config(['features.motor_designs' => true]);
     $this->admin = User::factory()->admin()->create();
     $this->f = ProductionFixtures::create();
     $this->service = app(MotorDesignService::class);
@@ -128,4 +130,13 @@ it('muhasebe görür ama değiştiremez; operatör ve depo göremez', function (
         $this->actingAs($user);
         $this->get(MotorDesignResource::getUrl('index'))->assertForbidden();
     }
+});
+
+it('modül gizliyken menüde görünmez ve sayfaları yöneticiye de kapalıdır', function () {
+    config(['features.motor_designs' => false]);
+    $this->actingAs($this->admin);
+
+    expect(MotorDesignResource::canAccess())->toBeFalse();
+    $this->get(MotorDesignResource::getUrl('index'))->assertForbidden();
+    $this->get(MotorDesignResource::getUrl('view', ['record' => $this->design]))->assertForbidden();
 });

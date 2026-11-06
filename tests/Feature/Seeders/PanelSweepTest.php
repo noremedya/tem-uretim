@@ -86,10 +86,11 @@ function sweepExpectations(): array
         'parts/{record}/edit' => ['yonetici'],
         'stock-movements' => ['yonetici', 'operator1', 'depo'],
         // Motor modeli, sipariş ve parti operatör ve depoya kapalı.
-        'motor-designs' => ['yonetici', 'muhasebe'],
-        'motor-designs/create' => ['yonetici'],
-        'motor-designs/{record}' => ['yonetici', 'muhasebe'],
-        'motor-designs/{record}/edit' => ['yonetici'],
+        // Tasarımlar gizli (config/features.php): kimse açamaz.
+        'motor-designs' => [],
+        'motor-designs/create' => [],
+        'motor-designs/{record}' => [],
+        'motor-designs/{record}/edit' => [],
         'motor-models' => ['yonetici', 'muhasebe'],
         'motor-models/create' => ['yonetici'],
         'motor-models/{record}' => ['yonetici', 'muhasebe'],
@@ -147,7 +148,7 @@ function sweepRecords(): array
         'bom-templates' => BomTemplate::query()->value('id'),
         'units' => Unit::query()->value('id'),
         'parts' => Part::query()->where('code', DemoDataSeeder::MARKER_PART)->value('id'),
-        'motor-designs' => MotorDesign::query()->value('id'),
+        'motor-designs' => MotorDesign::query()->value('id') ?? 0, // gizli modül, örnek verisi yok
         'motor-models' => MotorModel::query()->where('is_active', true)->value('id'),
         'customers' => Customer::query()->value('id'),
         'orders' => Order::query()->where('status', OrderStatus::Open->value)->value('id'),

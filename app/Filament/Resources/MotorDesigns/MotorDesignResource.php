@@ -36,6 +36,12 @@ class MotorDesignResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'name';
 
+    /** Modül gizliyse menüde görünmez, sayfaları kimse açamaz (config/features.php). */
+    public static function canAccess(): bool
+    {
+        return (bool) config('features.motor_designs') && parent::canAccess();
+    }
+
     public static function form(Schema $schema): Schema
     {
         return MotorDesignForm::configure($schema);
