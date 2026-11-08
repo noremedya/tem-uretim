@@ -59,3 +59,9 @@ it('dağıtım betikleri çalıştırılabilir ve sıkı modda', function (strin
     expect(is_executable($path))->toBeTrue()
         ->and(file_get_contents($path))->toContain('set -euo pipefail');
 })->with(['backup.sh', 'deploy.sh', 'restore.sh', 'db-migrate.sh']);
+
+it('Cloudflare Tunnel isteğe bağlıdır: yalnızca "tunnel" profiliyle başlar (intranet kurulumunda kapalı)', function () {
+    preg_match('/^  cloudflared:\n(.*?)(?=^\S|^  \S)/ms', file_get_contents(base_path('docker-compose.prod.yml')), $block);
+
+    expect($block[1] ?? '')->toContain('profiles: ["tunnel"]');
+});

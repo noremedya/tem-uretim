@@ -285,7 +285,9 @@ Fabrikadaki bir bilgisayardan `https://uretim.alanadi.com` aç, yönetici ile gi
 
 ---
 
-## 11. Cloudflare Tunnel ve erişim kontrolü (dışarıdan erişim)
+## 11. Cloudflare Tunnel ve erişim kontrolü (dışarıdan erişim) — isteğe bağlı
+
+> Yalnızca fabrika içi ağda (intranet) kullanılacaksa bu bölüm atlanır: `TUNNEL_TOKEN` boş kalır, tünel servisi başlamaz. Açmak için `.env`'e `COMPOSE_PROFILES=tunnel` satırı eklenir.
 
 1. Cloudflare Zero Trust paneli → Networks → Tunnels → **Create a tunnel** → Cloudflared.
 2. Tünele isim ver (`tem-uretim`), verilen **token**'ı `.env` içindeki `TUNNEL_TOKEN` alanına yaz.
@@ -426,7 +428,7 @@ Ayda bir, test bilgisayarında veya ayrı bir klasörde son yedeği geri yükley
 - [ ] Router internet kablosu çıkarılıp test edildi: uygulama yerel ağda çalışmaya devam ediyor
 - [ ] Telefon kamerasıyla QR okutma çalışıyor
 - [ ] USB barkod okuyucu test edildi
-- [ ] Dışarıdan erişim Cloudflare Access e-posta doğrulamasıyla çalışıyor
+- [ ] (Yalnızca tünel açıksa) Dışarıdan erişim Cloudflare Access e-posta doğrulamasıyla çalışıyor
 - [ ] İlk yedek alındı: sunucu, USB disk ve B2'de görünüyor
 - [ ] healthchecks.io iki kontrol de yeşil, bildirim e-postası test edildi
 - [ ] Geri yükleme tatbikatı bir kez yapıldı

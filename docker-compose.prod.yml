@@ -137,8 +137,11 @@ services:
       - app
     logging: *logging
 
+  # Dışarıdan erişim (Cloudflare Tunnel) isteğe bağlı: yalnızca .env'de COMPOSE_PROFILES=tunnel ve TUNNEL_TOKEN doluyken başlar.
+  # Yalnızca fabrika içi ağda (intranet) kullanımda kapalı kalır.
   cloudflared:
     image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
     restart: unless-stopped
     command: ["tunnel", "--no-autoupdate", "run"]
     environment:
