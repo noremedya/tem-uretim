@@ -179,6 +179,7 @@ Tarih, serial_number, status, motor_model_id, part_id gibi filtrelenen alanlara 
 - Yarı mamuller (ör. gövde, kapak/flanş, rotor, bobinajlı stator, işlenmiş mil) fabrikada üretilir ve modele özeldir (ör. 0,37 kW 1500 d/dk 71 tip 60 mm stator) → çok seviyeli reçete gerekir.
 - Mamul ayrı bir stok kartıdır (motor_units'e ek olarak).
 - Direkt sarf reçeteye girer ve üretimde otomatik düşer; endirekt sarf reçeteye girmez.
+- **Sarf malzemeleri** (karar 2026-11-10): boya, koli, köpük, balonlu poşet direkt sarftır; motor şablonlarında (Trifaze, MD, MSD, Vibrasyon) satırları vardır, motor reçetesinden motor başına düşer. Vernik bobinajlı stator reçetesindedir (motor başına bir stator). Şerit bant ve koli bandı endirekt sarftır (alt tür "Bant"): reçeteye girmez, depodan toplu stok çıkışıyla (açıklama: gider) düşer.
 - Fire: reçetede her malzeme için standart fire oranı; operatör tamamlamada gerçekleşen fireyi girebilir. Fire, üretim sarfından ayrı bir hareket tipiyle kaydedilir ve muhasebe aktarımına yansır.
 - Ayrıntılı kurallar: yukarıdaki "İş emri", "Reçete", "Mamul ve yarı mamul", "Sevk".
 

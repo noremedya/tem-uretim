@@ -111,6 +111,13 @@ final class StarterCatalog
         $parts[] = self::part('DS-MAKARON', 'Makaron', 'Direkt sarf', 'Makaron', 'Metre');
         $parts[] = self::part('DS-KABLO', 'Bağlantı kablosu', 'Direkt sarf', 'Kablo', 'Metre');
         $parts[] = self::part('DS-VERNIK', 'Emprenye verniği', 'Direkt sarf', 'Vernik', 'Kg');
+        // Ambalaj ve boya motor reçetesinden motor başına düşer; şerit bant ve koli bandı depodan toplu gider çıkışıyla (karar 2026-11-10).
+        $parts[] = self::part('DS-BOYA', 'Motor boyası', 'Direkt sarf', 'Boya', 'Kg');
+        $parts[] = self::part('DS-KOLI-71', 'Koli 71 tip', 'Direkt sarf', 'Koli', 'Adet', 'Her koli ölçüsü için ayrı satır.');
+        $parts[] = self::part('DS-KOPUK', 'Köpük (ambalaj)', 'Direkt sarf', 'Köpük', 'Adet');
+        $parts[] = self::part('DS-BALONLU', 'Balonlu poşet', 'Direkt sarf', 'Balonlu poşet', 'Adet');
+        $parts[] = self::part('ES-SERIT-BANT', 'Şerit bant', 'Endirekt sarf', 'Bant', 'Adet', 'Rulo; reçeteye girmez, depodan toplu çıkış (gider).');
+        $parts[] = self::part('ES-KOLI-BANDI', 'Koli bandı', 'Endirekt sarf', 'Bant', 'Adet', 'Rulo; reçeteye girmez, depodan toplu çıkış (gider).');
         $parts[] = self::part('YM-STP-71-070', 'Stator paketi 71 tip 70 mm', 'Yarı mamul', 'Stator paketi', 'Adet', 'Örnek: her motor tipi ve paket boyu için ayrı satır.');
         $parts[] = self::part('YM-RTP-71-070', 'Rotor paketi 71 tip 70 mm', 'Yarı mamul', 'Rotor paketi', 'Adet', 'Stator paketiyle aynı kalıpta çıkar (Eş ürünler).');
         $parts[] = self::part('YM-MIL-71', 'İşlenmiş mil 71 tip', 'Yarı mamul', 'İşlenmiş mil', 'Adet');

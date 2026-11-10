@@ -37,7 +37,8 @@ it('kurulumda örnek alt türler açılır', function () {
     expect(PartSubtype::where('type', 'raw_material')->pluck('name')->all())->toContain('Silisli sac', 'Mil çeliği')
         ->and(PartSubtype::where('type', 'semi_finished')->pluck('name')->all())->toContain('Stator paketi', 'Mil+rotor')
         ->and(PartSubtype::where('type', 'finished_good')->orderBy('id')->pluck('name')->all())->toBe(['Trifaze', 'Monofaze MD', 'Monofaze MSD', 'Vibrasyon', 'Bor yağı pompası'])
-        ->and(PartSubtype::where('type', 'indirect_consumable')->count())->toBe(0);
+        ->and(PartSubtype::where('type', 'indirect_consumable')->pluck('name')->all())->toBe(['Bant'])   // şerit bant, koli bandı (karar 2026-11-10)
+        ->and(PartSubtype::where('type', 'direct_consumable')->pluck('name')->all())->toContain('Boya', 'Koli', 'Köpük', 'Balonlu poşet');
 });
 
 it('ad aynı ana türde tekildir (Türkçe I/ı ve büyük/küçük harf önemsiz); başka ana türde tekrar edebilir', function () {
