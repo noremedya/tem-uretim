@@ -8,6 +8,7 @@ use App\Filament\Resources\MotorDesigns\Pages\ListMotorDesigns;
 use App\Filament\Resources\MotorDesigns\Pages\ViewMotorDesign;
 use App\Filament\Resources\MotorDesigns\RelationManagers\ItemsRelationManager;
 use App\Filament\Resources\MotorDesigns\Schemas\MotorDesignForm;
+use App\Filament\Resources\MotorDesigns\Schemas\MotorDesignInfolist;
 use App\Filament\Resources\MotorDesigns\Tables\MotorDesignsTable;
 use App\Models\MotorDesign;
 use BackedEnum;
@@ -45,6 +46,11 @@ class MotorDesignResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return MotorDesignForm::configure($schema);
+    }
+
+    public static function infolist(Schema $schema): Schema
+    {
+        return MotorDesignInfolist::configure($schema);
     }
 
     public static function table(Table $table): Table

@@ -204,7 +204,7 @@ class BomTemplateService
         return "{$part->code} — {$part->name} ({$part->unit->name})";
     }
 
-    private function ensureMatches(BomTemplateLine $line, Part $part): void
+    public function ensureMatches(BomTemplateLine $line, Part $part): void
     {
         if ($part->type !== $line->component_type) {
             throw new BusinessRuleException("{$line->label}: {$part->code} bir {$part->type->label()}; bu satıra {$line->component_type->label()} seçilmeli.");

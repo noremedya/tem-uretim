@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\LabelController;
+use App\Http\Controllers\MotorDesignImageController;
 use App\Http\Controllers\PartImageController;
 use App\Http\Controllers\ReportExportDownloadController;
 use App\Http\Middleware\LogoutInactiveUser;
@@ -18,4 +19,5 @@ Route::middleware([LogoutInactiveUser::class, 'auth'])->group(function (): void 
 
     // Stok kartı görselleri.
     Route::get('/parca-gorsel/{part}', PartImageController::class)->name('parts.image');
+    Route::get('/tasarim-gorsel/{motorDesign}', MotorDesignImageController::class)->name('motor-designs.image');
 });

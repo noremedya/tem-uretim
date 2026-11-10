@@ -12,6 +12,7 @@ use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Notifications\Notification;
 use Filament\Tables\Columns\IconColumn;
+use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
@@ -22,9 +23,13 @@ class MotorDesignsTable
     {
         return $table
             ->defaultSort('updated_at', 'desc')
+            ->modifyQueryUsing(fn ($query) => $query->with(['template', 'motorModel']))
             ->columns([
+                ImageColumn::make('image')->label('')->state(fn (MotorDesign $record): ?string => $record->imageUrl())->imageSize(40),
                 TextColumn::make('code')->label('Kod')->searchable()->sortable(),
                 TextColumn::make('name')->label('Ad')->searchable()->sortable(),
+                TextColumn::make('template.name')->label('Motor tipi')->placeholder('—')->toggleable(),
+                TextColumn::make('motorModel.code')->label('Motor modeli')->placeholder('—')->toggleable(),
                 TextColumn::make('items_count')->label('Bileşen')->counts('items')->numeric()->alignEnd(),
                 TextColumn::make('description')->label('Açıklama')->limit(60)->toggleable(),
                 TextColumn::make('updated_at')->label('Son değişiklik')->dateTime('d.m.Y H:i')->sortable(),

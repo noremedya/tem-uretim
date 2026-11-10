@@ -48,13 +48,15 @@ class ItemsRelationManager extends RelationManager
     public function table(Table $table): Table
     {
         return $table
-            ->modifyQueryUsing(fn (Builder $query) => $query->with(['part.unit', 'unit']))
+            ->modifyQueryUsing(fn (Builder $query) => $query->with(['part.unit', 'unit', 'templateLine']))
             ->defaultSort('id')
             ->paginated(false)
             ->emptyStateHeading('Henüz bileşen yok')
             ->emptyStateDescription('Ürün seçerek veya deneme bileşeni yazarak ekleyin.')
             ->columns([
                 ImageColumn::make('image')->label('')->state(fn (MotorDesignItem $record): ?string => $record->part?->imageUrl())->imageSize(40),
+                TextColumn::make('drawing')->label('Çizim')->state(fn (MotorDesignItem $record): ?string => $record->templateLine?->drawingLabel())
+                    ->description(fn (MotorDesignItem $record): ?string => $record->templateLine?->label)->placeholder('—'),
                 TextColumn::make('label')->label('Bileşen')->state(fn (MotorDesignItem $record): string => $record->label())
                     ->description(fn (MotorDesignItem $record): string => $record->part !== null ? $record->part->type->label() : 'Deneme bileşeni (kartı yok)')
                     ->wrap(),

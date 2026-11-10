@@ -91,6 +91,7 @@ function sweepExpectations(): array
         'motor-designs/create' => ['yonetici'],
         'motor-designs/{record}' => ['yonetici', 'muhasebe'],
         'motor-designs/{record}/edit' => ['yonetici'],
+        'tasarim-olustur' => ['yonetici'],
         'motor-models' => ['yonetici', 'muhasebe'],
         'motor-models/create' => ['yonetici'],
         'motor-models/{record}' => ['yonetici', 'muhasebe'],

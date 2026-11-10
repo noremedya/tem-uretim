@@ -28,6 +28,12 @@ class MotorDesignItem extends Model
         return $this->belongsTo(MotorDesign::class, 'motor_design_id');
     }
 
+    /** @return BelongsTo<BomTemplateLine, $this> Şablondan gelen satırın şablon satırı (çizim numarası). */
+    public function templateLine(): BelongsTo
+    {
+        return $this->belongsTo(BomTemplateLine::class, 'bom_template_line_id');
+    }
+
     /** @return BelongsTo<Part, $this> */
     public function part(): BelongsTo
     {
@@ -52,6 +58,6 @@ class MotorDesignItem extends Model
 
     public function getActivitylogOptions(): LogOptions
     {
-        return LogOptions::defaults()->logOnly(['motor_design_id', 'part_id', 'description', 'quantity', 'unit_id', 'notes'])->logOnlyDirty()->dontLogEmptyChanges();
+        return LogOptions::defaults()->logOnly(['motor_design_id', 'bom_template_line_id', 'part_id', 'description', 'quantity', 'unit_id', 'notes'])->logOnlyDirty()->dontLogEmptyChanges();
     }
 }
