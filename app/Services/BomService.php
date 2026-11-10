@@ -301,7 +301,7 @@ class BomService
         }
     }
 
-    private function ensureComponent(Part $component): void
+    public function ensureComponent(Part $component): void
     {
         if (in_array($component->type, [PartType::IndirectConsumable, PartType::FinishedGood], true)) {
             throw new BusinessRuleException("{$component->type->label()} reçeteye bileşen olarak eklenemez.");
@@ -313,7 +313,7 @@ class BomService
     }
 
     /** @return array{quantity_per_unit: string, scrap_rate: string, scrap_quantity_per_unit: ?string, scrap_part_id: ?int} */
-    private function values(Part $parent, Part $component, string|int|float $quantityPerUnit, string|int|float|null $scrapRate, string|int|float|null $scrapQuantity, Part|int|null $scrapPart): array
+    public function values(Part $parent, Part $component, string|int|float $quantityPerUnit, string|int|float|null $scrapRate, string|int|float|null $scrapQuantity, Part|int|null $scrapPart): array
     {
         $quantity = $this->positiveQuantity($component, $quantityPerUnit);
 

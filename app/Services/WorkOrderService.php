@@ -408,7 +408,7 @@ class WorkOrderService
         }
     }
 
-    private function calculateMaterial(WorkOrderMaterial $material, string $quantity, Part $component): void
+    public function calculateMaterial(WorkOrderMaterial $material, string $quantity, Part $component): void
     {
         $required = Quantity::mul($quantity, (string) $material->quantity_per_unit);
         $wholeUnit = ! $component->unit->allows_decimal;

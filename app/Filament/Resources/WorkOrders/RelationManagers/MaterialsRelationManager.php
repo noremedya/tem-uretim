@@ -14,11 +14,13 @@ use App\Models\Warehouse;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderMaterial;
 use App\Services\StockService;
+use App\Services\WorkOrderMaterialService;
 use App\Services\WorkOrderService;
 use App\Support\Quantity;
 use Closure;
 use Filament\Actions\Action;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
@@ -107,9 +109,119 @@ class MaterialsRelationManager extends RelationManager
                     ->color(fn (string $state): ?string => $state !== '—' ? 'danger' : null)
                     ->weight(fn (string $state): ?string => $state !== '—' ? 'bold' : null),
             ])
+            ->headerActions([$this->addMaterialAction()])
             ->recordActions([
                 $this->resolveShortageAction(),
+                $this->editMaterialAction(),
+                $this->removeMaterialAction(),
             ]);
+    }
+
+    /** Malzeme değişikliği: iş emri yetkisi, açık iş emri, henüz üretim kaydı yok. */
+    private function canChangeMaterials(): bool
+    {
+        $workOrder = $this->workOrder();
+
+        return (Auth::user()?->can(Permission::WorkOrdersManage) ?? false) && $workOrder->status->isOpen() && ! $workOrder->hasProduction();
+    }
+
+    /** "Yalnızca bu iş emri / reçeteye de işle" sorusu (reçete yetkisi yoksa yalnızca bu iş emri). */
+    private function scopeField(): Radio
+    {
+        $canBom = Auth::user()?->can(Permission::MotorModelsManage) ?? false;
+        $product = $this->workOrder()->product;
+
+        return Radio::make('scope')
+            ->label('Bu değişiklik')
+            ->required()
+            ->options(array_filter([
+                'work_order' => 'Yalnızca bu iş emri için',
+                'permanent' => $canBom ? "Kalıcı: {$product->code} reçetesine de işlensin (sonraki iş emirleri de böyle açılır)" : null,
+            ]))
+            ->helperText($canBom ? 'Diğer açık iş emirleri etkilenmez.' : 'Reçeteyi değiştirme yetkiniz yok; değişiklik yalnızca bu iş emrine uygulanır.');
+    }
+
+    /** @return list<mixed> */
+    private function quantityFields(?WorkOrderMaterial $material): array
+    {
+        $unit = $material?->part->unit->name;
+
+        return [
+            TextInput::make('quantity_per_unit')->label('Birim başına miktar'.($unit ? " ({$unit})" : ''))->required()->inputMode('decimal'),
+            TextInput::make('scrap_rate')->label('Fire oranı (%)')->inputMode('decimal')->default('0')
+                ->visible(fn (): bool => $material?->scrap_quantity_per_unit === null),
+            TextInput::make('scrap_quantity_per_unit')->label('Birim başına fire miktarı'.($unit ? " ({$unit})" : ''))->inputMode('decimal')
+                ->visible(fn (): bool => $material !== null && $material->scrap_quantity_per_unit !== null),
+            Hidden::make('lock_version'),
+        ];
+    }
+
+    private function runMaterialChange(Action $action, Closure $callback, string $success): void
+    {
+        try {
+            $callback();
+        } catch (BusinessRuleException $exception) {
+            BusinessRuleNotification::send($exception);
+            $action->halt();
+        }
+
+        Notification::make()->success()->title($success)->send();
+        $this->dispatch('$refresh');
+    }
+
+    private function addMaterialAction(): Action
+    {
+        return Action::make('addMaterial')
+            ->label('Malzeme ekle')
+            ->icon('heroicon-o-plus')
+            ->visible(fn (): bool => $this->canChangeMaterials())
+            ->fillForm(fn (): array => ['scrap_rate' => '0', 'lock_version' => $this->workOrder()->lock_version])
+            ->schema(fn (): array => [
+                Select::make('part_id')->label('Malzeme')->required()->searchable()
+                    ->getSearchResultsUsing(fn (string $search): array => Part::query()->where('is_active', true)
+                        ->whereNotIn('type', [PartType::FinishedGood->value, PartType::IndirectConsumable->value])
+                        ->whereKeyNot($this->workOrder()->product_part_id)
+                        ->where(fn ($q) => $q->where('code', 'ilike', "%{$search}%")->orWhere('name', 'ilike', "%{$search}%"))
+                        ->orderBy('code')->limit(50)->get()->mapWithKeys(fn (Part $p) => [$p->getKey() => "{$p->code} — {$p->name}"])->all())
+                    ->getOptionLabelUsing(fn ($value): ?string => ($p = Part::query()->find($value)) ? "{$p->code} — {$p->name}" : null),
+                ...$this->quantityFields(null),
+                $this->scopeField(),
+            ])
+            ->action(fn (array $data, Action $action) => $this->runMaterialChange($action, fn () => app(WorkOrderMaterialService::class)->save(
+                $this->workOrder(), null, $data, $data['scope'] === 'permanent', Auth::user(), (int) $data['lock_version']), 'Malzeme eklendi'));
+    }
+
+    private function editMaterialAction(): Action
+    {
+        return Action::make('editMaterial')
+            ->label('Değiştir')
+            ->icon('heroicon-o-pencil-square')
+            ->color('gray')
+            ->visible(fn (): bool => $this->canChangeMaterials())
+            ->modalHeading(fn (WorkOrderMaterial $record): string => "{$record->part->code} {$record->part->name}")
+            ->fillForm(fn (WorkOrderMaterial $record): array => [
+                'quantity_per_unit' => Quantity::toInput((string) $record->quantity_per_unit),
+                'scrap_rate' => Quantity::toInput((string) $record->scrap_rate),
+                'scrap_quantity_per_unit' => $record->scrap_quantity_per_unit === null ? null : Quantity::toInput((string) $record->scrap_quantity_per_unit),
+                'lock_version' => $this->workOrder()->lock_version,
+            ])
+            ->schema(fn (WorkOrderMaterial $record): array => [...$this->quantityFields($record), $this->scopeField()])
+            ->action(fn (WorkOrderMaterial $record, array $data, Action $action) => $this->runMaterialChange($action, fn () => app(WorkOrderMaterialService::class)->save(
+                $this->workOrder(), $record, $data, $data['scope'] === 'permanent', Auth::user(), (int) $data['lock_version']), 'Malzeme değiştirildi'));
+    }
+
+    private function removeMaterialAction(): Action
+    {
+        return Action::make('removeMaterial')
+            ->label('Çıkar')
+            ->icon('heroicon-o-trash')
+            ->color('danger')
+            ->visible(fn (): bool => $this->canChangeMaterials())
+            ->modalHeading(fn (WorkOrderMaterial $record): string => "Çıkar: {$record->part->code} {$record->part->name}")
+            ->fillForm(fn (): array => ['lock_version' => $this->workOrder()->lock_version])
+            ->schema(fn (): array => [Hidden::make('lock_version'), $this->scopeField()])
+            ->action(fn (WorkOrderMaterial $record, array $data, Action $action) => $this->runMaterialChange($action, fn () => app(WorkOrderMaterialService::class)->remove(
+                $this->workOrder(), $record, $data['scope'] === 'permanent', Auth::user(), (int) $data['lock_version']), 'Malzeme çıkarıldı'));
     }
 
     /** Eksik miktar (0 veya pozitif); tam sayılı birimde yukarı yuvarlanır. */
